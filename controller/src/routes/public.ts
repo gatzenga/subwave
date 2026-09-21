@@ -90,11 +90,14 @@ export function publicOrigin(req: express.Request): string {
 const COVER_CACHE_MAX = 20;
 const coverCache = new Map<string, { buf: Buffer; contentType: string }>();
 
-router.get('/cover/:id', async (req, res) => {
-  const { id } = req.params;
+// Exported so the AzuraCast-compatible art paths (routes/nowplaying-compat.ts)
+// serve the same bytes through the same cache rather than redirecting: one
+// implementation, one LRU, and a client that does not follow redirects still
+// gets an image.
+export async function serveCover(id: string, res: express.Response): Promise<void> {
   // Subsonic ids are short alphanumerics; anything else would make this an SSRF
   // surface.
-  if (!/^[\w-]{1,64}$/.test(id)) return res.status(400).end();
+  if (!/^[\w-]{1,64}$/.test(id)) { res.status(400).end(); return; }
 
   const sendCover = (entry: { buf: Buffer; contentType: string }) => {
     res.setHeader('Content-Type', entry.contentType);
@@ -112,7 +115,7 @@ router.get('/cover/:id', async (req, res) => {
 
   try {
     const r = await fetchWithTimeout(subsonic.getCoverArtUrl(id, 512), { timeoutMs: 5000 });
-    if (!r.ok) return res.status(502).end();
+    if (!r.ok) { res.status(502).end(); return; }
     const entry = {
       buf: Buffer.from(await r.arrayBuffer()),
       contentType: r.headers.get('content-type') || 'image/jpeg',
@@ -125,6 +128,10 @@ router.get('/cover/:id', async (req, res) => {
   } catch {
     res.status(502).end();
   }
+}
+
+router.get('/cover/:id', async (req, res) => {
+  await serveCover(req.params.id, res);
 });
 
 // Persona portrait; serves the transparent placeholder when no avatar is set.

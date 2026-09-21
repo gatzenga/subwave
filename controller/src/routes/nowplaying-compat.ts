@@ -21,7 +21,7 @@ import * as settings from '../settings.js';
 import * as library from '../music/library.js';
 import { getStreamStatus } from '../broadcast/listeners.js';
 import { getStationTimezone } from '../time.js';
-import { publicOrigin } from './public.js';
+import { publicOrigin, serveCover } from './public.js';
 
 export const router = express.Router();
 
@@ -43,6 +43,8 @@ interface SongShape {
 // consistent whether or not the mixer reported one.
 function songOf(
   origin: string,
+  shortcode: string,
+  stamp: number,
   t: { subsonic_id?: string | null; id?: string | null; title?: string | null; artist?: string | null; album?: string | null; genre?: string | null } | null,
 ): SongShape {
   const id = String(t?.subsonic_id || t?.id || '');
@@ -57,10 +59,12 @@ function songOf(
     genre: String(t?.genre || ''),
     isrc: '',
     lyrics: '',
-    // The cover proxy already fronts Navidrome without exposing credentials.
+    // AzuraCast's own shape, down to the .jpg: clients match on the path and
+    // some refuse an extensionless image URL. The trailing -<stamp> is its
+    // cache-buster; ours is the airing time, so a re-play refetches.
     // Empty string, not a placeholder URL: a client that tests truthiness
     // should see "no art", not fetch a 404.
-    art: id ? `${origin}/api/cover/${encodeURIComponent(id)}` : '',
+    art: id ? `${origin}/api/station/${encodeURIComponent(shortcode)}/art/${encodeURIComponent(id)}-${stamp}.jpg` : '',
     custom_fields: {},
   };
 }
@@ -73,6 +77,7 @@ const secs = (iso?: string | null): number => {
 router.get('/nowplaying/:station', async (req, res) => {
   try {
     const origin = publicOrigin(req);
+    const shortcode = String(req.params.station || 'subwave');
     const s = settings.get();
     const np = await queue.getNowPlaying();
     const snap = queue.snapshot();
@@ -103,7 +108,7 @@ router.get('/nowplaying/:station', async (req, res) => {
       station: {
         id: 1,
         name: s.station || 'SUB/WAVE',
-        shortcode: String(req.params.station || 'subwave'),
+        shortcode,
         description: s.stationDescription || '',
         frontend: 'icecast',
         backend: 'liquidsoap',
@@ -151,7 +156,7 @@ router.get('/nowplaying/:station', async (req, res) => {
         playlist: '',
         streamer: '',
         is_request: false,
-        song: songOf(origin, np),
+        song: songOf(origin, shortcode, secs(startedAt), np),
         elapsed,
         remaining: Math.max(0, duration - elapsed),
       },
@@ -162,7 +167,7 @@ router.get('/nowplaying/:station', async (req, res) => {
             duration: 0,
             playlist: '',
             is_request: false,
-            song: songOf(origin, next),
+            song: songOf(origin, shortcode, 0, next),
           }
         : null,
       song_history: (snap.history || []).slice(0, 10).map((h: any, i: number) => ({
@@ -172,7 +177,7 @@ router.get('/nowplaying/:station', async (req, res) => {
         playlist: '',
         streamer: '',
         is_request: false,
-        song: songOf(origin, h),
+        song: songOf(origin, shortcode, secs(h.startedAt), h),
       })),
       is_online: stream.online,
       cache: null,
@@ -180,4 +185,49 @@ router.get('/nowplaying/:station', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// --- AzuraCast-shaped artwork paths ----------------------------------------
+//
+// AzuraCast serves media art at /api/station/{station}/art/{id}[-{stamp}].jpg
+// and the current song's art at /api/nowplaying/{station}/art. Clients built
+// against it hit those paths directly — Shelv, for one, derives its own
+// station-artwork fallback URL from the shortcode without ever reading a field
+// we could point elsewhere. Serving the shapes is the only way to answer that.
+//
+// Everything funnels into the same serveCover() the /cover/:id route uses, so
+// there is one proxy, one cache and one failure mode.
+
+// `abc123-1699999999.jpg` → `abc123`. The stamp is a cache-buster, not an
+// identifier, so it is stripped before the id is validated. Extension
+// optional: AzuraCast's own route makes it optional too.
+function mediaIdFrom(file: string): string {
+  return String(file || '')
+    .replace(/\.jpe?g$/i, '')
+    .replace(/-\d+$/, '');
+}
+
+async function serveCurrentCover(res: express.Response): Promise<void> {
+  const np = await queue.getNowPlaying();
+  const id = np?.subsonic_id ? String(np.subsonic_id) : '';
+  // 404, never a placeholder image: a client that falls back to its own art
+  // should be told there is none, not handed a grey square it will cache.
+  if (!id) { res.status(404).end(); return; }
+  await serveCover(id, res);
+}
+
+router.get('/station/:station/art/:file', async (req, res) => {
+  await serveCover(mediaIdFrom(req.params.file), res);
+});
+
+router.get('/station/:station/art', async (_req, res) => {
+  await serveCurrentCover(res);
+});
+
+router.get('/nowplaying/:station/art/:file', async (_req, res) => {
+  await serveCurrentCover(res);
+});
+
+router.get('/nowplaying/:station/art', async (_req, res) => {
+  await serveCurrentCover(res);
 });
