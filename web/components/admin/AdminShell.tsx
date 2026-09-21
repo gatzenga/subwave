@@ -15,9 +15,6 @@ import {
   SlidersHorizontal,
   Terminal,
   BookOpen,
-  Apple,
-  Smartphone,
-  Monitor,
   Users,
   Headphones,
   Plug,
@@ -42,7 +39,6 @@ import NavidromeBanner from './NavidromeBanner';
 import MusicStarvedBanner from './MusicStarvedBanner';
 import StationSwitcher from './StationSwitcher';
 import OdometerNumber from '../OdometerNumber';
-import BoothBuddy from '../BoothBuddy';
 import ThemeSwitcher from '../ThemeSwitcher';
 import {
   CommandDialog,
@@ -180,26 +176,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/settings', id: 'settings', label: 'Settings', icon: SlidersHorizontal },
       { href: '/admin/debug', id: 'debug', label: 'Debug', icon: Terminal },
     ],
-  },
-];
-
-interface AppLink {
-  href: string;
-  label: string;
-  icon: NavIcon;
-}
-
-const APP_LINKS: AppLink[] = [
-  { href: 'https://apps.apple.com/app/sub-wave/id6778786696', label: 'iOS app', icon: Apple },
-  {
-    href: 'https://play.google.com/store/apps/details?id=com.getsubwave.app',
-    label: 'Android app',
-    icon: Smartphone,
-  },
-  {
-    href: 'https://github.com/getsubwave/subwave-desktop/releases/latest',
-    label: 'Desktop app',
-    icon: Monitor,
   },
 ];
 
@@ -719,48 +695,17 @@ function TopBar({ pathname }: { pathname: string | null }) {
           </>
         )}
         <span className="h-4 w-px bg-separator-strong" />
-        <Link
-          href="/admin/doctor"
-          className="inline-flex min-h-9 items-center gap-1.5 text-[var(--accent)] no-underline sm:min-h-0"
-          title="DJ Doc — run a station health check and get the producer's review"
-        >
-          <BoothBuddy mood="onair" size={16} />
-          <span className="caption">DJ Doc</span>
-        </Link>
         <ThemeSwitcher variant="admin" />
-        {/* modal={false} for the same reason as the sidebar's More menu: no body
-            scroll lock, so no scrollbar-compensation margin shift. */}
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger
-            className="caption inline-flex min-h-9 cursor-pointer items-center gap-1 text-muted focus:outline-none sm:min-h-0"
-            aria-label="Listen and get the app"
-            title="Listen"
-          >
-            <Headphones size={15} strokeWidth={2} aria-hidden="true" />
-            <ChevronDown size={11} strokeWidth={2} aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[11rem]">
-            <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href="/listen" target="_blank" rel="noopener noreferrer">
-                  <Headphones aria-hidden="true" />
-                  Listen in browser
-                </Link>
-              </DropdownMenuItem>
-              {APP_LINKS.map(app => {
-                const Icon = app.icon;
-                return (
-                  <DropdownMenuItem asChild key={app.href}>
-                    <a href={app.href} target="_blank" rel="noopener noreferrer">
-                      <Icon aria-hidden="true" />
-                      {app.label}
-                    </a>
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Link
+          href="/listen"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="caption inline-flex min-h-9 items-center text-muted no-underline sm:min-h-0"
+          aria-label="Open the player"
+          title="Listen"
+        >
+          <Headphones size={15} strokeWidth={2} aria-hidden="true" />
+        </Link>
       </span>
     </header>
   );
