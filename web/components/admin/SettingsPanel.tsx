@@ -50,7 +50,6 @@ import { LibrarySection } from './settings/LibrarySection';
 import { StationSection } from './settings/StationSection';
 import { ThemeSection } from './settings/ThemeSection';
 import { ScrobbleSection } from './settings/ScrobbleSection';
-import { LikesSection } from './settings/LikesSection';
 import { NavidromeSection } from './settings/NavidromeSection';
 import {
   useSettingsMutation,
@@ -602,13 +601,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
           typeof v.picker?.minTrackLengthSeconds === 'number' ? v.picker.minTrackLengthSeconds : 0,
         ),
       },
-      likes: {
-        enabled: v.likes?.enabled ?? true,
-        starInNavidrome: v.likes?.starInNavidrome ?? true,
-        influenceDj: !!v.likes?.influenceDj,
-        maxTracks: String(v.likes?.maxTracks ?? 10),
-        windowDays: String(v.likes?.windowDays ?? 30),
-      },
     };
     const revision = settingsQuery.dataUpdatedAt;
     if (revision && appliedRevisionRef.current !== revision) {
@@ -1016,12 +1008,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
               <ScrobbleSection
                 data={data} form={form} setForm={updateForm} busy={busy}
                 saveSettings={saveSettings} fieldErrors={fieldErrors} adminFetch={adminFetch} refresh={refresh}
-              />
-            )}
-            {activeSection === 'likes' && (
-              <LikesSection
-                data={data} form={form} setForm={updateForm} busy={busy}
-                saveSettings={saveSettings} fieldErrors={fieldErrors}
               />
             )}
           </>

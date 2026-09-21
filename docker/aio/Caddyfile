@@ -30,6 +30,12 @@
 			Access-Control-Allow-Origin *
 			Cache-Control "no-cache"
 		}
+		# Caddy guesses the type from the extension, and `.ts` collides with
+		# TypeScript — it served segments as text/vnd.trolltech.linguist. Most
+		# players sniff the bytes and cope; a strict one or a CDN in front does
+		# not, so state it.
+		@hls_segment path *.ts
+		header @hls_segment Content-Type video/mp2t
 		root * /var/sub-wave
 		file_server
 	}

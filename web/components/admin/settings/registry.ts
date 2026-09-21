@@ -10,7 +10,7 @@
 
 import {
   Radio, Palette, Cpu, Mic, Library, Search,
-  Activity, Archive, Save, AlertTriangle, Heart, Music2, BrainCircuit,
+  Activity, Archive, Save, AlertTriangle, Music2, BrainCircuit,
   MessageCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -104,11 +104,6 @@ export const SECTIONS = [
     formKeys: ['search'],
   },
   {
-    id: 'likes', group: 'listeners', label: 'Likes',
-    hint: 'heart button · stars', icon: Heart,
-    formKeys: ['likes'],
-  },
-  {
     id: 'scrobble', group: 'listeners', label: 'Scrobbling',
     hint: 'last.fm · navidrome', icon: Activity,
     formKeys: ['scrobble'],
@@ -174,7 +169,6 @@ export const ADVANCED_CARDS: Partial<Record<SectionId, readonly string[]>> = {
   llm: ['fallback', 'reasoning', 'next-track-picker', 'idle-behaviour', 'daily-token-budget'],
   tts: ['fallback-voice'],
   library: ['seed-phase', 'propagation', 'enrichment'],
-  likes: ['ai-dj-influence'],
   danger: [
     'crossfade', 'duck-depth', 'stem-transitions', 'dj-transition-effects', 'max-track-length', 'dead-air-trim',
     'loudness-levelling', 'opus-stream', 'flac-stream', 'ogg-metadata',
@@ -293,11 +287,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Engines', section: 'search', card: 'Provider', keywords: 'searxng engines pin restrict google duckduckgo wikipedia' },
 
   // ── likes ──────────────────────────────────────────────────────────────────
-  { label: 'Enabled', section: 'likes', card: 'Heart button', keywords: 'heart like listener tap' },
-  { label: 'Star in Navidrome', section: 'likes', card: 'Heart button', keywords: 'subsonic starred favourites' },
-  { label: 'Use likes to influence picks', section: 'likes', card: 'AI DJ influence', keywords: 'taste preference signal picker' },
-  { label: 'Tracks included', section: 'likes', card: 'AI DJ influence', keywords: 'top liked count' },
-  { label: 'Time window (days)', section: 'likes', card: 'AI DJ influence', keywords: 'window days all time' },
 
   // ── scrobbling ─────────────────────────────────────────────────────────────
   { label: 'Enabled', section: 'scrobble', card: 'Last.fm', keywords: 'lastfm scrobble spins' },

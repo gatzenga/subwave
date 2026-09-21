@@ -234,7 +234,6 @@ export interface ScrobbleForm {
   navidrome: ScrobbleNavidromeForm;
 }
 
-/** Listener likes (#991) — heart button + Navidrome star + DJ influence. */
 // Track-selection windows read by BOTH pick paths. A separate top-level
 // settings key from `llm` because the album cooldown is not LLM config — the
 // stateless pool picker enforces it too.
@@ -244,14 +243,6 @@ export interface PickerForm {
   // Seconds, as typed. 0/'' = off (the shipped default). A show's own
   // minTrackLengthSeconds overrides this; listener requests are exempt.
   minTrackLengthSeconds: string;
-}
-
-export interface LikesForm {
-  enabled: boolean;
-  starInNavidrome: boolean;
-  influenceDj: boolean;
-  maxTracks: string;
-  windowDays: string;
 }
 
 export interface ArchiveForm {
@@ -371,7 +362,6 @@ export interface FormState {
   embedding: EmbeddingForm;
   scrobble: ScrobbleForm;
   privacy: PrivacyForm;
-  likes: LikesForm;
 }
 
 export interface JingleEntry {
@@ -505,13 +495,6 @@ export interface SettingsData {
     picker?: {
       albumHours?: number;
       minTrackLengthSeconds?: number;
-    };
-    likes?: {
-      enabled?: boolean;
-      starInNavidrome?: boolean;
-      influenceDj?: boolean;
-      maxTracks?: number;
-      windowDays?: number;
     };
   };
   tts?: {

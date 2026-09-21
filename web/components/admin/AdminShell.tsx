@@ -28,7 +28,6 @@ import {
   ChevronDown,
   ChevronRight,
   MoreHorizontal,
-  ListMusic,
   Clock,
   CalendarDays,
   Volume2,
@@ -145,7 +144,6 @@ const NAV_SECTIONS: NavSection[] = [
         label: 'Library',
         icon: Disc3,
         children: [
-          { href: '/admin/playlists', id: 'playlists', label: 'Playlists', icon: ListMusic },
         ],
       },
       { href: '/admin/personas', id: 'personas', label: 'Personas', icon: Drama },
@@ -213,7 +211,6 @@ const FOOTER_LINKS: { href: string; label: string; icon: NavIcon; pill: string }
 // Playlists, DJ Doc and Stations aren't sidebar items, so they're resolved
 // explicitly; their crumb sections mirror where the rail stays lit.
 function resolveCrumb(pathname: string | null): { section?: string; page: string } {
-  if (pathname?.startsWith('/admin/playlists')) return { section: 'Programming', page: 'Playlists' };
   if (pathname?.startsWith('/admin/doctor')) return { section: 'Monitor', page: 'DJ Doc' };
   if (pathname?.startsWith('/admin/stations')) return { section: 'System', page: 'Stations' };
   for (const section of NAV_SECTIONS) {

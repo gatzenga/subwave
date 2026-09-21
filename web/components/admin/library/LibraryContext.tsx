@@ -6,7 +6,6 @@ import {
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { notify, errorMessage } from '../../../lib/notify';
-import type { PlaylistSummary } from './types';
 import type { Coverage, TaggerState } from '../LibraryTaggingPanel';
 import {
   applyBlockMarks, applyEraYearEvent, applyLikeChange, applyTagEvent, libraryKeys, rowsOf,
@@ -15,13 +14,11 @@ import {
   AdminResponseError,
   adminJson,
   adminResponse,
-  useQueryErrorToast,
   type AdminFetch,
 } from '../../../lib/admin-query';
 import type {
   BlockEntry, BlockRef, BlockType, BrowseResponse, LikeIndex, QueueBlockKind, QueueBlockResult, Track,
 } from './types';
-import { refreshPlaylistCatalogues } from '../playlist-cache';
 
 // Per-call cap on POST /library/blocklist/check, matching the controller's.
 // A Search tab paged deep with Load more can hold more rows than that.
@@ -30,7 +27,6 @@ const CHECK_CHUNK = 500;
 // Stable fallbacks for the two queries whose absent data has a meaning. A fresh
 // literal per render would change the context value's identity every time.
 const EMPTY_LIKES: LikeIndex = {};
-const EMPTY_PLAYLISTS: PlaylistSummary[] = [];
 
 export interface LibraryShared {
   // Passed down from the page owner so every Library resource shares one
@@ -57,9 +53,11 @@ export interface LibraryShared {
   toggleSelect: (id: string) => void;
   toggleAllRows: (rows: Track[]) => void;
   clearSelection: () => void;
-  playlists: PlaylistSummary[] | null;
   plBusy: boolean;
-  addSelectedToPlaylist: (t: { playlistId?: string; name?: string }) => Promise<void>;
+  /** Block every selected track by TITLE. Albums and artists stay per-row:
+   *  a bulk artist block from a filtered search would silently take far more
+   *  off the air than the rows the operator can see. */
+  blockSelectedTracks: () => Promise<void>;
 
   // Mood vocabulary for the inline editor. Only the browse response carries it.
   vocab: string[];
@@ -279,27 +277,6 @@ export function LibraryProvider({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [plBusy, setPlBusy] = useState(false);
 
-  // Fetched lazily, only once a row is selected: the Add-to-playlist bar is the
-  // only consumer and does not exist before then.
-  const playlistsQuery = useQuery({
-    queryKey: libraryKeys.playlists(),
-    queryFn: async ({ signal }) => {
-      const j = await adminJson<{ playlists?: PlaylistSummary[] }>(
-        adminFetch, '/playlists', undefined, signal,
-      );
-      return j.playlists || [];
-    },
-    enabled: ready && selected.size > 0,
-  });
-  useQueryErrorToast(playlistsQuery.error, true);
-  // An errored fetch reads as "no playlists", not "still loading", so the bar
-  // offers the create-new path rather than spinning forever.
-  const playlists = useMemo(
-    () => playlistsQuery.data ?? (playlistsQuery.error ? EMPTY_PLAYLISTS : null),
-    [playlistsQuery.data, playlistsQuery.error],
-  );
-  // Selection is per-view: ids from another tab would be invisible. The panel
-  // calls this on every tab change -- the provider cannot see `tab`.
   const clearSelection = useCallback(() => { setSelected(new Set()); }, []);
 
   const toggleSelect = useCallback((id: string) => {
@@ -321,39 +298,45 @@ export function LibraryProvider({
     });
   }, []);
 
-  const addSelectedToPlaylist = useCallback(async (target: { playlistId?: string; name?: string }) => {
-    const songIds = Array.from(selected);
-    if (songIds.length === 0) return;
+  // Bulk block by title. Sequential on purpose: each POST purges the queue and
+  // restamps marks server-side, and firing 50 of them at once turned a tidy
+  // operator action into a thundering herd against Navidrome. `plBusy` gates
+  // the bar so the button can't be pressed twice.
+  const blockSelectedTracks = useCallback(async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
     setPlBusy(true);
+    let done = 0;
+    let failed = 0;
     try {
-      let detailId: string | undefined;
-      if (target.playlistId) {
-        await adminJson(adminFetch, `/playlists/${encodeURIComponent(target.playlistId)}/tracks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ songIds }),
-        });
-        detailId = target.playlistId;
-      } else {
-        const result = await adminJson<{ playlist?: { id?: string } }>(adminFetch, '/playlists', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: target.name, songIds }),
-        });
-        detailId = result.playlist?.id;
+      for (const id of ids) {
+        try {
+          await adminJson(adminFetch, '/library/blocklist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'track', trackId: id }),
+          });
+          done++;
+        } catch {
+          // One bad id must not strand the other 49 — count it and carry on.
+          failed++;
+        }
       }
-      await refreshPlaylistCatalogues(qc, detailId ? [detailId] : []);
-      const plName = target.name
-        || playlists?.find(p => p.id === target.playlistId)?.name
-        || 'playlist';
-      notify.ok(`added ${songIds.length} track${songIds.length === 1 ? '' : 's'} to “${plName}”`);
+      // No undo here: an undo that has to lift 50 entries one by one is a
+      // second bulk operation wearing a toast, and a half-undone block is
+      // worse than none. The Blocked tab is where this gets reversed.
+      notify.ok(
+        `${done} track${done === 1 ? '' : 's'} will never air`
+        + (failed ? ` · ${failed} failed` : '')
+        + ' — manage in the Blocked tab',
+      );
+      void qc.invalidateQueries({ queryKey: libraryKeys.blocked() });
+      await restampBlockMarks();
       setSelected(new Set());
-    } catch (err) {
-      notify.err(errorMessage(err));
     } finally {
       setPlBusy(false);
     }
-  }, [adminFetch, selected, playlists, qc]);
+  }, [adminFetch, selected, qc, restampBlockMarks]);
 
   const vocabQuery = useQuery({
     queryKey: libraryKeys.moodVocab(),
@@ -616,7 +599,7 @@ export function LibraryProvider({
     adminFetch, ready, coverage, reloadCoverage, tagger, restampBlockMarks,
     likeIndex, liking, toggleLike, clearLikes,
     selected, toggleSelect, toggleAllRows, clearSelection,
-    playlists, plBusy, addSelectedToPlaylist,
+    plBusy, blockSelectedTracks,
     vocab, seedVocab, ensureVocab,
     queuing, retagging, flashId, editingId, manualBusy, eraBusy, blocking,
     queueTrack, queueBlock, retagTrack, onEditTrack, cancelEdit, saveManualTag, saveEraYear,
@@ -625,7 +608,7 @@ export function LibraryProvider({
     adminFetch, ready, coverage, reloadCoverage, tagger, restampBlockMarks,
     likeIndex, liking, toggleLike, clearLikes,
     selected, toggleSelect, toggleAllRows, clearSelection,
-    playlists, plBusy, addSelectedToPlaylist,
+    plBusy, blockSelectedTracks,
     vocab, seedVocab, ensureVocab,
     queuing, retagging, flashId, editingId, manualBusy, eraBusy, blocking,
     queueTrack, queueBlock, retagTrack, onEditTrack, cancelEdit, saveManualTag, saveEraYear,

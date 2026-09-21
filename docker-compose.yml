@@ -4,7 +4,7 @@ services:
     pull_policy: never
     container_name: sub-wave
     restart: unless-stopped
-    mem_limit: 8g
+    mem_limit: 16g
     environment:
       - TZ=Europe/Zurich
       - ADMIN_USER=admin
@@ -19,7 +19,7 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       navidrome:
-        ipv4_address: 172.168.22.10
+        ipv4_address: 172.168.22.100
 
 networks:
   navidrome:
