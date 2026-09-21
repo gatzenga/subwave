@@ -34,7 +34,6 @@ const {
   moodScheduleSchema,
   moodsSchema,
   privacyPatchSchema,
-  requestsPatchSchema,
   timezoneSchema,
   weatherMoodsSchema,
   scrobblePatchSchema,
@@ -46,7 +45,6 @@ const {
   transitionsPatchSchema,
   uiPatchSchema,
   weatherPatchSchema,
-  webhooksPolicyPatchSchema,
 } = await import('../src/schemas/settings.js');
 const {
   SETTINGS_PATCH_KEYS,
@@ -434,12 +432,9 @@ test('ui.skin is DROPPED when invalid, and stringifies non-strings', () => {
 });
 
 test('the never-throwing blocks still never throw', () => {
-  // ui, transitions and webhooksPolicy have no refusal path at all today.
+  // ui and transitions have no refusal path at all today.
   for (const v of [{ pairDrain: 'x' }, { stemBlends: 0 }, 'nonsense', null, []]) {
     assert.equal(transitionsPatchSchema.safeParse(v).success, true);
-  }
-  for (const v of [{ trackPlayListenerGated: 'x' }, 'nonsense', null]) {
-    assert.equal(webhooksPolicyPatchSchema.safeParse(v).success, true);
   }
   assert.equal(uiPatchSchema.safeParse({ boothBuddy: 'x', tuneInOverlay: 0 }).success, true);
   assert.equal(transitionsPatchSchema.parse({ pairDrain: 'x' }).pairDrain, true);
@@ -607,10 +602,9 @@ test('the converted keys are exactly the ones with schemas', () => {
     'locale', 'loudness', 'maxTrackSeconds', 'moodSchedule', 'moods',
     'pauseTalkMinSeconds', 'personas',
     'picker',
-    'privacy', 'requests', 'schedule', 'scheduleOverride', 'scrobble', 'search',
+    'privacy', 'schedule', 'scheduleOverride', 'scrobble', 'search',
     'sfx', 'shows', 'silenceTrim', 'station', 'stationDescription', 'stream',
     'theme', 'timezone', 'transitions', 'ui', 'weather', 'weatherMoods',
-    'webhooks', 'webhooksPolicy',
   ]);
 });
 
@@ -846,40 +840,6 @@ test('update() still refuses a lock with no password behind it', async () => {
   const s = await settings.update({ privacy: { publishPersonaSouls: true } });
   assert.equal(s.saved.privacy.publishPersonaSouls, true);
 });
-
-test('requests treats an emptied input as ABSENT, not as zero', () => {
-  // Why intIn exists: an emptied admin input arrives as JSON null and Number(null)
-  // is 0, which used to clamp to the floor and close the request line.
-  assert.equal(requestsPatchSchema.parse({ globalHourlyCap: null }).globalHourlyCap, undefined);
-  assert.equal(requestsPatchSchema.parse({ globalHourlyCap: '' }).globalHourlyCap, undefined);
-  assert.equal(requestsPatchSchema.parse({ globalHourlyCap: '  ' }).globalHourlyCap, undefined);
-  assert.equal(requestsPatchSchema.parse({ globalHourlyCap: [] }).globalHourlyCap, undefined);
-  assert.equal(requestsPatchSchema.parse({ globalHourlyCap: false }).globalHourlyCap, undefined);
-  // Usable values round and clamp SILENTLY — out of range never refuses.
-  assert.equal(requestsPatchSchema.parse({ globalHourlyCap: 9999 }).globalHourlyCap, 500);
-  assert.equal(requestsPatchSchema.parse({ globalHourlyCap: 1 }).globalHourlyCap, 5);
-  assert.equal(requestsPatchSchema.parse({ maxPending: '7' }).maxPending, 7);
-  assert.equal(requestsPatchSchema.parse({ maxPending: 2.5 }).maxPending, 3);
-  // 'x' is unusable (Number('5abc') is NaN here, unlike the parseInt family).
-  assert.equal(requestsPatchSchema.parse({ maxPending: '5abc' }).maxPending, undefined);
-  // Booleans are typeof-checked, NOT coerced — the opposite of ui/privacy.
-  assert.equal(requestsPatchSchema.parse({ enabled: 1 }).enabled, undefined);
-  assert.equal(requestsPatchSchema.parse({ enabled: false }).enabled, false);
-  // requests can never throw.
-  assert.equal(requestsPatchSchema.safeParse({ maxPending: {} }).success, true);
-});
-
-test('update() falls each requests field back to the CURRENT value', async () => {
-  await settings.update({ requests: { maxPending: 9, globalHourlyCap: 77 } });
-  const r = await settings.update({ requests: { globalHourlyCap: null, maxPending: 3 } });
-  assert.equal(r.saved.requests.maxPending, 3);
-  assert.equal(r.saved.requests.globalHourlyCap, 77); // untouched by the null
-  assert.deepEqual(Object.keys(r.saved.requests).sort(), [
-    'cooldownSec', 'enabled', 'globalHourlyCap', 'maxPending', 'onePendingPerIp',
-    'perIpHourlyCap', 'repeatCooldownMin',
-  ]);
-});
-
 
 test('moods canonicalises names and refuses post-normalisation duplicates', () => {
   const r = moodsSchema.parse([{ name: 'Late Night!' }, { name: '  ROCK  ' }]);

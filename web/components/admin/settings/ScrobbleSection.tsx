@@ -9,7 +9,7 @@ import { Label } from '../../ui/label';
 import { Card, Btn, Pill, Seg } from '../ui';
 import {
   SectionHeader, SaveBar,
-  type SectionProps, type ScrobbleLastfmForm, type ScrobbleListenbrainzForm,
+  type SectionProps, type ScrobbleLastfmForm,
 } from './shared';
 
 interface ScrobbleSectionProps extends SectionProps {
@@ -19,10 +19,8 @@ interface ScrobbleSectionProps extends SectionProps {
 
 export function ScrobbleSection({ data, form, setForm, busy, saveSettings, adminFetch, refresh }: ScrobbleSectionProps) {
   const lf = form.scrobble.lastfm;
-  const lb = form.scrobble.listenbrainz;
   const nd = form.scrobble.navidrome;
   const savedLf = data.values?.scrobble?.lastfm || {};
-  const savedLb = data.values?.scrobble?.listenbrainz || {};
   const savedNd = data.values?.scrobble?.navidrome || {};
 
   // 'set' means "stored": leave the input empty. The controller ignores 'set' on
@@ -34,9 +32,7 @@ export function ScrobbleSection({ data, form, setForm, busy, saveSettings, admin
   const lfApiKeySet = lf.apiKey === 'set' || !!env.LASTFM_API_KEY;
   const lfApiSecretSet = lf.apiSecret === 'set' || !!env.LASTFM_API_SECRET;
   const lfSessionSet = lf.sessionKey === 'set' || !!env.LASTFM_SESSION_KEY;
-  const lbTokenSet = lb.userToken === 'set' || !!env.LISTENBRAINZ_USER_TOKEN;
   const lfReady = lf.enabled && lfApiKeySet && lfApiSecretSet && lfSessionSet;
-  const lbReady = lb.enabled && lbTokenSet;
   // Navidrome has no credentials of its own — the station's existing connection
   // is the credential, so "enabled" is the whole readiness test here.
   const ndReady = !!nd.enabled;
@@ -56,20 +52,11 @@ export function ScrobbleSection({ data, form, setForm, busy, saveSettings, admin
     if (lf.sessionKey && lf.sessionKey !== 'set') patch.sessionKey = lf.sessionKey;
     saveSettings({ scrobble: { lastfm: patch } });
   };
-  const saveListenbrainz = () => {
-    const patch: Partial<ScrobbleListenbrainzForm> = {
-      enabled: lb.enabled,
-      username: lb.username,
-      baseUrl: lb.baseUrl,
-    };
-    if (lb.userToken && lb.userToken !== 'set') patch.userToken = lb.userToken;
-    saveSettings({ scrobble: { listenbrainz: patch } });
-  };
   const saveNavidrome = () => {
     saveSettings({ scrobble: { navidrome: { enabled: nd.enabled } } });
   };
 
-  const sendTest = async (provider: 'lastfm' | 'listenbrainz' | 'navidrome') => {
+  const sendTest = async (provider: 'lastfm' | 'navidrome') => {
     try {
       const r = await adminResponse(adminFetch, '/scrobble/test', {
         method: 'POST',
@@ -140,10 +127,10 @@ export function ScrobbleSection({ data, form, setForm, busy, saveSettings, admin
     <>
       <SectionHeader
         eyebrow="scrobbling"
-        title="Station-wide scrobbling to Last.fm, ListenBrainz and your own Navidrome."
+        title="Station-wide scrobbling to Last.fm and your own Navidrome."
         sub={<>
-          Each backend is independent, pick any of them. Last.fm and ListenBrainz
-          scrobble only when at least one listener is tuned in to the stream;
+          Each backend is independent, pick either. Last.fm scrobbles only when at
+          least one listener is tuned in to the stream;
           Navidrome logs every track the station airs, because that is what keeps
           smart playlists rotating. For Last.fm, enter your API key and secret, then
           hit <strong>Connect to Last.fm</strong> to authorize, no session-key
@@ -151,7 +138,6 @@ export function ScrobbleSection({ data, form, setForm, busy, saveSettings, admin
         </>}
         metrics={[
           { n: lfReady ? 'on' : 'off', l: 'last.fm', accent: lfReady },
-          { n: lbReady ? 'on' : 'off', l: 'listenbrainz', accent: lbReady },
           { n: ndReady ? 'on' : 'off', l: 'navidrome', accent: ndReady },
         ]}
       />
@@ -316,127 +302,6 @@ export function ScrobbleSection({ data, form, setForm, busy, saveSettings, admin
           busy={busy}
           onSave={saveLastfm}
           saveLabel="Save Last.fm"
-        />
-      </Card>
-
-      <Card
-        title="ListenBrainz"
-        sub={lbReady ? `submitting as ${savedLb.username || '(unknown)'}` : 'not connected'}
-      >
-        <div className="grid gap-[18px]">
-          <div className="field">
-            <div className="flex items-center gap-2">
-              <Label>Enabled</Label>
-              {lb.enabled !== !!savedLb.enabled && <Pill tone="accent" dot>unsaved</Pill>}
-            </div>
-            <Seg
-              value={lb.enabled ? 'on' : 'off'}
-              onChange={v =>
-                setForm(f => ({
-                  ...f,
-                  scrobble: {
-                    ...f.scrobble,
-                    listenbrainz: { ...f.scrobble.listenbrainz, enabled: v === 'on' },
-                  },
-                }))
-              }
-              options={[{ id: 'off', label: 'Off' }, { id: 'on', label: 'On' }]}
-            />
-            <div className="field-hint">
-              ListenBrainz is the open-source alternative to Last.fm, with the same listener gate
-              and eligibility rules.
-            </div>
-          </div>
-
-          <div className="field">
-            <Label>API base URL</Label>
-            <Input
-              type="url"
-              value={lb.baseUrl}
-              placeholder="https://api.listenbrainz.org/1"
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setForm(f => ({
-                  ...f,
-                  scrobble: {
-                    ...f.scrobble,
-                    listenbrainz: { ...f.scrobble.listenbrainz, baseUrl: e.target.value },
-                  },
-                }))
-              }
-              className="max-w-[360px]"
-            />
-            <div className="field-hint">
-              Leave blank for listenbrainz.org. For self-hosted LB-compatible scrobblers, use the
-              API root (e.g. <code>http://koito:4110/apis/listenbrainz/1</code>). Overrides via{' '}
-              <code>LISTENBRAINZ_API_URL</code> env when set.
-            </div>
-          </div>
-
-          <div className="field">
-            <Label>User token</Label>
-            <Input
-              type="password"
-              autoComplete="off"
-              value={inputValue(lb.userToken)}
-              placeholder={placeholder(lb.userToken, 'your listenbrainz user token')}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setForm(f => ({
-                  ...f,
-                  scrobble: {
-                    ...f.scrobble,
-                    listenbrainz: { ...f.scrobble.listenbrainz, userToken: e.target.value },
-                  },
-                }))
-              }
-              className="max-w-[360px]"
-            />
-            <div className="field-hint">
-              Copy from <code>listenbrainz.org/profile</code>. Falls back to
-              <code> LISTENBRAINZ_USER_TOKEN</code>.
-            </div>
-          </div>
-
-          <div className="field">
-            <Label>Username (display)</Label>
-            <Input
-              value={lb.username}
-              placeholder="your listenbrainz username"
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setForm(f => ({
-                  ...f,
-                  scrobble: {
-                    ...f.scrobble,
-                    listenbrainz: { ...f.scrobble.listenbrainz, username: e.target.value },
-                  },
-                }))
-              }
-              className="max-w-[360px]"
-            />
-            <div className="field-hint">Cosmetic only.</div>
-          </div>
-
-          {/* Test probes the SAVED credentials, so it belongs in the card and
-              not beside the save button: the save bar renders only while the
-              section is dirty, which is the one state in which there is
-              nothing saved worth testing. */}
-          <div className="field">
-            <div className="flex flex-wrap items-center gap-3">
-              <Btn sm onClick={() => sendTest('listenbrainz')} disabled={busy || !lbReady}>
-                Test
-              </Btn>
-              <span className="text-[12px] leading-[1.5] text-muted">
-                Sends a now-playing update for the on-air track with the saved
-                credentials. Needs something playing.
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <SaveBar
-          note="Applies on the next track transition, no restart needed."
-          busy={busy}
-          onSave={saveListenbrainz}
-          saveLabel="Save ListenBrainz"
         />
       </Card>
 

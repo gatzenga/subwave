@@ -1,12 +1,11 @@
-// Pure show helpers: hydration and the payload / table-row projections.
-// Validation lives in ShowsPanel/ShowEditor via the shared schema; what stays
-// here is what the schema does not express — tolerance for a half-finished show
-// and showPayload's "only means something with" conditionals.
+// Pure show helpers: hydration and the payload / row projections. Validation
+// lives in the shared schema; what stays here is what the schema does not
+// express — tolerance for a half-finished show and showPayload's "only means
+// something with" conditionals.
 
-import type { ShowFacet, ShowRow } from './ShowsTable';
 import { SHOW_COLORS } from '../schedule/lib';
 import { eraLabelOf } from './types';
-import type { Persona, Schedule, Show } from './types';
+import type { Persona, Schedule, Show, ShowFacet, ShowRow } from './types';
 import {
   migrateLegacyShowFields,
   type ShowSchemaContext,
@@ -175,7 +174,7 @@ function faceOf(p: Persona, apiBase: string) {
   };
 }
 
-// Everything the row needs is derived here, so ShowsTable never sees `Show`.
+// Everything the row needs is derived here, so a consumer never sees `Show`.
 // `ok` comes from the caller's RHF `formState.errors.shows`, never a local check.
 export function showRow(
   s: Show,

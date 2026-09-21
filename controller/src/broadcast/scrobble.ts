@@ -1,4 +1,4 @@
-// Station-wide scrobbling — Last.fm + ListenBrainz + Navidrome, driven from
+// Station-wide scrobbling — Last.fm + Navidrome, driven from
 // Queue.onTrackStarted. Each backend is independent (own enable flag,
 // credentials, failure mode); every call is fire-and-forget with a 5s timeout and
 // no retry queue.
@@ -29,21 +29,6 @@ import {
 
 const TIMEOUT_MS = 5000;
 
-// Env LISTENBRAINZ_API_URL wins, then settings baseUrl, else LB.org. Either input
-// may be the API root or the submit endpoint; normalized to a base here.
-export function listenbrainzApiBase(): string {
-  const raw =
-    process.env.LISTENBRAINZ_API_URL?.trim() ||
-    settings.get()?.scrobble?.listenbrainz?.baseUrl?.trim() ||
-    '';
-  const base = raw.replace(/\/submit-listens\/?$/i, '').replace(/\/$/, '');
-  return base || 'https://api.listenbrainz.org/1';
-}
-
-function listenbrainzSubmitUrl(): string {
-  return `${listenbrainzApiBase()}/submit-listens`;
-}
-
 export type ScrobbleTrack = ScrobbleTrackLike;
 
 interface TrackEventArgs {
@@ -66,13 +51,6 @@ function lastfmCreds(): LastfmCreds | null {
   const sessionKey = resolveLastfmSessionKey();
   if (!apiKey || !apiSecret || !sessionKey) return null;
   return { apiKey, apiSecret, sessionKey };
-}
-
-function listenbrainzToken(): string | null {
-  const s: any = settings.get()?.scrobble?.listenbrainz || {};
-  if (!s.enabled) return null;
-  const token = process.env.LISTENBRAINZ_USER_TOKEN || s.userToken || '';
-  return token || null;
 }
 
 // md5 over every parameter except `format`/`callback`, sorted alphabetically and
@@ -224,78 +202,6 @@ export async function lastfmCompleteAuth(token: string): Promise<{ sessionKey: s
   return { sessionKey, username };
 }
 
-async function postListenbrainz(payload: Record<string, unknown>, token: string, label: string): Promise<CallResult> {
-  try {
-    const r = await fetchWithTimeout(listenbrainzSubmitUrl(), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'sub-wave/scrobble',
-      },
-      body: JSON.stringify(payload),
-      timeoutMs: TIMEOUT_MS,
-      bodyDeadline: true,
-    });
-    if (!r.ok) {
-      let detail = '';
-      try { detail = (await r.text()).slice(0, 200); } catch {}
-      const message = `HTTP ${r.status}${detail ? ` — ${detail}` : ''}`;
-      console.warn(`[scrobble] listenbrainz ${label} → ${message}`);
-      return { ok: false, message };
-    }
-    return { ok: true };
-  } catch (err: any) {
-    const message = err?.name === 'AbortError' ? 'request timed out' : (err?.message || String(err));
-    console.warn(`[scrobble] listenbrainz ${label} failed: ${message}`);
-    return { ok: false, message };
-  }
-}
-
-function listenbrainzTrackMetadata(track: ScrobbleTrack): Record<string, unknown> {
-  const md: Record<string, unknown> = {
-    artist_name: String(track.artist || ''),
-    track_name: String(track.title || ''),
-  };
-  if (track.album) md.release_name = String(track.album);
-  const d = Number(track.duration);
-  const additional: Record<string, unknown> = {};
-  if (Number.isFinite(d) && d > 0) additional.duration = Math.round(d);
-  additional.media_player = 'SUB/WAVE';
-  additional.submission_client = 'sub-wave/scrobble';
-  md.additional_info = additional;
-  return md;
-}
-
-async function listenbrainzPlayingNow(track: ScrobbleTrack, token: string): Promise<CallResult> {
-  return postListenbrainz(
-    {
-      listen_type: 'playing_now',
-      payload: [{ track_metadata: listenbrainzTrackMetadata(track) }],
-    },
-    token,
-    'playing_now',
-  );
-}
-
-async function listenbrainzSubmit(track: ScrobbleTrack, startedAt: string, token: string): Promise<CallResult> {
-  const ts = Math.floor(Date.parse(startedAt) / 1000);
-  if (!Number.isFinite(ts)) return { ok: false, message: 'invalid start timestamp' };
-  return postListenbrainz(
-    {
-      listen_type: 'single',
-      payload: [
-        {
-          listened_at: ts,
-          track_metadata: listenbrainzTrackMetadata(track),
-        },
-      ],
-    },
-    token,
-    'submit_listens',
-  );
-}
-
 // Navidrome goes through music/subsonic.ts, inheriting its salt+token auth,
 // bounded fetch and /debug call log. Credentials come from `config.navidrome`,
 // never from settings, so there is nothing to paste or redact.
@@ -353,18 +259,16 @@ export function onTrackEvent({ outgoing, outgoingStartedAt, incoming }: TrackEve
   }
 
   const lf = lastfmCreds();
-  const lb = listenbrainzToken();
-  if (!lf && !lb) {
+  if (!lf) {
     console.log('[scrobble] skip: no backend enabled with credentials');
     return;
   }
 
-  const backends = [lf && 'last.fm', lb && 'listenbrainz'].filter(Boolean).join('+');
+  const backends = 'last.fm';
 
   if (incoming?.title && incoming?.artist) {
     console.log(`[scrobble] now-playing → ${backends}: "${incoming.title}" — ${incoming.artist}`);
     if (lf) lastfmUpdateNowPlaying(incoming, lf).catch(() => {});
-    if (lb) listenbrainzPlayingNow(incoming, lb).catch(() => {});
   }
 
   if (outgoing && outgoingStartedAt) {
@@ -372,7 +276,6 @@ export function onTrackEvent({ outgoing, outgoingStartedAt, incoming }: TrackEve
     if (isEligibleScrobble(outgoing, elapsed)) {
       console.log(`[scrobble] submit → ${backends}: "${outgoing.title}" — ${outgoing.artist} (elapsed=${elapsed}s)`);
       if (lf) lastfmScrobble(outgoing, outgoingStartedAt, lf).catch(() => {});
-      if (lb) listenbrainzSubmit(outgoing, outgoingStartedAt, lb).catch(() => {});
     } else {
       const dur = Number(outgoing.duration);
       const durDisplay = Number.isFinite(dur) && dur > 0 ? `${dur}s` : 'unknown';
@@ -383,7 +286,7 @@ export function onTrackEvent({ outgoing, outgoingStartedAt, incoming }: TrackEve
 
 // Admin "Test" button. Bypasses the listener gate but still respects the
 // per-backend enabled flag, so "disabled but configured" cannot surprise-emit.
-export type ScrobbleProvider = 'lastfm' | 'listenbrainz' | 'navidrome';
+export type ScrobbleProvider = 'lastfm' | 'navidrome';
 
 export interface TestResult {
   ok: boolean;
@@ -404,14 +307,6 @@ export async function testNowPlaying(
     return res.ok
       ? { ok: true, message: `sent now-playing to last.fm for "${track.title}"` }
       : { ok: false, message: `last.fm rejected it — ${res.message || 'unknown error'}` };
-  }
-  if (provider === 'listenbrainz') {
-    const token = listenbrainzToken();
-    if (!token) return { ok: false, message: 'listenbrainz not enabled or missing user token' };
-    const res = await listenbrainzPlayingNow(track, token);
-    return res.ok
-      ? { ok: true, message: `sent playing_now to listenbrainz for "${track.title}"` }
-      : { ok: false, message: `listenbrainz rejected it — ${res.message || 'unknown error'}` };
   }
   if (provider === 'navidrome') {
     if (!navidromeEnabled()) return { ok: false, message: 'navidrome scrobbling is off' };

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { ListMusic, Telescope, ArrowRight } from 'lucide-react';
+import { ListMusic, ArrowRight } from 'lucide-react';
 import { useAdminAuth } from '../../lib/adminAuth';
 import TaggingPanel from './LibraryTaggingPanel';
 import { LibraryProvider, useLibrary } from './library/LibraryContext';
@@ -76,21 +76,6 @@ function LibraryBody() {
             <span className="block text-sm font-bold text-ink">Playlist Builder</span>
             <span className="block truncate font-mono text-[10px] text-muted">
               describe a vibe → an ordered set · edit by hand · save to Navidrome
-            </span>
-          </span>
-          <ArrowRight className="size-4 flex-none text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
-        </a>
-        <a
-          href="/observatory"
-          className="group flex min-w-0 items-center gap-3.5 border border-ink bg-bg p-3.5 transition-colors hover:bg-ink-soft"
-        >
-          <span className="grid size-9 flex-none place-items-center border border-ink bg-ink text-bg">
-            <Telescope size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-bold text-ink">Observatory</span>
-            <span className="block truncate font-mono text-[10px] text-muted">
-              fly the library as a starfield — moods, clusters, outliers
             </span>
           </span>
           <ArrowRight className="size-4 flex-none text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />

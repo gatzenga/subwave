@@ -2,30 +2,19 @@
   "name": "sub-wave",
   "version": "1.13.0",
   "private": true,
-  "description": "SUB/WAVE — personal internet radio station. One Icecast stream, AI DJ, AI-curated playlists.",
+  "description": "SUB/WAVE — personal internet radio station. HLS + Icecast, AI DJ, AI-curated playlists.",
   "license": "MIT",
   "type": "module",
-  "bin": {
-    "subwave": "bin/subwave"
-  },
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "start": "node bin/subwave",
-    "setup": "node bin/subwave setup",
-    "dev": "node bin/subwave setup",
-    "dev:docker": "docker compose -f docker-compose.dev.yml up -d",
-    "dev:web": "npm --prefix web run dev",
-    "rebuild": "docker compose -f docker-compose.dev.yml up -d --build",
-    "logs": "docker compose -f docker-compose.dev.yml logs -f",
-    "down": "docker compose -f docker-compose.dev.yml down",
-    "jingles": "bash scripts/generate-jingles.sh",
-    "cli:typecheck": "npm --prefix cli run typecheck"
-  },
-  "dependencies": {
-    "@clack/prompts": "^0.8.2",
-    "picocolors": "^1.1.1",
-    "tsx": "^4.19.2"
+    "up": "docker compose up -d",
+    "down": "docker compose down",
+    "pull": "docker compose pull",
+    "logs": "docker compose logs -f",
+    "lint": "npm --prefix controller run lint && npm --prefix web run lint",
+    "test": "npm --prefix controller test",
+    "gen:schemas": "npm --prefix controller run gen:schemas"
   }
 }

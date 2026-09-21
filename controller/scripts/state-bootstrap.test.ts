@@ -1,5 +1,5 @@
 // Regression tests for the shared-state bootstrap in the two supervisors
-// (docker/broadcast-entrypoint.sh and docker/aio/supervisor.sh:
+// (docker/aio/supervisor.sh:
 // bootstrap_state_dirs).
 //
 // #1300 bug 10. The bootstrap creates the state subdirs and chmod 777s them,
@@ -52,7 +52,6 @@ const docker = join(here, '..', '..', 'docker');
 // The two scripts, each sourced in library mode so the bootstrap runs without
 // booting a station. Same function name in both — that IS the lockstep.
 const SUPERVISORS = [
-  { name: 'broadcast-entrypoint.sh', path: join(docker, 'broadcast-entrypoint.sh'), lib: 'SUBWAVE_BROADCAST_LIB' },
   { name: 'aio/supervisor.sh', path: join(docker, 'aio', 'supervisor.sh'), lib: 'SUBWAVE_SUPERVISOR_LIB' },
 ] as const;
 

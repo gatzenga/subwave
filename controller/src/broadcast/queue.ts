@@ -22,7 +22,6 @@ import * as mix from '../music/mix.js';
 import * as library from '../music/library.js';
 import * as loudness from '../music/loudness.js';
 import * as silenceTrim from '../music/silence-trim.js';
-import { swallowedByCrossfade } from '../util/request-guard.js';
 import * as showBoundary from './show-boundary.js';
 import * as blocklist from '../music/blocklist.js';
 import { artistRootKey, trackKey, type CandidateLike } from '../music/recency.js';
@@ -52,7 +51,7 @@ import { getFullContext, getClockContext, energyForDaypart } from '../context.js
 import * as settings from '../settings.js';
 import { TRANSITION_EFFECTS } from '../settings/vocab.js';
 import { logEvent } from '../observability/events.js';
-import { djCallsAllowed, presentListeners } from './listeners.js';
+import { djCallsAllowed } from './listeners.js';
 import { autoVoiceAllowed } from './voice-policy.js';
 import { speakClockAllowed, stationIdDaypartDrifted, stationIdDaypartStamp } from './clock-policy.js';
 import {
@@ -78,7 +77,6 @@ import {
   waitForPauseVoiceClaim,
   waitForPauseVoiceStarted,
 } from './queue/pause-voice-delivery.js';
-import * as webhooks from './webhooks.js';
 import * as scrobble from './scrobble.js';
 import * as liquidsoapControl from './liquidsoap-control.js';
 import {
@@ -145,16 +143,13 @@ import {
   speechDurationMs,
   writeHandoff,
   jingleAiredAtMs,
-  type QueuedVoice,
   type VoiceHandoff,
 } from './queue/voice-io.js';
 import { awaitIntroRender, IntroRenderTracker } from './queue/intro-render.js';
-import { notifyQueued, notifySpoken } from './voice-events.js';
 
 // Everything the outside world is told about ONE spoken segment, held in a
-// single value because it is now read twice — once when the clip is committed
-// (onQueued) and once when it airs (onSpoken). Two hand-built copies at each of
-// the four call sites is exactly the drift #1382 removed.
+// single value so the four call sites that air speech describe a segment the
+// same way rather than hand-building a copy each.
 interface SegmentDesc {
   kind: string;
   /** Which handoff file carried the clip — the caller picked it, so it says
@@ -196,7 +191,7 @@ interface PendingVoice {
    *  refuses a stale clip on this stamp. */
   daypart: string | null;
   /** Whether the clips are lines of one multi-voice exchange, which decides the
-   *  attribution they air under and the single webhook they owe. */
+   *  attribution they air under. */
   exchange: boolean;
   /** Enqueue time — the anchor for both the stale drop and the planner's hold. */
   t: number;
@@ -393,6 +388,23 @@ const PENDING_JINGLE_TTL_MS = 30 * 60 * 1000;
 const HANDOFF_BOUNDARY_WAIT_MS = 2 * 60_000;
 
 // transitions far more often — a working DJ talks across most of them.
+// Will the mixer eat this pick whole? (#1594) `cross(duration=d)` buffers d
+// seconds of the outgoing track, so an item whose whole playable span is under d
+// never reaches output and nothing reports it. `playableSec` is the span AFTER
+// silence-trim; `crossfadeSec` is settings.crossfadeDuration. Fails FALSE on
+// either unknown and on crossfade 0, and EQUAL is not swallowed (strictly under
+// is the measured failure). It says nothing about whether the track should air.
+function swallowedByCrossfade(
+  playableSec: number | null | undefined,
+  crossfadeSec: number | null | undefined,
+): boolean {
+  const span = Number(playableSec);
+  const cross = Number(crossfadeSec);
+  if (!Number.isFinite(span) || span <= 0) return false;
+  if (!Number.isFinite(cross) || cross <= 0) return false;
+  return span < cross;
+}
+
 class Queue {
   upcoming: QueueItem[] = [];  // request items pushed by listeners, not yet playing
   current: QueueItem | null = null;    // what's broadcasting right now (request or auto)
@@ -2150,7 +2162,6 @@ class Queue {
         return { accepted: false, deferred: false, completed: Promise.resolve(false) };
       }
       const handoff = await this._airVoice(targetFile, wavPath, safeText, voiceGainDb(kind, persona), {
-        onQueued: q => this.onQueued(q, seg),
       });
       // Bookkeeping runs when the words reach the stream, not at handoff
       // (#1382). A mixer that writes no marker resolves immediately with a null
@@ -2171,38 +2182,16 @@ class Queue {
   // airPendingVoice, airIntro) all used to do this inline, immediately after the
   // handoff file was written — which is a poll, a queue and a duck ramp before
   // any of it is true. They also drifted: three published slightly different
-  // webhook payloads for the same thing.
+  // payloads for the same thing.
   //
   // `handoff.aired` resolves with the live-edge stamp from the mixer's marker,
   // or immediately with null on a station whose Liquidsoap doesn't write one —
   // in which case this is exactly the old timing and the old (unstamped) data.
   // It never rejects, so there is no path where a segment airs and the booth log
   // never hears about it.
-  // The pre-air half of the same bookkeeping: announce that speech is COMING.
-  // Passed to airVoice as a callback because the commitment happens inside it,
-  // before the handoff this method's caller is awaiting has resolved — the
-  // whole value of the event is that it lands early. Nothing is logged or
-  // persisted here: this is a forecast, and the booth log records what aired.
-  onQueued(q: QueuedVoice, { kind, channel, text, meta = {}, persona = null }: SegmentDesc) {
-    try {
-      const safeText = normalizeForDisplay(text);
-      notifyQueued({
-        voiceId: q.voiceId,
-        kind,
-        channel,
-        text: safeText,
-        durationMs: q.clipMs,
-        estimatedAirInMs: q.estimatedAirInMs,
-        personaId: persona?.id ?? (meta.personaId as string | undefined) ?? null,
-        personaName: persona?.name ?? (meta.personaName as string | undefined) ?? null,
-      });
-    } catch (err) {
-      this.log('error', `Queued-voice notify failed: ${(err as Error).message}`);
-    }
-  }
 
   async onSpoken(handoff: VoiceHandoff, {
-    kind, channel, text, meta = {}, persona = null, logText = null, legacy = true,
+    kind, text, meta = {}, logText = null,
     settlesHandoff = true,
   }: SegmentDesc): Promise<boolean> {
     const airedAt = await handoff.aired;
@@ -2223,17 +2212,6 @@ class Queue {
         meta: airedAt != null
           ? { ...meta, airedAt: new Date(airedAt).toISOString() }
           : meta,
-      });
-      notifySpoken({
-        voiceId: handoff.voiceId,
-        kind,
-        channel,
-        text: safeText,
-        durationMs: handoff.clipMs,
-        airedAt,
-        legacy,
-        personaId: persona?.id ?? (meta.personaId as string | undefined) ?? null,
-        personaName: persona?.name ?? (meta.personaName as string | undefined) ?? null,
       });
       return true;
     } catch (err) {
@@ -2294,19 +2272,12 @@ class Queue {
           settlesHandoff: kind === 'handoff' ? index === rendered.length - 1 : undefined,
         };
         const handoff = await this._airVoice(config.liquidsoap.sayFile, l.wavPath, l.text, voiceGainDb(kind, l.persona), {
-          onQueued: q => this.onQueued(q, seg),
         });
         this.onSpoken(handoff, seg);
       } catch (err) {
         this.log('error', `Exchange line failed to air: ${(err as Error).message}`);
       }
     }
-    // One webhook for the whole exchange — per-line events would read as five
-    // separate segments to a Discord pipe.
-    webhooks.notify('dj.say', {
-      text: rendered.map(l => `${l.persona?.name || 'DJ'}: ${l.text}`).join('\n'),
-      kind,
-    });
     return true;
   }
 
@@ -2321,7 +2292,7 @@ class Queue {
   // `djTalkOnlyBetweenTracks` on (#1485 FR 5b) every scheduled segment reaches
   // the same slot, through announce()/announceExchange() rather than through
   // here. All bookkeeping (djLog → recap/opener anti-repeat, session turn,
-  // webhook) happens at AIR time, so the DJ's memory reflects what reached the
+  // ) happens at AIR time, so the DJ's memory reflects what reached the
   // stream, not what was merely scheduled.
   async announceAtNextTrack(text, kind = 'announcement', { persona = null, meta = {}, daypart = null, hostSpeech = null }: { persona?: Persona | null; meta?: TurnMeta; daypart?: string | null; hostSpeech?: HostSpeechStamp | null } = {}) {
     const safeText = normalizeForDisplay(text || '');
@@ -2733,7 +2704,6 @@ class Queue {
             }
           : { kind: p.kind, channel: 'intro', text: clip.text, meta: clip.meta, persona: clip.persona };
         const handoff = await this._airVoice(config.liquidsoap.introFile, clip.wavPath, clip.text, voiceGainDb(p.kind, clip.persona), {
-          onQueued: q => this.onQueued(q, seg),
         });
         completions.push(this.onSpoken(handoff, seg));
         if (!sfxHanded && p.sfx) {
@@ -2745,15 +2715,6 @@ class Queue {
       }
     }
     void Promise.all(completions).then(results => p.onCompleted?.(results.some(Boolean)));
-    // One webhook for the whole exchange, at air time — the same single event
-    // announceExchange fires, moved to where the words actually reached the
-    // stream. A single-clip segment's event rides onSpoken like every other.
-    if (p.exchange) {
-      webhooks.notify('dj.say', {
-        text: clips.map(c => `${c.persona?.name || 'DJ'}: ${c.text}`).join('\n'),
-        kind: p.kind,
-      });
-    }
   }
 
   // Air a queued item's track-tied intro/link. Called from onTrackStarted the
@@ -2761,7 +2722,7 @@ class Queue {
   // the RIGHT song rather than over whatever was on-air when it was queued
   // (issue #189). The WAV was rendered ahead of time in drainToLiquidsoap, so
   // this just writes the path to the duck channel and mirrors the bookkeeping
-  // announce() does (djLog feeds the opener anti-repeat; session + webhook).
+  // announce() does (djLog feeds the opener anti-repeat; session).
   // `overBed` is the CALLER's statement that an instrumental bed is feeding the
   // music chain right now — onBedStarted saw the marker. It is not read off
   // item.bedded, which only means a bed URI reached next.txt: a pushed item is
@@ -2879,7 +2840,6 @@ class Queue {
           : {},
       };
       const handoff = await this._airVoice(targetFile, item.introWav, item.introScript || '', voiceGainDb(kind, item.introPersona || undefined), {
-        onQueued: q => this.onQueued(q, seg),
       });
       // Not deferred: introAired is already set and the queue state has to reach
       // disk whether or not the words are audible yet.
@@ -3230,35 +3190,6 @@ class Queue {
       showName: onAirShow?.name || null,
     });
 
-    // `sourceTrackId` is the id from the music backend (Subsonic/Navidrome, or
-    // whatever a router fronts), so a relay can resolve the exact library item
-    // instead of fuzzy-matching artist+title (#1250). Same id `recordPlay` and
-    // `scrobble` already take below. Null when the annotated URI carried no
-    // `subsonic_id` — untracked auto-playlist plays, mainly — so consumers must
-    // handle its absence. Deliberately NOT folded into `source`: that field
-    // means how the track got queued (auto | ai | request) and existing relays
-    // branch on it.
-    const trackPayload = {
-      title: this.current.track.title,
-      artist: this.current.track.artist || null,
-      album: this.current.track.album || null,
-      sourceTrackId: this.current.track.id || null,
-      source: this.current.source,
-      requestedBy: this.current.requestedBy || null,
-    };
-
-    // Outbound fan-out — fire-and-forget; never blocks the picker path.
-    // Optional listener gate (webhooksPolicy.trackPlayListenerGated): fail-closed
-    // like scrobble — see scrobble.ts. Silent skip when gated and count unknown.
-    const gated = !!settings.get()?.webhooksPolicy?.trackPlayListenerGated;
-    if (gated) {
-      const listeners = presentListeners();
-      if (listeners !== null) {
-        webhooks.notify('track.play', { ...trackPayload, listeners });
-      }
-    } else {
-      webhooks.notify('track.play', trackPayload);
-    }
 
     // Last.fm / ListenBrainz — also fire-and-forget. Internally gated on
     // listener count > 0 (fail-closed) and per-backend enable flags.
@@ -3883,33 +3814,6 @@ class Queue {
     return ids;
   }
 
-  // How many LISTENER requests are queued and unaired — what
-  // `settings.requests.maxPending` is a bound on.
-  //
-  // `routes/request.ts` used to count `upcoming.filter(i => i.requestedBy)`
-  // inline, and that read every operator push as a listener waiting in line,
-  // because `POST /dj/queue-track` pushes `requestedBy: 'studio'` on purpose:
-  // that string is the discriminator four air-path exemptions key off (the
-  // #447 length cap, the show-boundary cut, the bed's request reason, the
-  // sub-crossfade warning), and an explicit operator action wants all four.
-  // The cost was paid on a surface with no connection to any of them — six
-  // manual Queue presses reached the default `maxPending` of 6 and answered
-  // every listener "The request queue's full" for as long as those tracks took
-  // to air, with nothing in the refusal or the booth log naming the cause.
-  //
-  // The fix is one question asked in one place rather than a second meaning
-  // hung on `requestedBy`: an operator push carries `operator: true` and is not
-  // a request the queue is holding on a listener's behalf. Counting `!sent`
-  // would be the wrong narrowing — a sent-but-unaired request is still a
-  // listener waiting, and the cap is about how deep the line gets, not about
-  // how far down it Liquidsoap has already reached.
-  //
-  // The on-air track is deliberately NOT counted: `maxPending` bounds what is
-  // still waiting, and a request that is playing has been served.
-  pendingListenerRequests(): number {
-    return this.upcoming.filter(i => i.requestedBy && !i.operator).length;
-  }
-
   // Honest acknowledgement for a listener request whose resolved track is
   // already queued or on air — used when push() dedups the request (issue
   // #619). Lets the caller send a truthful line instead of a false "coming up"
@@ -4179,7 +4083,6 @@ class Queue {
               voiceId: deliveryId,
               pauseDeliveryId: deliveryId,
               airMarkerPromise: started,
-              onQueued: q => this.onQueued(q, seg),
             },
           );
           if (p.sfx) {

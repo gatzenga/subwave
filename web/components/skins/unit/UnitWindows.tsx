@@ -9,19 +9,16 @@ import {
   useMemo,
   useState,
   type ReactNode,
-  type RefObject,
 } from 'react';
 import styles from './Unit.module.css';
 import { usePlayerFeed } from '@/components/player/PlayerCore';
 import { useStationClient } from '@/lib/stationClient';
 import { cn } from '@/lib/cn';
-import { REQUEST_NAME_MAX } from '@/lib/schemas.generated';
 import { normalizeStationLocale, zonedDayHour } from '@/lib/format';
 import type { SchedulePayload, ScheduleShow, StationLocale } from '@/lib/types';
-import { boothLines, contextLine, lastVoiceLine, stationIdentity, turnClock } from '../shared';
-import type { RequestSlip } from '../sharedHooks';
+import { boothLines, lastVoiceLine, stationIdentity, turnClock } from '../shared';
 
-export type UnitModal = null | 'timeline' | 'booth' | 'req';
+export type UnitModal = null | 'timeline' | 'booth';
 
 const EYEBROW =
   'font-mono text-[9px] font-bold tracking-[0.24em] text-[var(--accent)] uppercase';
@@ -450,170 +447,6 @@ export function BoothWindow({ onClose }: { onClose: () => void }) {
                     {line.text}
                   </span>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </WindowShell>
-  );
-}
-
-const FEELING_CHIPS = [
-  'something slower',
-  'turn it up',
-  'deep cut',
-  'whole album side',
-  'surprise me',
-];
-
-export function RequestWindow({
-  onClose,
-  slip,
-  inputRef,
-}: {
-  onClose: () => void;
-  slip: RequestSlip;
-  inputRef: RefObject<HTMLInputElement | null>;
-}) {
-  const { dj, activeShow, context, state } = usePlayerFeed();
-  const { djName, showName } = stationIdentity(dj, activeShow, context);
-  const upcoming = (state.upcoming ?? []).slice(0, 4);
-
-  const receipt = slip.sending
-    ? 'transmitting · POST /request'
-    : slip.ack
-      ? 'receipt logged · the booth answered'
-      : 'no receipt yet · the booth is listening';
-
-  return (
-    <WindowShell label="Request — ask the booth">
-      <div className="flex min-h-0 flex-col border-b border-white/12 lg:border-r lg:border-b-0">
-        <RailHeader
-          title="REQUEST"
-          caption="POST /request · free text · answered by the booth"
-          onClose={onClose}
-        />
-        <div className="flex flex-none flex-col gap-3.5 px-5 py-[22px]">
-          <div className={EYEBROW}>show sheet</div>
-          <div className="flex flex-col gap-2.5">
-            <FieldRow wide k="show" v={showName || 'freeform'} />
-            <FieldRow wide k="host" v={djName} />
-            <FieldRow wide k="mood" v={context?.dominantMood || '—'} />
-            <FieldRow wide k="conditions" v={contextLine(context) || '—'} />
-          </div>
-        </div>
-        <div className="min-h-0 flex-1" />
-        <div className={cn(CAPTION, 'flex-none border-t border-white/12 px-5 py-4 tracking-[0.16em]')}>
-          {receipt}
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-col">
-        <PaneHeader onClose={onClose}>
-          <div className={EYEBROW}>what do you want to hear</div>
-          <div className={cn(CAPTION, 'tracking-[0.16em]')}>artist, title, or a feeling</div>
-        </PaneHeader>
-        <div className="flex min-h-0 flex-1 flex-col gap-[22px] px-5 py-6 lg:px-[26px]">
-          {slip.ack ? (
-            <div className="flex flex-col gap-3">
-              <div className="font-display text-[20px] leading-[1.45] text-[#e6e0d4] italic">
-                {slip.ack}
-              </div>
-              <button
-                type="button"
-                onClick={slip.reset}
-                className="v3-focus cursor-pointer self-start border-0 bg-transparent p-0 font-mono text-[10px] font-bold tracking-[0.2em] text-[var(--accent)] uppercase hover:opacity-80"
-              >
-                new request
-              </button>
-            </div>
-          ) : (
-            <>
-              <form
-                className="flex flex-col border border-white/18 bg-white/3"
-                onSubmit={e => {
-                  e.preventDefault();
-                  void slip.send();
-                }}
-              >
-                <div className="flex">
-                  <input
-                    ref={inputRef}
-                    value={slip.text}
-                    onChange={e => slip.setText(e.target.value)}
-                    placeholder="type it here"
-                    aria-label="Your request"
-                    className={cn(
-                      styles.doto,
-                      'v3-focus min-w-0 flex-1 border-0 bg-transparent p-5 text-[clamp(18px,2vw,24px)] text-[#f4f0e6] uppercase outline-none placeholder:text-[#7c7669]',
-                    )}
-                  />
-                  <button
-                    type="submit"
-                    disabled={slip.sending || !slip.text.trim()}
-                    className={cn(
-                      'v3-focus flex flex-none items-center border-0 bg-[var(--accent)] px-[26px] font-mono text-[11px] font-bold tracking-[0.2em] text-[#0e0d0b] uppercase',
-                      slip.sending || !slip.text.trim()
-                        ? 'cursor-default opacity-60'
-                        : 'cursor-pointer hover:opacity-90',
-                    )}
-                  >
-                    {slip.sending ? '…' : 'send'}
-                  </button>
-                </div>
-                {/* A second, quieter row inside the same chassis — signing is
-                    optional, and a signed request gets the name read on air
-                    (#1347). Inside the form, so Enter still sends from here. */}
-                <div className="flex items-center gap-3 border-t border-white/18 px-5 py-3">
-                  <span className={cn(CAPTION, 'flex-none select-none')}>from</span>
-                  <input
-                    value={slip.name}
-                    onChange={e => slip.setName(e.target.value)}
-                    placeholder="your name (optional)"
-                    aria-label="Your name (optional)"
-                    maxLength={REQUEST_NAME_MAX}
-                    className="v3-focus min-w-0 flex-1 border-0 bg-transparent p-0 font-mono text-[12px] tracking-[0.08em] text-[#e6e0d4] outline-none placeholder:text-[#7c7669]"
-                  />
-                </div>
-              </form>
-              <div className="flex flex-col gap-3">
-                <div className={EYEBROW}>or send a feeling</div>
-                <div className="flex flex-wrap gap-2.5">
-                  {FEELING_CHIPS.map(chip => (
-                    <button
-                      key={chip}
-                      type="button"
-                      onClick={() => {
-                        slip.setText(chip);
-                        inputRef.current?.focus();
-                      }}
-                      className="v3-focus cursor-pointer border border-white/20 bg-transparent px-3.5 py-2.5 font-mono text-[10px] tracking-[0.16em] whitespace-nowrap text-[#e6e0d4] uppercase hover:border-white/40"
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-          <div className="mt-auto flex flex-col gap-2.5 border-t border-white/12 pt-4">
-            <div className={EYEBROW}>in the queue</div>
-            <div className="flex flex-col gap-2 font-mono text-[12px] text-[#b8b1a4]">
-              {upcoming.length === 0 && (
-                <span className="text-[#7c7669]">queue clear — the next pick is the dj&rsquo;s</span>
-              )}
-              {upcoming.map((t, i) => (
-                <span key={`${t.title ?? i}-${i}`} className="truncate">
-                  {i + 1} · {t.title ?? '—'}
-                  {t.artist ? ` — ${t.artist}` : ''}
-                  <span className="text-[#7c7669]">
-                    {' '}
-                    · {typeof t.requestedBy === 'string' && t.requestedBy
-                      ? `for ${t.requestedBy}`
-                      : 'booth pick'}
-                  </span>
-                </span>
               ))}
             </div>
           </div>

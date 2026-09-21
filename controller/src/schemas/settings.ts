@@ -612,10 +612,6 @@ export const transitionsPatchSchema = settingsBlockOf({
   effects: transitionEffectsPatchSchema,
 });
 
-export const webhooksPolicyPatchSchema = settingsBlockOf({
-  trackPlayListenerGated: settingsBoolLike(),
-});
-
 export const uiPatchSchema = settingsBlockOf({
   boothBuddy: settingsBoolLike(),
   tuneInOverlay: settingsBoolLike(),
@@ -728,8 +724,22 @@ export const backupsPatchSchema = settingsBlockOf({
   ),
 });
 
+// HLS AAC bitrates. A separate ladder from the icecast AAC mount: HLS is the
+// default listener transport, so its rungs start lower for mobile.
+export const SETTINGS_HLS_SEGMENT_DURATIONS = [2, 4, 6, 8] as const;
+export const SETTINGS_HLS_SEGMENT_COUNTS = [3, 4, 5, 6, 8, 10] as const;
+
 export const streamPatchSchema = settingsBlockOf({
   opusEnabled: settingsBoolLike(),
+  hlsEnabled: settingsBoolLike(),
+  hlsSegmentDuration: settingsIntOneOf(
+    SETTINGS_HLS_SEGMENT_DURATIONS,
+    `stream.hlsSegmentDuration must be one of: ${SETTINGS_HLS_SEGMENT_DURATIONS.join(', ')}`,
+  ),
+  hlsSegments: settingsIntOneOf(
+    SETTINGS_HLS_SEGMENT_COUNTS,
+    `stream.hlsSegments must be one of: ${SETTINGS_HLS_SEGMENT_COUNTS.join(', ')}`,
+  ),
   flacEnabled: settingsBoolLike(),
   oggIcyMetadata: settingsBoolLike(),
   aacEnabled: settingsBoolLike(),
@@ -1088,50 +1098,6 @@ export const privacyPatchSchema = settingsBlockOf({
       }
     })
     .transform((raw) => String(raw ?? '').trim()),
-});
-
-/**
- * `requests` — every field falls back to the CURRENT stored value, so the
- * schema's job is to decide "usable or absent" and let update() spread the
- * result over what is stored.
- *
- * The usability rule is `intIn`'s and it is deliberately narrow: only a number,
- * a bigint or a NON-BLANK string counts. `null`, `''`, `false` and `[]` all
- * coerce to 0 under `Number()`, and without this guard an emptied admin input
- * (which arrives as JSON null) clamped to the field's FLOOR and silently
- * committed it — clearing the station hourly cap set it to 5/hour and closed
- * the request line. Anything unusable is dropped here, which update() reads as
- * "leave it alone".
- *
- * Note the booleans are `typeof === 'boolean'`, NOT `!!` — a truthy non-boolean
- * is IGNORED rather than coerced, the opposite posture to ui/privacy. Both are
- * shipping behaviour and neither may be unified onto the other.
- */
-function settingsRequestsInt(bounds: SettingsNumericBound) {
-  return z.unknown().transform((raw) => {
-    if (typeof raw === 'string') {
-      if (!raw.trim()) return undefined;
-    } else if (typeof raw !== 'number' && typeof raw !== 'bigint') {
-      return undefined;
-    }
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return undefined;
-    return Math.min(bounds.max, Math.max(bounds.min, Math.round(n)));
-  });
-}
-
-function settingsRequestsBool() {
-  return z.unknown().transform((raw) => (typeof raw === 'boolean' ? raw : undefined));
-}
-
-export const requestsPatchSchema = settingsBlockOf({
-  enabled: settingsRequestsBool(),
-  onePendingPerIp: settingsRequestsBool(),
-  maxPending: settingsRequestsInt({ min: 1, max: 50 }),
-  globalHourlyCap: settingsRequestsInt({ min: 5, max: 500 }),
-  repeatCooldownMin: settingsRequestsInt({ min: 0, max: 1440 }),
-  cooldownSec: settingsRequestsInt({ min: 5, max: 600 }),
-  perIpHourlyCap: settingsRequestsInt({ min: 1, max: 100 }),
 });
 
 // --- the mood family -------------------------------------------------------

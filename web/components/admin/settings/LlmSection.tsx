@@ -319,12 +319,10 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
         pickerAgent: form.llm.pickerAgent,
         noRepeatWindow: Math.max(0, parseInt(form.llm.noRepeatWindow, 10) || 0),
         artistVarietyWindow: Math.max(0, parseInt(form.llm.artistVarietyWindow, 10) || 0),
-        requestWebResolve: form.llm.requestWebResolve,
         agentTimeoutMs: form.llm.agentTimeoutMs,
         pauseWhenEmpty: form.llm.pauseWhenEmpty,
         dailyTokenCap: form.llm.dailyTokenCap,
         budgetSoftPct: form.llm.budgetSoftPct,
-        exemptRequests: form.llm.exemptRequests,
         maxOutputTokens: form.llm.maxOutputTokens,
         discoverySteps: form.llm.discoverySteps,
         ...(INLINE_KEY_PROVIDERS.includes(activeProvider) && compatKeyInput.trim()
@@ -1196,29 +1194,6 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
           </div>
         )}
 
-        {form.llm.pickerAgent && (
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
-            <div>
-              <div className="text-[13px] font-bold">Resolve described requests via web</div>
-              <div className="field-hint mt-1 max-w-[440px]">
-                When on, a listener who <em>describes</em> a track instead of naming
-                it (&ldquo;the song from the new Dune movie&rdquo;) gets it looked up on
-                the web, then matched to your library. Needs a web-search provider
-                set under Web search; otherwise it does nothing.
-              </div>
-            </div>
-            <Seg
-              accent
-              value={form.llm.requestWebResolve ? 'on' : 'off'}
-              options={[
-                { id: 'off', label: 'Off' },
-                { id: 'on', label: 'On' },
-              ]}
-              onChange={v => setForm(f => ({ ...f, llm: { ...f.llm, requestWebResolve: v === 'on' } }))}
-            />
-          </div>
-        )}
-
         <div className="field mt-4">
           <Label>No-repeat window (tracks)</Label>
           <Input
@@ -1389,28 +1364,6 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
           </div>
         )}
 
-        {form.llm.dailyTokenCap > 0 && (
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
-            <div>
-              <div className="text-[13px] font-bold">Always answer requests</div>
-              <div className="mt-0.5 max-w-[480px] text-[14px] leading-[1.5] text-muted">
-                When on, listener requests are still answered by the AI DJ even
-                over the cap; a human asked, so honour it. When off,
-                requests over the cap fall back to plain library matching like
-                everything else.
-              </div>
-            </div>
-            <Seg
-              accent
-              value={form.llm.exemptRequests ? 'on' : 'off'}
-              options={[
-                { id: 'off', label: 'Off' },
-                { id: 'on', label: 'On' },
-              ]}
-              onChange={v => setForm(f => ({ ...f, llm: { ...f.llm, exemptRequests: v === 'on' } }))}
-            />
-          </div>
-        )}
       </Card>
       </Advanced>
 

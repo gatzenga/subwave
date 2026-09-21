@@ -1,5 +1,5 @@
 // Connect — the discovery surface behind the admin "Connect" page: the curated
-// endpoint/MCP/stream manifest (GET /connect/catalog) and an OpenAPI 3.1 render
+// endpoint/stream manifest (GET /connect/catalog) and an OpenAPI 3.1 render
 // of the same (GET /connect/openapi.json). Both are admin-gated because they
 // enumerate admin endpoints and the station origin.
 import express from 'express';
@@ -8,7 +8,6 @@ import * as settings from '../settings.js';
 import { publicOrigin } from './public.js';
 import {
   ENDPOINT_GROUPS,
-  MCP_TOOLS,
   STREAM_MOUNTS,
   type StreamMountDoc,
 } from '../connect/catalog.js';
@@ -37,9 +36,6 @@ router.get('/connect/catalog', requireAdmin, (req, res) => {
     origin,
     version: VERSION,
     groups: ENDPOINT_GROUPS,
-    mcpTools: MCP_TOOLS,
-    // Built-in HTTP MCP endpoint, reachable at `${apiBase}${mcpHttpPath}`.
-    mcpHttpPath: '/mcp',
     streamMounts: mountsWithState(),
     openapiPath: '/connect/openapi.json',
   });

@@ -54,6 +54,8 @@ import {
   LLM_HEADER_VALUE_RE,
   LLM_HEADERS_MAX,
   SETTINGS_AAC_BITRATES,
+  SETTINGS_HLS_SEGMENT_COUNTS,
+  SETTINGS_HLS_SEGMENT_DURATIONS,
   SETTINGS_LOUDNESS_SOURCES,
   SETTINGS_MP3_BITRATES,
   SETTINGS_OPUS_BITRATES,
@@ -234,25 +236,19 @@ export function validateTtsCorrectionsStrict(raw: any): Array<{ from: string; to
 export const LLM_PROVIDERS = [
   'ollama',
   'openai-compatible',
-  'locca',
   'openrouter',
-  'requesty',
   'anthropic',
   'openai',
   'google',
-  'deepseek',
-  'gateway',
 ];
 
 // Subset of LLM_PROVIDERS that can produce text embeddings (#493, #522).
 export const EMBEDDING_PROVIDERS = [
   'ollama',
   'openai-compatible',
-  'locca',
   'openrouter',
   'openai',
   'google',
-  'requesty',
 ];
 
 // Ollama context window; 0 disables, else floored into [2048, 131072].
@@ -837,15 +833,6 @@ export function coerceGuestPersonaIds(raw: unknown, hostId: string, personaIds: 
 // span non-adjacent decades.
 export type { EraWindow };
 
-// Webhook shape + event list live in schemas/webhook.ts; re-exported here so
-// existing importers keep working.
-export {
-  WEBHOOK_EVENTS,
-  WEBHOOKS_LIMIT,
-  type Webhook,
-  type WebhookEvent,
-} from '../schemas/webhook.js';
-
 // One saved DJ prompt-template library entry (settings.djPrompts).
 export interface DjPromptEntry {
   id: string;
@@ -1024,6 +1011,8 @@ export const MP3_BITRATES = SETTINGS_MP3_BITRATES;
 // Same parse-time-literal constraint as %mp3: add a radio.liq branch per value.
 export const OPUS_BITRATES = SETTINGS_OPUS_BITRATES;
 export const AAC_BITRATES = SETTINGS_AAC_BITRATES;
+export const HLS_SEGMENT_DURATIONS = SETTINGS_HLS_SEGMENT_DURATIONS;
+export const HLS_SEGMENT_COUNTS = SETTINGS_HLS_SEGMENT_COUNTS;
 
 // Where per-track loudness comes from (#998): an embedded ReplayGain tag, the
 // analyzer's measured LUFS, or tag-with-measured-fallback (the default).

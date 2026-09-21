@@ -9,8 +9,6 @@ import * as subsonic from '../../music/subsonic.js';
 import * as dj from '../../llm/dj.js';
 import { stripThinking } from '../../llm/sdk.js';
 import { recordPick } from '../../llm/log.js';
-import * as requestLog from '../request-log.js';
-import { echoesRecentRequest } from '../../util/request-guard.js';
 import { speechPaceScale } from '../../audio/tts.js';
 import { normalizeForDisplay, normalizeForSpeech, spokenWordScale } from '../../audio/speech-text.js';
 import { introMsOf } from './runs.js';
@@ -56,19 +54,6 @@ export function trackFields(song) {
     // recover it with a getSong lookup.
     replayGain: song.replayGain,
   };
-}
-
-// Echo guard on the PICK path: the session window quotes listener request text
-// verbatim for ~40 turns, so an injected phrasing can resurface in a later
-// pick's link. Policy lives in util/request-guard.ts; this applies it and logs.
-// Exported because callers also apply it BEFORE enqueuePick, so the session
-// turn records the line as it will air. Re-running it is safe: a pre-applied
-// drop short-circuits, and a trim only ever shortens to a prefix, which cannot
-// turn a no-hit into a hit.
-export function dropEchoedLink(link: string | null, queue: any): string | null {
-  if (!link || !echoesRecentRequest(link, requestLog.recentRequests)) return link;
-  queue.log('request-guard', `pick link echoed recent listener request text — link dropped`);
-  return null;
 }
 
 // Talk-within-the-intro budget (#962), applied to a between-track link in DJ
@@ -120,7 +105,7 @@ export async function enqueuePick(
   // the session turn may carry the marginally longer reading.
   const introLink = hostSpeech && !session.isHostSpeechCurrent(hostSpeech)
     ? null
-    : dropEchoedLink(trimLinkToIntro(link, song), queue);
+    : trimLinkToIntro(link, song);
   const track: any = trackFields(song);
   // Transition effects (DJ mode only); getAnnotatedUri stamps the liq_* flags
   // and radio.liq ramps them. sweep muffles the crossfade INTO this pick;

@@ -122,9 +122,8 @@ export function getRedacted() {
     // see which headers a gateway is being sent — while every VALUE is masked
     // to the same 'set' sentinel, because a routing header and a credential
     // header are the same field and only the operator knows which they typed.
-    // This is `webhooks[].authHeader` in the other direction. applyLlmLegPatch
-    // reads 'set' back as "keep the stored value", so the redacted map
-    // round-trips through a save untouched.
+    // applyLlmLegPatch reads 'set' back as "keep the stored value", so the
+    // redacted map round-trips through a save untouched.
     clone.llm.headers = maskHeaderValues(s.llm?.headers);
   }
   // Same channel, same map — the fallback leg's key also lives in llm.keys,
@@ -139,11 +138,6 @@ export function getRedacted() {
   }
   if (clone.search) clone.search.apiKey = s.search?.apiKey ? 'set' : '';
   if (clone.embedding) clone.embedding.apiKey = s.embedding?.apiKey ? 'set' : '';
-  if (Array.isArray(clone.webhooks)) {
-    for (let i = 0; i < clone.webhooks.length; i++) {
-      clone.webhooks[i].authHeader = s.webhooks?.[i]?.authHeader ? 'set' : '';
-    }
-  }
   if (clone.scrobble?.lastfm) {
     clone.scrobble.lastfm.apiKey = s.scrobble?.lastfm?.apiKey ? 'set' : '';
     clone.scrobble.lastfm.apiSecret = s.scrobble?.lastfm?.apiSecret ? 'set' : '';

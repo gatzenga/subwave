@@ -15,11 +15,10 @@ const ITEMS: readonly RailItem[] = [
   { k: 'schedule', l: 'Schedule' },
   { k: 'timeline', l: 'Timeline' },
   { k: 'booth',    l: 'Booth' },
-  { k: 'request',  l: 'Request' },
 ];
 
 export interface DotRailProps {
-  /** Counts (or icon nodes) keyed by drawer id. `request` is rendered as "+" regardless. */
+  /** Counts (or icon nodes) keyed by drawer id. */
   counts?: Partial<Record<PlayerDrawer, ReactNode>>;
   active: PlayerDrawer | null;
   onSelect: (id: PlayerDrawer | null) => void;
@@ -33,8 +32,7 @@ export default memo(function DotRail({ counts, active, onSelect }: DotRailProps)
     >
       {ITEMS.map(item => {
         const isActive = active === item.k;
-        const isRequest = item.k === 'request';
-        const n: ReactNode = isRequest ? '+' : (counts?.[item.k] ?? 0);
+        const n: ReactNode = counts?.[item.k] ?? 0;
         const isIcon = isValidElement(n);
         return (
           <button
@@ -43,7 +41,6 @@ export default memo(function DotRail({ counts, active, onSelect }: DotRailProps)
             className={cn(
               'v3-focus relative flex w-full cursor-pointer flex-col items-center gap-[6px] border-0 px-1 py-[14px] font-[inherit] sm:px-2',
               isActive ? 'text-bg' : 'bg-transparent text-ink',
-              isRequest && !isActive && 'bg-[rgba(197,48,42,0.08)] shadow-[inset_2px_0_0_var(--accent)]',
             )}
             aria-pressed={isActive}
           >
@@ -61,9 +58,9 @@ export default memo(function DotRail({ counts, active, onSelect }: DotRailProps)
             <span
               className={cn(
                 'v3-tab-num relative leading-none',
-                isRequest ? 'text-[26px] font-semibold' : 'text-[22px] font-extralight',
+                'text-[22px] font-extralight',
                 isIcon && 'inline-flex h-[22px] items-center justify-center',
-                isActive ? 'text-vermilion' : isRequest ? 'text-vermilion' : 'text-ink',
+                isActive ? 'text-vermilion' : 'text-ink',
               )}
             >
               {typeof n === 'number' ? <OdometerNumber value={n} /> : n}
@@ -72,7 +69,7 @@ export default memo(function DotRail({ counts, active, onSelect }: DotRailProps)
               className={cn(
                 // Tighter tracking so "SCHEDULE" still fits the slim phone rail.
                 'relative text-[8px] tracking-[0.2em] uppercase sm:text-[9px] sm:tracking-[0.3em]',
-                isActive ? 'text-bg' : isRequest ? 'font-bold text-vermilion' : 'text-ink',
+                isActive ? 'text-bg' : 'text-ink',
               )}
             >
               {item.l}

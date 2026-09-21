@@ -6,7 +6,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { toast } from 'sonner';
 import { CalendarClock, History, Mic } from 'lucide-react';
 import TopBar from './TopBar';
 import CenterStage from './CenterStage';
@@ -18,7 +17,6 @@ import CommandPalette, { type PlayerDrawer } from './CommandPalette';
 import ShortcutsDialog from './ShortcutsDialog';
 import TimelineDrawer from './drawers/TimelineDrawer';
 import BoothDrawer from './drawers/BoothDrawer';
-import RequestDrawer from './drawers/RequestDrawer';
 import ScheduleDrawer from './drawers/ScheduleDrawer';
 import { Sheet } from '@/components/ui/sheet';
 import {
@@ -33,12 +31,11 @@ import { useDynamicStyle } from '@/hooks/useDynamicStyle';
 import { cn } from '@/lib/cn';
 import { useStationClient } from '@/lib/stationClient';
 import type { SkinProps } from '@/components/skins/types';
-import type { QueueEntry, RequestResult } from '@/lib/types';
+import type { QueueEntry } from '@/lib/types';
 
 const DRAWER_TITLES: Record<PlayerDrawer, string> = {
   timeline: 'Timeline',
   booth: 'Booth feed',
-  request: 'Make a request',
   schedule: 'Schedule',
 };
 
@@ -56,7 +53,7 @@ export default function ClassicSkin({ portalNode }: SkinProps) {
   } = usePlayerFeed();
   const boothFeed = session.messages;
   const { audioRef, tunedIn, status, volume, muted, offline, signal } = usePlayerAudio();
-  const { tune, toggleMute, setVolume, submitRequest: coreSubmitRequest, pollRequest } =
+  const { tune, toggleMute, setVolume } =
     usePlayerActions();
   const { showOverlay, tuneInFromOverlay, handleTune } = useTuneInGate();
 
@@ -75,9 +72,6 @@ export default function ClassicSkin({ portalNode }: SkinProps) {
     '--cover-tint-2': coverColors.average ?? coverColors.vibrant,
   });
 
-  const [requestText, setRequestText] = useState('');
-  const [requesterName, setRequesterName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [drawer, setDrawer] = useState<PlayerDrawer | null>(null);
 
   // Stable handlers + counts for the memoized layout components, so a feed
@@ -146,31 +140,12 @@ export default function ClassicSkin({ portalNode }: SkinProps) {
       m: toggleMute,
       '1': () => setDrawer('timeline'),
       '2': () => setDrawer('booth'),
-      '3': () => setDrawer('request'),
-      '4': () => setDrawer('schedule'),
-      r: () => setDrawer('request'),
+      '3': () => setDrawer('schedule'),
       '?': () => setShortcutsOpen(true),
       'mod+k': () => setPaletteOpen(o => !o),
     },
     { disabled: paletteOpen || shortcutsOpen },
   );
-
-  // The controller returns a request id immediately; matching runs in the booth
-  // and the drawer polls pollRequest() for the outcome.
-  const submitRequest = async (): Promise<RequestResult | null> => {
-    if (!requestText.trim() || isSubmitting) return null;
-    setIsSubmitting(true);
-    try {
-      const data = await coreSubmitRequest(requestText.trim(), requesterName.trim());
-      if (data.success) setRequestText('');
-      return data;
-    } catch {
-      toast.error('Request failed. Is the controller up?');
-      return { success: false, message: 'Network error.' };
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <>
@@ -236,18 +211,6 @@ export default function ClassicSkin({ portalNode }: SkinProps) {
           <TimelineDrawer upcoming={state.upcoming} history={state.history} />
         )}
         {drawer === 'booth'   && <BoothDrawer items={boothFeed} timezone={timezone} locale={locale} />}
-        {drawer === 'request' && (
-          <RequestDrawer
-            requestText={requestText} setRequestText={setRequestText}
-            requesterName={requesterName} setRequesterName={setRequesterName}
-            isSubmitting={isSubmitting}
-            onSubmit={submitRequest}
-            onPoll={pollRequest}
-            onClose={() => setDrawer(null)}
-            nowPlaying={nowPlaying}
-            context={context}
-          />
-        )}
         {drawer === 'schedule' && <ScheduleDrawer activeShow={activeShow} context={context} />}
       </Sheet>
 

@@ -1,47 +1,26 @@
-import Link from 'next/link';
-import Masthead from '@/components/landing/Masthead';
-import StationFooter from '@/components/landing/StationFooter';
 import { AnimatedLink } from '@/components/ui/animated-link';
 
 // The site-wide 404, catching unmatched URLs and any `notFound()` without a
 // closer not-found.tsx. Without this file Next serves its own bare 404 inside
-// the root layout, which carries no masthead of its own — so this page supplies
-// the Masthead + bs-paper + StationFooter trio the other shells use.
+// the root layout.
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-bg text-ink">
-      <Masthead />
-      <main className="bs-paper">
-        <article>
-          <header className="bs-news-hero">
-            <p className="bs-eyebrow">OFF THE DIAL</p>
-            <h1>Dead air.</h1>
-            <p>
-              There&rsquo;s nothing broadcasting on this frequency. The page you asked for
-              either moved, never existed, or was pulled from the schedule.
-            </p>
-          </header>
-
-          <p className="bs-news-empty">
-            The stream itself is unaffected — the music keeps playing whatever this page
-            does.
-          </p>
-
-          {/* Primary recovery only — the StationFooter below already renders
-              the full "Back Pages" index (dispatches, stations, skills,
-              personas, shows), so repeating those links here is noise. */}
-          <div className="bs-station-cta">
-            <p className="bs-station-cta-copy">Try one of these instead.</p>
-            <AnimatedLink href="/listen" variant="arrow" className="bs-station-cta-link">
-              Back to the player
-            </AnimatedLink>
-            <Link href="/manual" className="bs-station-cta-help">
-              Read the manual
-            </Link>
-          </div>
-        </article>
-        <StationFooter />
+    <div className="grid min-h-screen place-items-center bg-bg px-6 text-ink">
+      <main className="max-w-[46ch] text-center">
+        <p className="font-mono text-[10px] tracking-[0.2em] text-muted uppercase">Off the dial</p>
+        <h1 className="mt-2 text-[clamp(28px,5vw,44px)] leading-[1.1] font-extrabold tracking-[-0.02em]">
+          Dead air.
+        </h1>
+        <p className="mt-3 text-[14px] leading-[1.6] text-muted">
+          There&rsquo;s nothing broadcasting on this frequency. The stream itself is
+          unaffected — the music keeps playing whatever this page does.
+        </p>
+        <div className="mt-6">
+          <AnimatedLink href="/listen" variant="arrow">
+            Back to the player
+          </AnimatedLink>
+        </div>
       </main>
     </div>
   );

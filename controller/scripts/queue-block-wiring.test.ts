@@ -88,9 +88,9 @@ test('the stamp rides the item, and the block is not a listener in the line', as
   assert.equal(queue.upcoming[0].block?.id, 'blk');
   assert.equal(queue.upcoming[0].block?.label, 'Rec — A');
   assert.equal(queue.upcoming[1].block?.index, 2);
-  // The two exemptions the block inherits verbatim from POST /dj/queue-track.
+  // The exemption the block inherits verbatim from POST /dj/queue-track.
   assert.equal(queue.upcoming[0].requestedBy, 'studio', 'keeps the air-path discriminator');
-  assert.equal(queue.pendingListenerRequests(), 0, 'and takes no request slot');
+  assert.equal(queue.upcoming[0].operator, true, 'and is marked an operator push');
 });
 
 test('an ordinary push carries no block', async () => {

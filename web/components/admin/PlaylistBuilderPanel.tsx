@@ -1532,7 +1532,7 @@ export default function PlaylistBuilderPanel() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink px-5 py-3.5">
               <span className="font-mono text-[10px] text-muted">
-                Then pin it to a show in <a href="/admin/shows" className="text-vermilion hover:text-ink">Shows</a> →
+                Then pin it to a show in settings →
               </span>
               <div className="flex flex-none gap-2.5">
                 <Button variant="ghost" className="h-10" onClick={() => setModal(null)}>Cancel</Button>

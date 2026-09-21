@@ -25,6 +25,8 @@ import { DEFAULT_THEME_ID } from '../themes.js';
 import {
   AAC_BITRATES,
   FESTIVAL_DEFAULTS,
+  HLS_SEGMENT_COUNTS,
+  HLS_SEGMENT_DURATIONS,
   LoudnessSource,
   MOOD_DEFAULTS,
   MP3_BITRATES,
@@ -32,12 +34,14 @@ import {
   PERIOD_MOOD_DEFAULTS,
   SEED_PERSONAS,
   WEATHER_MOOD_DEFAULTS,
-  Webhook,
   emptyWeek,
 } from './vocab.js';
 
 export const DEFAULTS = {
-  jingleRatio: 30, // 1 jingle per N music tracks
+  // 0 = jingles OFF (#997). The station ships without imaging: there is no
+  // admin page to manage stingers, so the rotate stays dark unless a stored
+  // settings.json says otherwise.
+  jingleRatio: 0,
   // WHO counts those tracks (#1619). 'mixer' is the pre-existing station —
   // radio.liq's own rotate draws the stinger and the controller finds out
   // afterwards. 'controller' moves the count into the talk-slot planner and
@@ -85,6 +89,18 @@ export const DEFAULTS = {
     flacEnabled: false,
     aacEnabled: false,
     aacBitrate: 192,
+    // HLS (/hls/live.m3u8) — the DEFAULT listener transport. A directory of
+    // segments plus a rolling playlist, served as static files by the edge, so
+    // a listener who drops off resumes by fetching the next segment instead of
+    // reconnecting to a live socket. The icecast mounts stay up alongside it:
+    // /stream.mp3 is still the universal floor (Sonos, hardware radios, car
+    // receivers) and is still what the listener COUNT is read from.
+    hlsEnabled: true,
+    // segmentDuration x segments is how far behind the live edge an HLS
+    // listener sits. 4 x 5 = 20s, deliberately close to bufferSeconds below so
+    // both transports hear the same thing at the same moment.
+    hlsSegmentDuration: 4,
+    hlsSegments: 5,
     bitrate: 192,
     // Icecast <burst-size> expressed in SECONDS, not bytes: a fixed byte count
     // stretches at low bitrates (512 KB is ~22s at 192k but ~66s at 64k), so the
@@ -195,18 +211,6 @@ export const DEFAULTS = {
   // handing over every one at once is opt-in. GET /dj is deliberately unaffected:
   // it has always published the ON-AIR soul, one at a time.
   privacy: { privatePlayer: false, listenerAuth: false, password: '', publishPersonaSouls: false },
-  // Listener-request gates, all applied live. They bound the rate from several
-  // angles at once: queue depth, requests/hour station-wide, per-track repeat
-  // cooldown (0 = off), minimum gap between any two, and a single IP's share.
-  requests: {
-    enabled: true,
-    maxPending: 6,
-    globalHourlyCap: 30,
-    repeatCooldownMin: 120,
-    cooldownSec: 60,
-    perIpHourlyCap: 8,
-    onePendingPerIp: true,
-  },
   // Global DJ prompt template; '' = DEFAULT_DJ_PROMPT_TEMPLATE. Always the
   // RESOLVED text of the active djPrompts entry, so renderDjPrompt (and an older
   // controller sharing the same settings.json) never has to chase the library.
@@ -302,67 +306,13 @@ export const DEFAULTS = {
     // the CLI uses it to decide whether to write COMPOSE_PROFILES.
     heavyEnabled: false,
     kokoro: { voice: 'bf_isabella', lang: '' },
-    // Reference voice used when the engine resolves to chatterbox with no
-    // persona-level voice. Empty = the model's built-in default.
-    chatterbox: { referenceVoice: '' },
-    // Built-in voice id used when the engine resolves to pocket-tts with no
-    // persona-level voice.
-    pocketTts: { voice: 'alba' },
-    // Used when an engine resolves to 'cloud'. A persona chooses provider+voice;
-    // `model` stays shared. `enabled: false` makes the engine report unavailable
-    // regardless of key, so the pickers grey it out.
-    cloud: {
-      enabled: false,
-      provider: 'openai',
-      model: 'gpt-4o-mini-tts',
-      voice: 'alloy',
-      // Legacy managed-provider inline key; new credentials live in secrets.env.
-      apiKey: '',
-      // Bearer for authenticated openai-compatible servers. Stays
-      // provider-scoped even when personas use compat alongside a different
-      // station-wide cloud provider.
-      compatApiKey: '',
-      // Includes the /v1 suffix. Required — and only used — when provider is
-      // 'openai-compatible'.
-      baseUrl: '',
-      // ElevenLabs voice_settings, sent only for that provider. Ranges match
-      // ElevenLabs' native ones; defaults mirror its UI so an unconfigured
-      // install renders like the SDK's baseline (#696).
-      voiceStability: 0.5,
-      voiceStyle: 0,
-      voiceSimilarityBoost: 0.75,
-      voiceUseSpeakerBoost: true,
-      // openai-compatible only: send the computed speech `speed` upstream in the
-      // request body instead of applying it locally via ffmpeg atempo. Off by
-      // default because compat servers are uneven with the field (issue #942:
-      // some shims produced comb-filtered audio when `speed` was present), so we
-      // stretch locally when unsure. Turn it on when the server honours `speed`
-      // natively — e.g. the hosted DJ Brain voice — since native speed beats
-      // time-stretch artifacts. Inert for openai / elevenlabs (they always send
-      // speed). See speedDirective() in llm/internal/speech/cloud-speech.ts.
-      sendSpeed: false,
-      // Fish Audio S2.1 controls. Persisted alongside the shared cloud config so
-      // switching providers preserves the tuning, but sent only for fish-audio.
-      temperature: 0.7,
-      topP: 0.7,
-      latency: 'normal' as 'low' | 'normal' | 'balanced',
-      // Free-form extra body fields for openai-compatible servers (#1317) —
-      // Chatterbox's temperature/seed/exaggeration and whatever the next engine
-      // invents. Stored as text and coerced to JSON types at send time. Rules
-      // live in settings/compat-params.ts.
-      compatParams: [] as { key: string; value: string }[],
-    },
-    // Self-hosted TTS endpoint over HTTP (POST /speak → audio body, gated on a
-    // /health probe) — the TTS equivalent of the LLM's custom base URL.
-    remote: { url: '' },
     // Per-engine trim (dB) applied via liq_amplify on every spoken segment, to
     // level the loudness gap between engines. Stacks with each persona's own
     // tts.gainDb. See TTS_GAIN_CLAMP_DB and audio/tts.ts:voiceGainDb().
-    gainDb: { piper: 0, kokoro: 0, chatterbox: 0, 'pocket-tts': 0, cloud: 0, remote: 0 },
+    gainDb: { piper: 0, kokoro: 0 },
     // Per-engine speech-rate multiplier (0.5–2.0x), composed with each
-    // persona's tts.speed and, on air, programme pacing. Piper, Kokoro, Cloud
-    // and Remote honour it; Chatterbox/PocketTTS leave it inert.
-    speed: { piper: 1, kokoro: 1, chatterbox: 1, 'pocket-tts': 1, cloud: 1, remote: 1 },
+    // persona's tts.speed and, on air, programme pacing.
+    speed: { piper: 1, kokoro: 1 },
     // Find→replace pairs applied to every booth-bound line before any engine sees
     // it (audio/speech-text.ts), e.g. { from: 'GHz', to: 'gigahertz' }.
     corrections: [],
@@ -445,12 +395,6 @@ export const DEFAULTS = {
     // never costs the station a slot. 0 leaves only the back-to-back guard,
     // which is always on. See broadcast/dj-agent/artist-guard.ts.
     artistVarietyWindow: ARTIST_VARIETY_WINDOW,
-    // Gives the listener-request agent (never the per-track picker) an
-    // `identifyRequestedTrack` tool that resolves a DESCRIBED track via web search
-    // and matches it locally. Off by default: needs a search provider and costs a
-    // web round-trip plus a small extraction call per use. No-op unless
-    // searchReady().
-    requestWebResolve: false,
     // Hard wall-clock ceiling on a single DJ-agent generation, enforced by
     // withDeadline. The main and recovery runs each get the full budget, so worst
     // case per pick is ~2x this before the stateless fallback. Reasoning-heavy
@@ -469,10 +413,6 @@ export const DEFAULTS = {
     // Percent of dailyTokenCap that enters the soft tier. 0 or 100 disables it and
     // goes straight from normal to hard at the cap.
     budgetSoftPct: 80,
-    // On: listener requests are still answered by the agent over the hard cap — a
-    // human asked. Off: they fall through to the stateless matcher cascade. No
-    // effect until dailyTokenCap is set.
-    exemptRequests: true,
     // Per-call max OUTPUT tokens, distinct from the cumulative dailyTokenCap.
     // 0 = the strategy primitives' built-ins (4000 text / 8000 object / 8000
     // agent); a value (clamped 500–8000) overrides all three. The lever for a
@@ -631,9 +571,10 @@ export const DEFAULTS = {
   },
   // When disabled, the segment-director agent is never shown the effect
   // catalogue, so it stops garnishing spoken breaks with stingers. The files stay
-  // on disk either way.
+  // on disk either way. Off by default alongside jingleRatio — imaging has no
+  // admin surface on this station.
   sfx: {
-    enabled: true,
+    enabled: false,
   },
   // Beds — an instrumental between two songs for the DJ to talk over, so a long
   // link isn't talked over the song it's introducing (broadcast/beds.ts +
@@ -664,22 +605,17 @@ export const DEFAULTS = {
   // Dead-air trim — cut near-silent runs off the head/tail of a track so a bad
   // rip's leading blank or a long mastering gap doesn't air as silence
   // (music/silence-trim.ts stamps liq_cue_in / liq_cue_out; radio.liq's
-  // cue_cut does the cutting). OFF by default: it acts on a MEASUREMENT, and
-  // an upgrade must sound byte-identical until the operator asks for this.
-  // Controller-side only — no mixer restart.
+  // cue_cut does the cutting). ON by default here: this station wants tight
+  // transitions out of the box, and a switch the operator has to find first is
+  // the wrong default for the one feature that decides how the seams sound.
+  // Upstream ships it off so an upgrade stays byte-identical; that does not
+  // apply to a fork with one operator. Controller-side only — no restart.
   silenceTrim: {
-    enabled: false,
+    enabled: true,
     // Gaps shorter than this are left alone. A track legitimately opens a beat
     // after zero, and a segued album's inter-track space is deliberate; only a
     // gap the listener would call dead air is worth a cue point.
     minGapMs: 1500,
-  },
-  // Fire-and-forget station-event POSTs (event list in broadcast/webhooks.ts).
-  webhooks: [] as Webhook[],
-  webhooksPolicy: {
-    // When true, track.play POSTs only when listener count > 0 (fail-closed on
-    // null/unknown/non-finite, like scrobble).
-    trackPlayListenerGated: false,
   },
   // Each backend is independent, paste-only (no OAuth), and gated on listener
   // count > 0 at scrobble time — a null/unknown count is treated as zero, i.e.
@@ -693,18 +629,10 @@ export const DEFAULTS = {
       sessionKey: '',
       username: '',
     },
-    listenbrainz: {
-      enabled: false,
-      userToken: '',
-      username: '',
-      // For self-hosted LB-compatible scrobblers (e.g. Koito). Submit URL is
-      // `${baseUrl}/submit-listens`. Env LISTENBRAINZ_API_URL wins.
-      baseUrl: '',
-    },
     // Navidrome play reporting (#1298) — Subsonic `scrobble`, so playCount and
     // lastPlayed move and `.nsp` smart playlists rotate. No credentials of its
-    // own (it reuses config.navidrome) and, unlike the two above, no listener
-    // gate: see broadcast/scrobble-pure.ts. Off by default.
+    // own (it reuses config.navidrome) and, unlike Last.fm, no listener gate:
+    // see broadcast/scrobble-pure.ts. Off by default.
     navidrome: {
       enabled: false,
     },
@@ -773,24 +701,8 @@ export const BOUNDS = {
 export const MP3_BITRATE_SET = new Set<number>(MP3_BITRATES);
 export const OPUS_BITRATE_SET = new Set<number>(OPUS_BITRATES);
 export const AAC_BITRATE_SET = new Set<number>(AAC_BITRATES);
-
-// True when the four ElevenLabs voice_settings knobs all sit at their shipped
-// defaults, i.e. the operator never tuned them. cloud-speech then OMITS the
-// voice_settings block so ElevenLabs defers to the voice's own VoiceLab-saved
-// settings instead of having these literals forced onto every call (#915).
-export function cloudVoiceSettingsAreDefault(c: unknown): boolean {
-  const d = DEFAULTS.tts.cloud;
-  const cc = c as {
-    voiceStability?: unknown;
-    voiceStyle?: unknown;
-    voiceSimilarityBoost?: unknown;
-    voiceUseSpeakerBoost?: unknown;
-  } | null | undefined;
-  return cc?.voiceStability === d.voiceStability
-    && cc?.voiceStyle === d.voiceStyle
-    && cc?.voiceSimilarityBoost === d.voiceSimilarityBoost
-    && cc?.voiceUseSpeakerBoost === d.voiceUseSpeakerBoost;
-}
+export const HLS_SEGMENT_DURATION_SET = new Set<number>(HLS_SEGMENT_DURATIONS);
+export const HLS_SEGMENT_COUNT_SET = new Set<number>(HLS_SEGMENT_COUNTS);
 
 // Coerce a stored/per-show max-track-length to a clean integer SECOND count.
 // `allowNull` distinguishes the two callers: the station default has no "unset"

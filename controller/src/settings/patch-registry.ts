@@ -53,7 +53,6 @@ import {
   moodsSchema,
   pickerPatchSchema,
   privacyPatchSchema,
-  requestsPatchSchema,
   scrobblePatchSchema,
   searchPatchSchema,
   sfxPatchSchema,
@@ -65,7 +64,6 @@ import {
   uiPatchSchema,
   weatherMoodsSchema,
   weatherPatchSchema,
-  webhooksPolicyPatchSchema,
 } from '../schemas/settings.js';
 import {
   activeDjPromptIdSchema,
@@ -81,7 +79,6 @@ import {
 } from '../schemas/persona.js';
 import { scheduleOverrideSchema, scheduleSchema } from '../schemas/schedule.js';
 import { SHOW_MAX_TRACK_SECONDS, showsSchema } from '../schemas/show.js';
-import { webhooksSchema } from '../schemas/webhook.js';
 
 // Mirrors settings/defaults.ts's BOUNDS.maxTrackSeconds, which reads its ceiling
 // from the same SHOW_MAX_TRACK_SECONDS — a mirrored module may not import a
@@ -154,9 +151,6 @@ export const SETTINGS_PATCH_KEYS = [
   'silenceTrim',
   'ui',
   'privacy',
-  'requests',
-  'webhooks',
-  'webhooksPolicy',
   'scrobble',
   'likes',
 ] as const;
@@ -230,7 +224,6 @@ export const SETTINGS_PATCH_SCHEMAS: Readonly<Partial<Record<SettingsPatchKey, S
   beds: bedsPatchSchema,
   silenceTrim: silenceTrimPatchSchema,
   ui: uiPatchSchema,
-  webhooksPolicy: webhooksPolicyPatchSchema,
   scrobble: scrobblePatchSchema,
   likes: likesPatchSchema,
   moods: moodsSchema,
@@ -239,7 +232,6 @@ export const SETTINGS_PATCH_SCHEMAS: Readonly<Partial<Record<SettingsPatchKey, S
   festivals: festivalsSchema,
   timezone: timezoneSchema,
   privacy: privacyPatchSchema,
-  requests: requestsPatchSchema,
   // Both are validated by the SAME schema update() reaches through
   // validatePersonasStrict / validateDjPromptsStrict. Their branches are NOT
   // switched to parseSettingsPatchKey, because both need a server-only step the
@@ -264,13 +256,12 @@ export const SETTINGS_PATCH_SCHEMAS: Readonly<Partial<Record<SettingsPatchKey, S
   // pin is how a takeover is cancelled.
   scheduleOverride: (ctx) =>
     scheduleOverrideSchema({ showIds: ctx.showIds, now: null }).nullable(),
-  // These three were already on a shared schema before this registry existed —
-  // update() reaches them through validateShowsStrict / validateScheduleStrict /
-  // validateWebhooksStrict, which is where their server-only halves live (id
-  // resolution, the redacted-secret merge, the drop-and-count posture). What
-  // they lacked was a ROUTE, so a panel posting them to /settings got a flat
-  // 400 and no `fieldErrors`. Registering the pure half closes that without
-  // touching their branches.
+  // These two were already on a shared schema before this registry existed —
+  // update() reaches them through validateShowsStrict / validateScheduleStrict,
+  // which is where their server-only halves live (id resolution, the
+  // drop-and-count posture). What they lacked was a ROUTE, so a panel posting
+  // them to /settings got a flat 400 and no `fieldErrors`. Registering the pure
+  // half closes that without touching their branches.
   //
   // Every context field is null: the route cannot know the roster, the mood
   // vocabulary, the theme registry or the crossfade-derived floor, any of which
@@ -286,7 +277,6 @@ export const SETTINGS_PATCH_SCHEMAS: Readonly<Partial<Record<SettingsPatchKey, S
       minTrackSeconds: null,
     }),
   schedule: (ctx) => scheduleSchema({ showIds: ctx.showIds }),
-  webhooks: webhooksSchema,
 };
 
 /** Resolve an entry against a context — a plain schema ignores it. */
@@ -320,7 +310,7 @@ function prefixed(key: string, issues: Record<string, string>): Record<string, s
  * This is the one place that does NOT go through `firstMessage`, and the
  * exception is narrow. firstMessage prefixes the issue path unconditionally
  * because zod's BUILT-IN messages name a constraint and never a location —
- * 'expected array, received string' is useless without 'webhooks.1.url' in
+ * 'expected array, received string' is useless without 'shows.1.name' in
  * front. Every message here is custom and already self-locating, so prefixing
  * would produce 'crossSec: beds.crossSec must be number in [0, 15]'. Carrying
  * the message as written keeps these strings byte-identical to the branches
@@ -367,11 +357,10 @@ const SETTINGS_PATCH_ROOTED_KEYS: ReadonlySet<string> = new Set<SettingsPatchKey
   // because validateScheduleOverrideStrict has always rooted them here. Adding
   // the key to the text instead would double it on that path.
   'scheduleOverride',
-  // The same three validate*Strict functions already root at their settings
+  // The same two validate*Strict functions already root at their settings
   // key, so the route must too or the two disagree about the same body.
   'shows',
   'schedule',
-  'webhooks',
 ]);
 
 /** Root the flat message at its settings key when that key needs it. */

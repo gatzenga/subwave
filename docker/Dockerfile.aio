@@ -5,11 +5,13 @@
 # the canonical deployment; nothing here forks app behaviour — internal URLs
 # are just repointed at loopback.
 #
-# NOT bundled (kept lean): tts-heavy engines and the docker-socket-proxy Stats
-# panel — both degrade gracefully. Bundled: Piper + Kokoro TTS and the lean
-# acoustic analyzer as an in-process venv (ANALYZE_PYTHON; no sidecars here).
-# CI also publishes `subwave-aio-heavy` (WITH_CLAP=1 WITH_DEMUCS=1) and
-# `subwave-aio-cuda` (+ WITH_CUDA=1) — see docs/unraid.md.
+# Everything in one container: icecast2 + liquidsoap, the controller, the web
+# UI and a loopback Caddy on :80. Piper + Kokoro TTS and the acoustic analyzer
+# are baked in as venvs (ANALYZE_PYTHON) — there are no sidecars.
+#
+# Build args WITH_CLAP / WITH_DEMUCS add the "sounds-like" embedding and vocal
+# stacks (amd64 only in practice); WITH_CUDA swaps in cu124 torch for a host
+# with an NVIDIA card. See docs/building-images.md.
 
 # ---- web build: Next.js standalone (mirrors web/Dockerfile) ----------------
 FROM node:22-bookworm-slim AS webbuild
@@ -186,9 +188,6 @@ RUN /opt/kokoro/venv/bin/python -c \
 COPY --from=webbuild /web/.next/standalone /web
 COPY --from=webbuild /web/.next/static /web/.next/static
 COPY --from=webbuild /web/public /web/public
-# /news + sitemap read the dispatch markdown at runtime — the standalone trace
-# doesn't include it.
-COPY --from=webbuild /web/content /web/content
 
 # --- Broadcast + edge config + bundled audio --------------------------------
 COPY docker/icecast.xml.template /etc/icecast2/icecast.xml.template

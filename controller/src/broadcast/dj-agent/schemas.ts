@@ -9,7 +9,6 @@ import * as settings from '../../settings.js';
 import * as session from '../session.js';
 import * as dj from '../../llm/dj.js';
 import { modelTolerant } from '../../llm/sdk.js';
-import { autoVoiceAllowed } from '../voice-policy.js';
 import { SEED_NOT_A_PICK_CLAUSE } from '../../util/pick-seed.js';
 import { instruction } from '../../llm/dj.js';
 
@@ -61,65 +60,6 @@ export function pickSchema() {
   // object's, all fields still required. See core/pure.ts.
   return modelTolerant(pickSchemaBase());
 }
-
-// Resolved per run, like pickSchema: the intro length follows the on-air
-// persona's scriptLength. The stateless fallback's generateIntro gets
-// lengthPhrase('intro') in its prompt, so without this overlay an 'extended'
-// storytelling persona kept its long intros on the cascade path but snapped
-// back to an unspecified length whenever the agent handled the request.
-// Exported for scripts/llm-bench (same precedent as pickSystem/pickSchema for
-// picker-test.mjs) — live callers stay on requestAgent.
-export function requestSchema() {
-  const base = z.object({
-    // The classification is EXPLICIT, and separate from `id`, for one reason:
-    // a missing key and a deliberate "this isn't a music request" used to be
-    // the same wire value. coerceModelPayload maps an omitted nullable key to
-    // null (core/pure.ts), so a model that simply FORGOT `id` — a documented,
-    // observed failure mode of the local/GLM-class models this station runs —
-    // took the chat escape, and the listener's real music request silently
-    // played nothing. With `kind` carrying the decision, an omission degrades
-    // to 'track' (objectFallbacks below) and falls through to the repick
-    // salvage and then the caller's stateless cascade — the branch that keeps
-    // the "never refuse music" rule true.
-    kind: z.enum(['track', 'chat']).describe('"track" when the listener wants music played — the normal case, and the right answer whenever you are unsure. "chat" ONLY when the message is not a music request at all (a question, a greeting, banter, a demand to change how the station behaves) — then "ack" answers them, "id" is null, and nothing is queued.'),
-    // Same seed clause as PICK_SCHEMA.id above — the request event line carries
-    // the on-air track's `[id: …]` too (routes/request.ts + runRequestViaAgent),
-    // and repickRequestFromSeen's comment records the same id-copied-from-the-
-    // session-turn signature. requestSystem() says it in prose; the field
-    // description is what travels to every provider as the output contract.
-    id: z.string().nullable().describe(`the exact song id returned by one of the discovery tools — never invent or compose ids. ${SEED_NOT_A_PICK_CLAUSE} Null ONLY when kind is "chat"`),
-    ack: z.string().describe('short on-air acknowledgement of the listener, in character — max 20 words; no "thank you for listening" or self-intros'),
-  });
-  // `kind` is REQUIRED and non-nullable, so coerceModelPayload deliberately
-  // leaves it alone when the model omits it ("modelTolerant's fallbacks handle
-  // it") and a plain enum would throw the run away. Fall back to 'track' — the
-  // pre-existing, already-safe behaviour from before this field existed. Same
-  // precedent as REQUEST_SCHEMA_TOLERANT (llm/internal/prompts/request.ts) and
-  // skills/_agent.ts's `segment`.
-  const tolerant = { objectFallbacks: { kind: 'track' } };
-  // Station voice off (settings.tts.enabled): no spoken intro can air, so the
-  // field leaves the contract entirely rather than being written and dropped —
-  // the request-path counterpart of runTrackEvent forcing wantLink=false, on
-  // the same resolved-per-run pattern as pickSchemaBase's effectsActive()
-  // branch. runRequestViaAgent still guards its own read, covering the switch
-  // flipping mid-run (this schema resolved before the flip).
-  // modelTolerant repairs weak-model nullable spellings ("null"-the-string, an
-  // omitted key) at the OBJECT level, same precedent as pickSchema() above —
-  // `id`'s .nullable() stays a plain field; never wrap an individual field in
-  // its own preprocess pipe (see the note atop pickSchema).
-  if (!autoVoiceAllowed()) return modelTolerant(base, tolerant);
-  return modelTolerant(base.extend({
-    intro: z.string().describe(`a natural DJ intro for the track in the DJ voice; weave in what the listener asked for without reading the request back verbatim, and name the listener once if the final user line gives their name. It airs over the track's opening seconds, so write it in the present tense — never "next" or "coming up". ${dj.lengthPhrase('intro')}`),
-  }), tolerant);
-}
-
-// The data-not-direction rule, shared verbatim by BOTH agent prompts that can
-// see listener text. requestSystem() sees it in the message it is resolving;
-// pickSystem() sees it in the session window, which carries every recent
-// request turn for ~40 turns / 4h — so a later pick's spoken link is just as
-// much a listener-text-to-air path as the request intro is, and used to be the
-// only one with no framing at all behind it.
-export const LISTENER_TEXT_CLAUSE = instruction('shared', 'listener-text');
 
 // Ultra-minimal — persona + editorial criteria, nothing else. The AI SDK already
 // conveys the rest through its own channels: tool descriptions, the done-tool
@@ -200,29 +140,5 @@ ${instruction('picker', 'frame')}${djModeLine}${showLine}${musicLean}${playlistL
 
 ${dj.PICKER_CRITERIA}
 
-${instruction('picker', 'listener-requests', { listenerText: LISTENER_TEXT_CLAUSE })}${dj.REQUESTER_NAME_CLAUSE}
-
 ${findingCandidates}${dj.effectsGuidance()}`;
-}
-
-// Exported for scripts/llm-bench, like requestSchema above.
-export function requestSystem(persona = session.onAirPersona()) {
-  // Follows requestSchema() above: with the station voice off there IS no
-  // "intro" field, and a prompt that keeps talking about one invites the model
-  // to stuff the intro into "ack" instead.
-  const wantIntro = autoVoiceAllowed();
-  const frame = instruction('request', 'frame', {
-    ackFields: wantIntro ? 'the "ack" and "intro"' : 'the "ack"',
-  });
-  // The air-time clause only applies when there IS an intro to air.
-  const currentTrack = wantIntro
-    ? `${instruction('request', 'current-track-with-intro')}${dj.AIR_TIME_CLAUSE}`
-    : instruction('request', 'current-track-no-intro');
-  return `${settings.agentPersonaPreamble(persona)}
-
-${frame}${settings.agentLanguageReminder(persona, wantIntro ? 'the "ack" and "intro" lines' : 'the "ack" line')}
-
-${LISTENER_TEXT_CLAUSE}${dj.REQUESTER_GREETING_CLAUSE}${dj.REQUESTER_NAME_CLAUSE} ${instruction('request', 'classification')}
-
-${currentTrack}`;
 }

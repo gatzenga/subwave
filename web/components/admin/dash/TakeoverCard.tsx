@@ -8,7 +8,6 @@
 import { useEffect, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import type { z } from 'zod';
-import Link from 'next/link';
 import { useAdminAuth } from '../../../lib/adminAuth';
 import { useAdminMutation, useAdminQuery } from '../../../lib/admin-query';
 import { notify, errorMessage } from '../../../lib/notify';
@@ -225,12 +224,6 @@ export function TakeoverCard({ tz, locale }: { tz?: string; locale?: StationLoca
               on air
             </Pill>
           )}
-          <Link
-            href="/admin/shows/schedule"
-            className="inline-flex min-h-9 items-center text-[9px] font-bold tracking-[0.2em] text-muted uppercase hover:text-ink sm:min-h-0"
-          >
-            the week →
-          </Link>
         </span>
       }
     >
@@ -259,12 +252,7 @@ export function TakeoverCard({ tz, locale }: { tz?: string; locale?: StationLoca
           </Btn>
         </div>
       ) : shows.length === 0 ? (
-        <div className="text-muted italic">
-          no shows to pin —{' '}
-          <Link href="/admin/shows" className="underline hover:text-ink">
-            build one first
-          </Link>
-        </div>
+        <div className="text-muted italic">no shows to pin</div>
       ) : (
         <div className="grid gap-2.5">
           <Controller

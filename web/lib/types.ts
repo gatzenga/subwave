@@ -163,28 +163,6 @@ export interface QueueEntry {
   [key: string]: unknown;
 }
 
-/** Status returned by `/request/:id`. */
-export type RequestStatus = 'pending' | 'resolved' | 'failed' | 'unknown';
-
-export interface RequestTrack {
-  title?: string;
-  artist?: string;
-  album?: string;
-  subsonic_id?: string;
-}
-
-export interface RequestResult {
-  success: boolean;
-  pending?: boolean;
-  ack?: string;
-  track?: RequestTrack;
-  queuePosition?: number;
-  requestId?: string;
-  requestText?: string;
-  message?: string;
-  status?: RequestStatus;
-}
-
 export interface DjLogEntry {
   t?: string;
   text?: string;

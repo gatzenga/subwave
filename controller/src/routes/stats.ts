@@ -1,14 +1,13 @@
-// Admin-gated GET /stats — rollups over four in-memory call rings (LLM, TTS,
-// DJ-log, listener requests) for the Stats page. Since-boot and lossy on
+// Admin-gated GET /stats — rollups over three in-memory call rings (LLM, TTS,
+// DJ-log) for the Stats page. Since-boot and lossy on
 // restart by design; the raw per-call lists stay on /debug.
 import express from 'express';
 import { requireAdmin } from '../middleware/auth.js';
 import { recentCalls } from '../llm/log.js';
 import * as llmProvider from '../llm/provider.js';
 import * as settings from '../settings.js';
-import { ttsCalls, summarizeLlm, summarizeTts, summarizeDjLog, summarizeRequests } from '../stats.js';
+import { ttsCalls, summarizeLlm, summarizeTts, summarizeDjLog } from '../stats.js';
 import { queue } from '../broadcast/queue.js';
-import { recentRequests } from '../broadcast/request-log.js';
 import { budgetStatus } from '../broadcast/dj-budget.js';
 
 export const router = express.Router();
@@ -29,7 +28,6 @@ router.get('/stats', requireAdmin, (req, res) => {
       llm,
       tts: summarizeTts(ttsCalls),
       djLog: summarizeDjLog(queue.djLog),
-      requests: summarizeRequests(recentRequests),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

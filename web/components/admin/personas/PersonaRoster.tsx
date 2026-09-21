@@ -1,5 +1,5 @@
 'use client';
-// One "broadcast slate" card per persona, matching the show cards on /admin/shows.
+// One "broadcast slate" card per persona.
 // The whole card is the edit target; adding lives in the hero's "+ Add persona".
 import { useRef } from 'react';
 import { Upload, Users } from 'lucide-react';

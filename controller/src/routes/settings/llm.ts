@@ -8,7 +8,6 @@ import * as llmProvider from '../../llm/provider.js';
 import { probeEmbeddingConfig } from '../../music/embeddings.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import { SECRET_ENV_KEYS } from '../../setup/secrets.js';
-import { listenbrainzApiBase } from '../../broadcast/scrobble.js';
 import { generateText, createGateway } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -16,7 +15,6 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createDeepSeek } from '@ai-sdk/deepseek';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { fetchWithTimeout } from '../../util/fetch-timeout.js';
-import { probeFishKey } from '../../llm/speech.js';
 
 // Mounted onto the parent settings router in ../settings.ts.
 export const router = express.Router();
@@ -104,14 +102,6 @@ async function probeKey(
     case 'AI_GATEWAY_API_KEY': {
       return { ok: true, message: 'Key format looks valid — confirm via a live LLM call' };
     }
-    case 'FISH_API_KEY': {
-      try {
-        await probeFishKey(value);
-        return { ok: true, message: '✓ Fish Audio key valid' };
-      } catch (err) {
-        return { ok: false, message: briefLlmError(err) };
-      }
-    }
     case 'ELEVENLABS_API_KEY': {
       const r = await fetch('https://api.elevenlabs.io/v1/user', {
         headers: { 'xi-api-key': value },
@@ -180,17 +170,6 @@ async function probeKey(
         return { ok: false, message: j?.error === 10 ? 'Invalid API key — check your Last.fm developer credentials' : (j?.message || `Request failed (${r.status})`) };
       }
       return { ok: true, message: '✓ Last.fm API key valid' };
-    }
-    case 'LISTENBRAINZ_USER_TOKEN': {
-      const r = await fetch(`${listenbrainzApiBase()}/validate-token`, {
-        headers: { Authorization: `Token ${value}` },
-        signal: AbortSignal.timeout(8000),
-      });
-      const j = await r.json().catch(() => ({})) as { valid?: boolean; user_name?: string; message?: string };
-      if (!j.valid) {
-        return { ok: false, message: 'Token not valid — check your ListenBrainz user token' };
-      }
-      return { ok: true, message: `✓ ListenBrainz token valid${j.user_name ? ` · user: ${j.user_name}` : ''}` };
     }
     default:
       return { ok: false, message: `No probe defined for ${key}` };

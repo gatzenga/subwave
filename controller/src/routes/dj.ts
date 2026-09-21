@@ -850,11 +850,9 @@ router.post('/dj/queue-track', requireAdmin, async (req, res) => {
     // Explicit operator action — bypass the request/AI dedup guard (#619) so a
     // deliberate manual queue always fires, even for an already-queued track.
     //
-    // `requestedBy: 'studio'` earns the four air-path exemptions a request has
-    // (length cap, show-boundary cut, bed reason, sub-crossfade warning);
-    // `operator: true` says it is not a listener waiting in line, so it does
-    // not consume a `requests.maxPending` slot. The two are separate questions
-    // — see queue.pendingListenerRequests().
+    // `requestedBy: 'studio'` earns the four air-path exemptions (length cap,
+    // show-boundary cut, bed reason, sub-crossfade warning); `operator: true`
+    // marks it as an operator push rather than an ordinary queued track.
     const queuePosition = await queue.push({
       track, requestedBy: 'studio', operator: true, allowDuplicate: true,
     });
@@ -897,8 +895,6 @@ router.post('/dj/queue-track', requireAdmin, async (req, res) => {
 // refusal itself still happens in `push()`, and a `-2` from it is recorded as a
 // skip whether or not the plan predicted it.
 //
-// `operator: true` keeps the block out of the listener request line — see
-// queue.pendingListenerRequests().
 // ---------------------------------------------------------------------------
 
 // A block's tracks, plus what to call it. Throws a `{ status, error }` shape

@@ -4,7 +4,7 @@
 // settings/ must not import middleware/.
 import type { ZodError } from 'zod';
 
-// Dotted path ('webhooks.1.url'), which is also react-hook-form's setError syntax.
+// Dotted path ('shows.1.name'), which is also react-hook-form's setError syntax.
 function pathOf(issue: ZodError['issues'][number]): string {
   return issue.path.join('.');
 }
@@ -34,7 +34,7 @@ export function flattenIssues(error: ZodError): Record<string, string> {
  * reintroduce a per-code heuristic; the set of field-agnostic codes is open.
  *
  * `root` names the value when the SCHEMA is unrooted — a validator parsing a
- * bare array passes its settings key so '0.url' reads as 'webhooks.0.url'.
+ * bare array passes its settings key so '0.name' reads as 'shows.0.name'.
  */
 export function firstMessage(error: ZodError, root?: string): string {
   const issue = error.issues[0];

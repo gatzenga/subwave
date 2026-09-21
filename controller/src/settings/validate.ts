@@ -4,11 +4,9 @@
 //
 // Part of the settings/ split — see ../settings.ts for the public barrel.
 
-import { SHOW_MOODS, ScheduleOverride, Webhook } from './vocab.js';
+import { SHOW_MOODS, ScheduleOverride } from './vocab.js';
 
 import { minTrackSeconds } from './store.js';
-import { webhooksSchema } from '../schemas/webhook.js';
-import { mergeWebhookSecrets } from '../schemas/webhook-server.js';
 import { showsSchema, type ShowSchemaContext } from '../schemas/show.js';
 import { resolveShowIds } from '../schemas/show-server.js';
 import { djPromptsSchema, personasSchema, ttsVoiceSlotSchema } from '../schemas/persona.js';
@@ -146,30 +144,6 @@ export function validateScheduleOverrideStrict(raw, shows): ScheduleOverride | n
   const r = scheduleOverrideSchema(ctx).safeParse(raw);
   if (!r.success) throw new Error(firstMessage(r.error, 'scheduleOverride'));
   return r.data;
-}
-
-// Strict validator — used by update(). Shape and format now come from the
-// shared schema (controller/src/schemas/webhook.ts), which the web form runs
-// too; the stateful rules (redaction sentinel, id minting, cross-item dedupe)
-// come from its server-only sibling. `existing` is the current list, so the
-// operator can keep a previously-set authHeader by sending the redacted
-// sentinel back unchanged.
-//
-// The failure path matters as much as the success path: update() is reached by
-// callers that never touch POST /webhooks (backup restore, PUT /settings), and
-// both do `res.status(400).json({ error: err.message })`. A raw ZodError's
-// .message is a pretty-printed JSON array of issue objects, so safeParse +
-// firstMessage is what keeps a bad restore reading as one readable line instead
-// of a JSON blob in the operator's toast. Every remaining validate*Strict
-// conversion should copy this shape.
-export function validateWebhooksStrict(raw: unknown, existing: Webhook[] = []) {
-  const r = webhooksSchema.safeParse(raw);
-  // 'webhooks' is passed as the ROOT rather than string-prefixed here: this
-  // schema is the bare array, so its issue paths start at the index, and
-  // firstMessage needs to splice the name in FRONT of that index to produce
-  // 'webhooks.0.url' rather than 'webhooks: 0.url'.
-  if (!r.success) throw new Error(firstMessage(r.error, 'webhooks'));
-  return mergeWebhookSecrets(r.data, existing);
 }
 
 // --- Strict update() validators for the mood system (the validateFestivalsStrict

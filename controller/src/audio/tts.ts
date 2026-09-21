@@ -5,10 +5,6 @@
 import * as piper from './piper.js';
 import * as kokoro from './kokoro.js';
 import { applyEdgeFades } from './wav-edges.js';
-import * as chatterbox from './chatterbox.js';
-import * as pocketTts from './pocketTts.js';
-import { heavyColdEngines, heavyEnabledEngines } from './ttsHeavyClient.js';
-import * as remoteTts from './remoteTts.js';
 import { normalizeForSpeech } from './speech-text.js';
 import { scrubCjkForSpeech } from './spoken-script-policy.js';
 import {
@@ -16,14 +12,13 @@ import {
   type RescueSlot, type TtsTarget,
 } from './tts-fallback.js';
 import { localizedPreviewText } from './preview-text.js';
-import * as cloud from '../llm/speech.js';
 import { resolvePersonaVoiceSlot } from './persona-engine.js';
 import { stripThinking } from '../llm/sdk.js';
 import * as settings from '../settings.js';
 import { recordTts } from '../stats.js';
 import { energyForDaypart } from '../context.js';
 
-export const ENGINES = ['piper', 'kokoro', 'chatterbox', 'pocket-tts', 'cloud', 'remote'];
+export const ENGINES = ['piper', 'kokoro'];
 
 // Kinds NOT voiced by the on-air persona: they use the global defaultEngine.
 // Every other kind takes engine+voice from the effective persona's `tts`.
@@ -51,24 +46,13 @@ function requestedEngine(kind: string, personaTts: any): string {
   return settings.get().tts?.defaultEngine || 'piper';
 }
 
-// Pre-flight availability/key gate, in one predicate so resolveEngine() (the
+// Pre-flight availability gate, in one predicate so resolveEngine() (the
 // primary) and fallbackChain() (the runtime rescue) agree on what "installed"
-// means. `cloudProvider` scopes the key check to the provider that would be
-// called. Piper is local, keyless and always present: the universal floor.
-function engineUsable(engine: string, cloudProvider?: string | null): boolean {
+// means. Piper is local, keyless and always present: the universal floor.
+function engineUsable(engine: string): boolean {
   if (!ENGINES.includes(engine)) return false;
-  if (engine === 'cloud') return cloud.isConfigured(cloudProvider ?? null);
-  if (engine === 'chatterbox') return chatterbox.isAvailable();
-  if (engine === 'pocket-tts') return pocketTts.isAvailable();
   if (engine === 'kokoro') return kokoro.isAvailable();
-  if (engine === 'remote') return remoteTts.isAvailable();
   return true;
-}
-
-// The persona's own cloud provider, but only when the persona is actually ON
-// the cloud engine — otherwise the global Cloud provider applies.
-function personaCloudProvider(personaTts: any): string | null {
-  return (personaTts && personaTts.engine === 'cloud') ? (personaTts.cloudProvider ?? null) : null;
 }
 
 // The operator's configured rescue slot (settings.tts.fallback), or null when
@@ -83,31 +67,16 @@ function plainSlot(engine: string): RescueSlot {
   return { engine, personaTts: null };
 }
 
-// What a render is aimed at: the engine, plus (for `cloud` only) the provider.
-// The station default is NOT substituted here; that is sameTtsTarget's job.
-function ttsTarget(engine: string, personaTts: any): TtsTarget {
-  return {
-    engine,
-    cloudProvider: engine === 'cloud' ? personaCloudProvider(personaTts) : null,
-  };
+// What a render is aimed at. `cloudProvider` stays in the shape because
+// tts-fallback.ts is shared, pure and pinned; with only local engines left it
+// is always null.
+function ttsTarget(engine: string): TtsTarget {
+  return { engine, cloudProvider: null };
 }
 
-// The station's Cloud provider — what an unspecified cloud target resolves to.
-function defaultCloudProvider(): string | null {
-  return settings.get().tts?.cloud?.provider ?? null;
-}
-
-// True when a segment did not go out on the target the persona asked for:
-// a different engine, or a different provider inside `cloud` (#1345).
-function rerouted(
-  requestedEngineId: string, requestedPersonaTts: any,
-  actualEngine: string, actualPersonaTts: any,
-): boolean {
-  return !sameTtsTarget(
-    ttsTarget(requestedEngineId, requestedPersonaTts),
-    ttsTarget(actualEngine, actualPersonaTts),
-    defaultCloudProvider(),
-  );
+// True when a segment did not go out on the engine the persona asked for.
+function rerouted(requestedEngineId: string, actualEngine: string): boolean {
+  return !sameTtsTarget(ttsTarget(requestedEngineId), ttsTarget(actualEngine), null);
 }
 
 // Which engine — and which voice — speaks a segment of `kind`. Returns a slot
@@ -125,14 +94,14 @@ function resolveEngine(kind: string, personaTts: any): RescueSlot {
   // Known-unavailable engine: route to the operator's configured fallback if it
   // can speak, else their saved default engine, else Piper. The default engine
   // branch is deliberately NOT probed; the runtime chain in speak() catches it.
-  if (!engineUsable(chosen, personaCloudProvider(personaTts))) {
+  if (!engineUsable(chosen)) {
     // Probed with the fallback's own cloud provider, matching the credentials
     // the call would use.
     const configured = fallbackSlot();
     if (
       configured
-      && rerouted(configured.engine, configured.personaTts, chosen, personaTts)
-      && engineUsable(configured.engine, configured.personaTts?.cloudProvider ?? null)
+      && rerouted(configured.engine, chosen)
+      && engineUsable(configured.engine)
     ) {
       return configured;
     }
@@ -141,8 +110,8 @@ function resolveEngine(kind: string, personaTts: any): RescueSlot {
     // provider can survive (#1345). Probed, unlike the branch above.
     if (
       tts.defaultEngine
-      && rerouted(tts.defaultEngine, null, chosen, personaTts)
-      && engineUsable(tts.defaultEngine, null)
+      && rerouted(tts.defaultEngine, chosen)
+      && engineUsable(tts.defaultEngine)
     ) {
       return plainSlot(tts.defaultEngine);
     }
@@ -161,8 +130,8 @@ function fallbackChain(primary: TtsTarget): RescueSlot[] {
     primary,
     fallbackSlot(),
     settings.get().tts?.defaultEngine,
-    (engine, cloudProvider) => engineUsable(engine, cloudProvider ?? null),
-    defaultCloudProvider(),
+    (engine) => engineUsable(engine),
+    null,
   );
 }
 
@@ -210,42 +179,6 @@ async function speakWith(engine: string, text: string, opts: any, personaTts: an
     // Explicit phonemizer lang. Absent → KOKORO_LANG env → auto-detect.
     const lang = opts.lang || settings.get().tts?.kokoro?.lang || undefined;
     return kokoro.speak(text, { ...opts, voice, lang });
-  }
-  if (engine === 'chatterbox') {
-    // chatterbox `voice` is a reference-WAV filename; empty → built-in default.
-    const voice = (personaTts && personaTts.engine === 'chatterbox' && personaTts.voice)
-      ? personaTts.voice
-      : settings.get().tts?.chatterbox?.referenceVoice;
-    return chatterbox.speak(text, { ...opts, voice });
-  }
-  if (engine === 'pocket-tts') {
-    // PocketTTS voice is a built-in id (alba, anna, …); persona override wins.
-    // The worker falls back to its default on an unknown id, never silence.
-    const voice = (personaTts && personaTts.engine === 'pocket-tts' && personaTts.voice)
-      ? personaTts.voice
-      : settings.get().tts?.pocketTts?.voice;
-    return pocketTts.speak(text, { ...opts, voice });
-  }
-  if (engine === 'cloud') {
-    // Persona picks provider + voice; the shared tts.cloud holds key + model.
-    // `opts.cloudVoiceSettings` is preview-only (synthesizeSample) and rides the
-    // same override so "Play sample" auditions unsaved slider values.
-    const personaOverride = (personaTts && personaTts.engine === 'cloud')
-      ? { provider: personaTts.cloudProvider, voice: personaTts.voice }
-      : null;
-    const cloudModelOverride = typeof opts.cloudModel === 'string' ? { model: opts.cloudModel } : null;
-    const cloudOverride = (personaOverride || cloudModelOverride || opts.cloudVoiceSettings || opts.fishSettings)
-      ? { ...(personaOverride || {}), ...(cloudModelOverride || {}), ...(opts.cloudVoiceSettings || {}), ...(opts.fishSettings || {}) }
-      : null;
-    return cloud.speak(text, { ...opts, cloudOverride });
-  }
-  if (engine === 'remote') {
-    // `voice` is forwarded as-is; the endpoint interprets it and owns its
-    // own defaults, so there is no global fallback voice here.
-    const voice = (personaTts && personaTts.engine === 'remote' && personaTts.voice)
-      ? personaTts.voice
-      : undefined;
-    return remoteTts.speak(text, { ...opts, voice });
   }
   // piper `voice` is an .onnx filename; empty → the baked-in default voice.
   const voice = (personaTts && personaTts.engine === 'piper' && personaTts.voice)
@@ -377,14 +310,10 @@ export async function speak(
   // A pre-flight reroute onto the operator's configured fallback carries THAT
   // slot's voice; an ordinary resolve leaves the persona's own override.
   const primaryPersonaTts = primarySlot.personaTts ?? personaTts;
-  const primaryFellBack = rerouted(requested, personaTts, primary, primaryPersonaTts);
-  // Engine-native bracket cues reach the expressive primary untouched; a
-  // local/remote rescue would speak them literally, so sanitize only that.
-  const speakingPersona = GLOBAL_VOICE_KINDS.has(kind) ? null : personaFor(persona);
-  const cloudCueFamily = requested === 'cloud' && speakingPersona
-    ? cloud.requestedCloudExpressionCueFamilyForPersona(speakingPersona)
-    : '';
-  const rescueText = fallbackTextFor(requested, cloudCueFamily, speakText);
+  const primaryFellBack = rerouted(requested, primary);
+  // Engine-native bracket cues reach the primary untouched; a rescue would
+  // speak them literally, so sanitize only that.
+  const rescueText = fallbackTextFor(requested, '', speakText);
   const primaryText = primaryFellBack ? rescueText : speakText;
   // Persona soul rides to the cloud engine so delivery matches the writing
   // (#579), like `language` does for pronunciation (#558). DJ-voiced kinds only.
@@ -415,7 +344,7 @@ export async function speak(
     return result;
   } catch (err) {
     // Primary passed the pre-flight gate but threw mid-render: walk the chain.
-    const chain = fallbackChain(ttsTarget(primary, primaryPersonaTts));
+    const chain = fallbackChain(ttsTarget(primary));
     if (!chain.length) {
       recordTts({
         ...callBase, engine: primary, fellBack: primaryFellBack,
@@ -465,34 +394,7 @@ export function availableEngines() {
   return {
     piper: true,
     kokoro: kokoro.isAvailable(),
-    chatterbox: chatterbox.isAvailable(),
-    'pocket-tts': pocketTts.isAvailable(),
-    // tts-heavy sidecar's configured engines (TTS_HEAVY_ENGINES): string[] when
-    // reachable, null when unknown. Separates "engine off" from "sidecar off".
-    heavyEnabled: heavyEnabledEngines(),
-    // Which of those the sidecar has idle-unloaded (#1579). Still available (the
-    // next line pays a model load), so routing is unaffected; badge only.
-    heavyCold: heavyColdEngines(),
-    // Whether PocketTTS can clone voices (gated weights present); null = unknown.
-    // The admin UI warns that a cloned .wav silently reverts otherwise (#238).
-    pocketTtsCloning: pocketTts.cloningAvailable(),
-    cloud: cloud.isConfigured(),
-    remote: remoteTts.isAvailable(),
-    // Per-provider: a persona's cloud voice needs ITS provider configured,
-    // which can differ from the global Cloud-engine provider.
-    cloudByProvider: {
-      openai: cloud.isConfigured('openai'),
-      elevenlabs: cloud.isConfigured('elevenlabs'),
-      'fish-audio': cloud.isConfigured('fish-audio'),
-    },
   };
-}
-
-// A PocketTTS `voice` that is a cloned reference (.wav filename or absolute
-// path) rather than a built-in id. Mirrors resolveVoice() in pocketTts.ts.
-function isPocketClone(voice?: string | null): boolean {
-  const v = (voice || '').trim();
-  return !!v && (/\.wav$/i.test(v) || v.startsWith('/'));
 }
 
 // Snapshot of how a spoken segment would route right now, for /debug: which
@@ -509,48 +411,25 @@ export function describeRouting() {
   const slot = resolveEngine('dj-speak', personaTts);   // any persona-voiced kind
   const engine = slot.engine;
   let voice: string | null = null;
-  let provider: string | null = null;
+  const provider: string | null = null;
   if (slot.personaTts) {
-    // Pre-flight reroute: the slot carries the exact voice/provider that will
-    // speak, so report it directly rather than re-deriving from the persona.
+    // Pre-flight reroute: the slot carries the exact voice that will speak, so
+    // report it directly rather than re-deriving from the persona.
     voice = slot.personaTts.voice || null;
-    provider = engine === 'cloud' ? (slot.personaTts.cloudProvider || null) : null;
-  } else if (engine === 'cloud') {
-    voice = personaTts?.engine === 'cloud' ? personaTts.voice : tts.cloud?.voice;
-    provider = (personaTts?.engine === 'cloud' ? personaTts.cloudProvider : tts.cloud?.provider) as any;
   } else if (engine === 'kokoro') {
     voice = (personaTts?.engine === 'kokoro' && personaTts.voice)
       ? personaTts.voice
       : tts.kokoro?.voice;
-  } else if (engine === 'chatterbox') {
-    // For chatterbox, `voice` is the reference-WAV filename; empty → built-in.
-    voice = (personaTts?.engine === 'chatterbox' && personaTts.voice)
-      ? personaTts.voice
-      : (tts.chatterbox?.referenceVoice || null);
-  } else if (engine === 'pocket-tts') {
-    voice = (personaTts?.engine === 'pocket-tts' && personaTts.voice)
-      ? personaTts.voice
-      : (tts.pocketTts?.voice || null);
   } else if (engine === 'piper') {
     // For piper, `voice` is the .onnx filename; empty → baked-in default.
     voice = (personaTts?.engine === 'piper' && personaTts.voice)
       ? personaTts.voice
       : null;
-  } else if (engine === 'remote') {
-    voice = (personaTts?.engine === 'remote' && personaTts.voice)
-      ? personaTts.voice
-      : null;
   }
-  // A cloned PocketTTS voice silently reverts to a built-in when the gated
-  // weights are absent (#238); surface why, not a healthy-looking no-op.
-  let warning: string | null = null;
-  if (engine === 'pocket-tts' && isPocketClone(voice) && pocketTts.cloningAvailable() === false) {
-    warning = 'PocketTTS voice cloning is unavailable in this build (gated weights '
-      + 'not loaded) — this cloned voice reverts to a built-in. Set HF_TOKEN to enable cloning.';
-  }
+  const warning: string | null = null;
   // The configured rescue, so /debug answers "what speaks if this engine dies".
-  // `usable` probes the fallback's own cloud provider: the chain silently skips
-  // a configured-but-unusable fallback, which is worth seeing here.
+  // The chain silently skips a configured-but-unusable fallback, which is worth
+  // seeing here.
   const configured = fallbackSlot();
   const fallbackCfg = tts.fallback || {};
   return {
@@ -562,19 +441,14 @@ export function describeRouting() {
       voice: voice || null,
       provider: provider || null,
       // Provider-aware like speak()'s: a cloud→cloud reroute is still a fallback.
-      fellBack: rerouted(requested, personaTts, engine, slot.personaTts ?? personaTts),
+      fellBack: rerouted(requested, engine),
       warning,
     },
     fallback: {
       enabled: !!fallbackCfg.enabled,
       engine: configured?.engine || fallbackCfg.engine || null,
       voice: configured?.personaTts?.voice || null,
-      provider: configured?.engine === 'cloud'
-        ? (configured.personaTts?.cloudProvider || null)
-        : null,
-      usable: configured
-        ? engineUsable(configured.engine, configured.personaTts?.cloudProvider ?? null)
-        : false,
+      usable: configured ? engineUsable(configured.engine) : false,
     },
     jingle: { engine: resolveEngine('jingle', null).engine },
   };

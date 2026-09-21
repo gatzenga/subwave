@@ -3,35 +3,6 @@
 // otherwise the admin-selected active persona — settings.getEffectivePersona).
 
 import * as settings from '../../../settings.js';
-import { resolvePersonaVoiceSlot } from '../../../audio/persona-engine.js';
-import { resolveCloudModelForPersona, resolveCloudProviderForPersona } from '../speech/cloud-speech.js';
-import { cloudExpressionCueFamily } from '../core/pure.js';
-
-// Paralinguistic tags Chatterbox renders as actual non-verbal sounds. Every
-// other engine (piper, kokoro, cloud) reads `[laugh]` aloud as the word
-// "laugh", so we only mention this when the on-air persona will actually be
-// voiced by Chatterbox.
-const CHATTERBOX_TAG_HINT =
-  '\n\nYou may sparingly insert non-verbal cues in square brackets: [laugh], [chuckle], [sigh], [cough]. Use at most two when they genuinely improve delivery. Every cue must immediately precede spoken words; never stack cues, add a closing tag, or end a segment with one.';
-
-// ElevenLabs v3 renders bracketed audio tags as actual expressive cues rather
-// than reading them aloud (issue #696). Gated on the RESOLVED cloud model —
-// only eleven_v3* families support this — so an ElevenLabs persona still on
-// v2 (or a persona whose provider override resolves to eleven_flash_v2_5)
-// never sees the hint. Same structure as CHATTERBOX_TAG_HINT above but a
-// separate constant with v3's own verb-form tag vocabulary (per the
-// ElevenLabs prompting guide), so a tweak to one engine's cue list can't
-// silently retune the other. The base DJ prompt template already forbids
-// asterisks and quotes but says nothing about brackets, so no rule loosening
-// is needed for either engine.
-const ELEVENLABS_V3_TAG_HINT =
-  '\n\nYou may sparingly insert non-verbal audio cues in square brackets: [laughs], [sighs], [whispers], [excited]. Use at most two when they genuinely improve delivery. Every cue must immediately precede spoken words; never stack cues, add a closing tag, or end a segment with one.';
-
-// Fish Audio S2.1 accepts short natural-language performance cues rather than
-// a fixed tag vocabulary. This extends the existing engine-gated cue policy;
-// it does not alter the base prompt or let brackets leak into fallback engines.
-const FISH_S21_TAG_HINT =
-  '\n\nYou may sparingly add a short natural-language delivery cue in square brackets, such as [laughing nervously], [whispers], or [soft and warm]. Use at most two when they genuinely improve delivery. A cue describes only the voice, never music, a track, a fade, a pause, a transition, a timing note or a scene. Every cue must immediately precede spoken words; never stack cues, add a closing tag, or end a segment with one.';
 
 // `persona` overrides the on-air persona — used by the persona-handoff
 // generators (generateSignoff / generateHandoffGreeting) to render the sign-off
@@ -40,41 +11,14 @@ const FISH_S21_TAG_HINT =
 // and by the guest-speaker rotation (settings.pickOnAirSpeaker) to voice a
 // standalone segment under a co-host. The roster clause tells the speaker who
 // else is in the studio when the active show has guests (empty otherwise).
-//
-// `cloudModel` optionally overrides the resolved cloud TTS model for the
-// ElevenLabs v3 tag hint. Left blank, the resolver runs against the passed
-// persona — which is what every current caller wants. Kept as an override so a
-// future caller who already resolved the model (e.g. a preview endpoint) can
-// pass it in without re-resolving, per PR #696 owner review: "thread the
-// effective model into djSystem…pass it in explicitly."
-export function djSystem(
-  persona: any = settings.getEffectivePersona(),
-  cloudModel: string = resolveCloudModelForPersona(persona),
-) {
+export function djSystem(persona: any = settings.getEffectivePersona()) {
   const s = settings.get();
-  const base = settings.renderDjPrompt(persona, {
+  return settings.renderDjPrompt(persona, {
     station: s.station,
     // The broad on-air location, never the precise weather label — this is the
     // string the DJ speaks as "broadcasting from {location}".
     location: settings.resolveOnAirLocation(s),
   }) + settings.onAirRosterClause(persona);
-  // Resolved, not raw: a persona on the 'inherit' sentinel has no engine of its
-  // own, so asking the slot directly reads "pinned to something that is not
-  // chatterbox" and drops the hint on a station whose default IS chatterbox —
-  // the same miss resolvePersonaVoiceSlot() exists to close in cloud-speech.ts.
-  const engine = resolvePersonaVoiceSlot(persona?.tts, s.tts)?.engine;
-  if (engine === 'chatterbox') return base + CHATTERBOX_TAG_HINT;
-  // Provider/model resolution is non-empty only when the persona actually
-  // resolves to a configured cloud engine — including via the station default
-  // when the persona sets no engine. That fail-closed check keeps cues away
-  // from Piper/Kokoro fallback, where brackets would be spoken literally.
-  const cueFamily = cloudExpressionCueFamily(
-    resolveCloudProviderForPersona(persona),
-    cloudModel,
-  );
-  if (cueFamily === 'fish-s21') return base + FISH_S21_TAG_HINT;
-  if (cueFamily === 'elevenlabs-v3') return base + ELEVENLABS_V3_TAG_HINT;
-  return base;
 }
 
 // Persona-driven verbosity, one entry per SCRIPT_LENGTHS rung. 'concise'

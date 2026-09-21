@@ -245,3 +245,37 @@ export interface SettingsResponse {
   };
   tts?: { moods?: string[] };
 }
+
+// Row projection consumed by lib.ts's `showRow`. It used to live on the
+// /admin/shows table component; the page is gone, the projection is still
+// what the block-rule and skill pickers read shows through.
+export interface ShowFace {
+  key: string;
+  initials: string;
+  src: string | null;
+}
+
+export interface ShowFacet {
+  key: string;
+  label: string;
+  accent?: boolean;
+}
+
+export interface ShowRow {
+  id: string;
+  index: number;
+  name: string;
+  colour: string;
+  programme: boolean;
+  /** The pinned feature segment. */
+  skillPin: string;
+  banter: boolean;
+  host: ShowFace | null;
+  hostName: string;
+  guests: ShowFace[];
+  guestNames: string;
+  facets: ShowFacet[];
+  /** Scheduled hours per week; 0 means "unscheduled". */
+  hrs: number;
+  ok: boolean;
+}

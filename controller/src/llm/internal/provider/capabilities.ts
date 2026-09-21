@@ -9,7 +9,7 @@
 // Thinking control rides AI SDK 7's top-level `reasoning` call option. Never mix
 // it with providerOptions: the SDK does not merge the two and reasoning-related
 // providerOptions silently win. Providers with no per-call channel (OpenRouter,
-// and the body-injection openai-compatible/locca path) return undefined here and
+// and the body-injection openai-compatible path) return undefined here and
 // keep their construction-time wiring in registry.ts.
 
 interface ThinkingArgs {
@@ -91,7 +91,7 @@ const CAPS: Record<string, ProviderCapabilities> = {
         : undefined,
     discoverySteps: NATIVE_DISCOVERY_STEPS,
   },
-  // openai-compatible and locca serve the same local GGUF model class as ollama:
+  // openai-compatible serves the same local GGUF model class as ollama:
   // under native Output.object they emit a schema-valid object without exploring,
   // so the native leg is a wasted call. Forced done-tool path for both, with
   // no-think handled in transport.
@@ -100,12 +100,6 @@ const CAPS: Record<string, ProviderCapabilities> = {
     repeatPenaltyApplies: false,
     // Self-hosted llama.cpp/vLLM read chat_template_kwargs, not reasoning_effort,
     // so the top-level param stays unset and the knobs ride the body.
-    samplingViaBody: true,
-    reasoningLevel: NONE,
-  },
-  locca: {
-    objectStrategy: 'tool',
-    repeatPenaltyApplies: false,
     samplingViaBody: true,
     reasoningLevel: NONE,
   },
@@ -130,16 +124,6 @@ const CAPS: Record<string, ProviderCapabilities> = {
       (reasoning || /(^|\/)gemma-/i.test(modelId) ? undefined : 'none'),
     discoverySteps: NATIVE_DISCOVERY_STEPS,
   },
-  deepseek: {
-    objectStrategy: 'native',
-    repeatPenaltyApplies: false,
-    // V4 hybrids think by default and thinking mode rejects tool_choice, so a
-    // forced-tool leg must explicitly disable it. Reasoning on → undefined: the
-    // hybrid default already thinks, and DeepSeek coerces 'medium' up to 'high'.
-    reasoningLevel: ({ reasoning, forceNoThink }) =>
-      (reasoning && !forceNoThink ? undefined : 'none'),
-    discoverySteps: NATIVE_DISCOVERY_STEPS,
-  },
   // OpenRouter reads `reasoning` only from model-construction settings (verified
   // on @openrouter/ai-sdk-provider v3.0.0), so the knob is wired in registry.ts
   // and forced-tool legs get a separate reasoning-disabled instance.
@@ -148,27 +132,6 @@ const CAPS: Record<string, ProviderCapabilities> = {
     repeatPenaltyApplies: false,
     reasoningLevel: NONE,
     reasoningConstructionOnly: true,
-    discoverySteps: NATIVE_DISCOVERY_STEPS,
-  },
-  // Requesty is built via createOpenAI, so the level resolves through the openai
-  // code path as reasoning_effort. Suppressed when reasoning is off or on a
-  // forced-tool leg. No model-id gate: requesty ids are `vendor/model` and the
-  // gateway tolerates the field.
-  requesty: {
-    objectStrategy: 'native',
-    repeatPenaltyApplies: false,
-    reasoningLevel: ({ reasoning, forceNoThink }) =>
-      (reasoning && !forceNoThink ? undefined : 'minimal'),
-    discoverySteps: NATIVE_DISCOVERY_STEPS,
-  },
-  // The gateway serializes the top-level level to whatever vendor the
-  // `provider/model` id resolves to. Gemma downstreams are the exception, same
-  // 400 as the google entry (#1044), so omit the param for them.
-  gateway: {
-    objectStrategy: 'native',
-    repeatPenaltyApplies: false,
-    reasoningLevel: ({ modelId, reasoning, forceNoThink }) =>
-      ((reasoning && !forceNoThink) || /(^|\/)gemma-/i.test(modelId) ? undefined : 'none'),
     discoverySteps: NATIVE_DISCOVERY_STEPS,
   },
 };

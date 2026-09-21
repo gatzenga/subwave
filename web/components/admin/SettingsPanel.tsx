@@ -334,18 +334,12 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
   const saveMutation = useSettingsMutation<SettingsData>({ adminFetch });
   const busy = commandBusy || saveMutation.isPending;
 
-  // Jingles / SFX / Beds now live on /admin/imaging; their old ?section
-  // deep-links are forwarded so existing bookmarks survive. Read through
-  // useSearchParams, not a one-shot window.location, so client-side navigations
-  // land too — NavidromeBanner links here from /admin/settings itself, where
-  // only the query changes.
+  // Read through useSearchParams, not a one-shot window.location, so
+  // client-side navigations land too — NavidromeBanner links here from
+  // /admin/settings itself, where only the query changes.
   const searchParams = useSearchParams();
   useEffect(() => {
     const s = searchParams.get('section');
-    if (s === 'jingles' || s === 'sfx' || s === 'beds') {
-      router.replace(`/admin/imaging?tab=${s}`);
-      return;
-    }
     if (s === 'brain' && !djBrainEnabled) {
       setActiveSection('station');
       return;
@@ -415,15 +409,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
         // Arrives as the 'set' sentinel ('' when unset) — never the secret.
         password: v.privacy?.password ?? '',
         publishPersonaSouls: v.privacy?.publishPersonaSouls ?? false,
-      },
-      requests: {
-        enabled: v.requests?.enabled !== false,
-        maxPending: String(v.requests?.maxPending ?? 6),
-        cooldownSec: String(v.requests?.cooldownSec ?? 60),
-        perIpHourlyCap: String(v.requests?.perIpHourlyCap ?? 8),
-        globalHourlyCap: String(v.requests?.globalHourlyCap ?? 30),
-        repeatCooldownMin: String(v.requests?.repeatCooldownMin ?? 120),
-        onePendingPerIp: v.requests?.onePendingPerIp !== false,
       },
       kokoroLang: v.tts?.kokoro?.lang ?? '',
       // Absent (a settings.json predating the key) reads as OFF, matching the
@@ -534,12 +519,10 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
         // LLM field silently persists it over the new one.
         noRepeatWindow: String(typeof v.llm?.noRepeatWindow === 'number' ? v.llm.noRepeatWindow : 250),
         artistVarietyWindow: String(typeof v.llm?.artistVarietyWindow === 'number' ? v.llm.artistVarietyWindow : 5),
-        requestWebResolve: !!v.llm?.requestWebResolve,
         agentTimeoutMs: typeof v.llm?.agentTimeoutMs === 'number' ? v.llm.agentTimeoutMs : 45000,
         pauseWhenEmpty: !!v.llm?.pauseWhenEmpty,
         dailyTokenCap: typeof v.llm?.dailyTokenCap === 'number' ? v.llm.dailyTokenCap : 0,
         budgetSoftPct: typeof v.llm?.budgetSoftPct === 'number' ? v.llm.budgetSoftPct : 80,
-        exemptRequests: v.llm?.exemptRequests !== false,
         maxOutputTokens: typeof v.llm?.maxOutputTokens === 'number' ? v.llm.maxOutputTokens : 0,
         discoverySteps: typeof v.llm?.discoverySteps === 'number' ? v.llm.discoverySteps : 0,
         fallback: {
@@ -604,12 +587,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
           apiSecret: v.scrobble?.lastfm?.apiSecret ?? '',
           sessionKey: v.scrobble?.lastfm?.sessionKey ?? '',
           username: v.scrobble?.lastfm?.username ?? '',
-        },
-        listenbrainz: {
-          enabled: !!v.scrobble?.listenbrainz?.enabled,
-          userToken: v.scrobble?.listenbrainz?.userToken ?? '',
-          username: v.scrobble?.listenbrainz?.username ?? '',
-          baseUrl: v.scrobble?.listenbrainz?.baseUrl ?? '',
         },
         navidrome: {
           enabled: !!v.scrobble?.navidrome?.enabled,

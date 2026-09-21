@@ -13,8 +13,6 @@ import * as jingles from '../../broadcast/jingles.js';
 import * as settings from '../../settings.js';
 import { BOUNDARY_MIN_PLAY_SEC, BOUNDARY_TOLERANCE_SEC } from '../../broadcast/show-boundary.js';
 import * as tts from '../../audio/tts.js';
-import * as remoteTts from '../../audio/remoteTts.js';
-import * as chatterbox from '../../audio/chatterbox.js';
 import * as piper from '../../audio/piper.js';
 import * as llmProvider from '../../llm/provider.js';
 import { queue } from '../../broadcast/queue.js';
@@ -49,11 +47,8 @@ router.get('/settings', requireAdmin, async (req, res) => {
       // null means the default persona is on air.
       show: activeShow?.persona?.id ? { id: activeShow.id, name: activeShow.name } : null,
     };
-    // Reference-WAV voices are shared by chatterbox + pocket-tts (#213).
-    const customVoices = await chatterbox.listReferenceVoices();
-    // Custom Piper voices in the same folder (#230), .onnx + .onnx.json pairs.
+    // Custom Piper voices (#230), .onnx + .onnx.json pairs.
     const piperVoices = await piper.listPiperVoices();
-    const voiceDir = chatterbox.voiceDir();
     res.json({
       autoPick: queue.autoPick,
       pickerBusy: queue.pickerBusy,
@@ -158,14 +153,7 @@ router.get('/settings', requireAdmin, async (req, res) => {
         kokoroVoices: settings.KOKORO_VOICES,
         kokoroVoiceLanguages: settings.KOKORO_VOICE_LANGUAGES,
         kokoroLangs: settings.KOKORO_LANGS,
-        voiceDir,
         piperVoices,
-        chatterboxVoices: customVoices,
-        // Alias of voiceDir, kept for older UI builds.
-        chatterboxVoiceDir: voiceDir,
-        pocketTtsVoices: settings.POCKET_TTS_VOICES,
-        pocketTtsCustomVoices: customVoices,
-        cloudProviders: settings.TTS_CLOUD_PROVIDERS,
         frequencies: settings.FREQUENCIES,
         // Live mood names from the operator-editable vocabulary.
         moods: settings.moodVocab(),
@@ -226,10 +214,6 @@ router.post('/settings', requireAdmin, validateSettingsBody(), async (req, res) 
     }
     if (result.requiresRestart) {
       queue.log('scheduler', `mixer settings changed — Liquidsoap restart required`);
-    }
-    // Re-probe now so the admin badge doesn't wait out the 30s probe tick.
-    if (req.body?.tts?.remote?.url !== undefined) {
-      await remoteTts.refresh();
     }
     res.json(result);
   } catch (err) {

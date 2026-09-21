@@ -10,20 +10,18 @@ import { useAdminAuth } from '../../../lib/adminAuth';
 import { notify, errorMessage } from '../../../lib/notify';
 import { adminResponse } from '../../../lib/admin-query';
 import type { LucideIcon } from 'lucide-react';
-import { Braces, Boxes, Radio, Webhook } from 'lucide-react';
+import { Braces, Radio } from 'lucide-react';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
 import { Card, Btn, Eyebrow } from '../ui';
 import { SectionTabs } from '../SectionTabs';
 import EndpointsTab from './EndpointsTab';
-import McpTab from './McpTab';
 import IntegrationsTab from './IntegrationsTab';
-import WebhooksPanel from '../WebhooksPanel';
 import { useConnectCatalogQuery } from './queries';
 
-type TabId = 'endpoints' | 'mcp' | 'integrations' | 'webhooks';
+type TabId = 'endpoints' | 'integrations';
 
-const TAB_IDS = ['integrations', 'endpoints', 'mcp', 'webhooks'] as const;
+const TAB_IDS = ['integrations', 'endpoints'] as const;
 
 // Stream URLs leads, and is the default. Three "where is the stream URL?"
 // reports arrived while this panel already answered it — on the third tab,
@@ -34,8 +32,6 @@ const TAB_IDS = ['integrations', 'endpoints', 'mcp', 'webhooks'] as const;
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'integrations', label: 'Stream URLs', icon: Radio },
   { id: 'endpoints', label: 'API', icon: Braces },
-  { id: 'mcp', label: 'MCP', icon: Boxes },
-  { id: 'webhooks', label: 'Webhooks', icon: Webhook },
 ];
 
 export default function ConnectPanel() {
@@ -44,7 +40,7 @@ export default function ConnectPanel() {
   const catalog = catalogQuery.data ?? null;
 
   // The active tab lives in the URL (?tab=…), read every render rather than
-  // mirrored into state. Same pattern as ImagingPanel, and for the same reason:
+  // mirrored into state, for the same reason:
   // the sidebar now carries these tabs as sub-items, and a soft nav to the same
   // pathname does NOT remount, so a mount-only effect would move the URL while
   // leaving the panel on the tab it was already showing. Unknown values fall
@@ -113,7 +109,7 @@ export default function ConnectPanel() {
               Everything wired to {catalog.station}.
             </div>
             <div className="mt-1 text-[11px] leading-[1.6] text-muted">
-              Discover the HTTP API, try it live, wire up an MCP client, or point a speaker at the stream.
+              Discover the HTTP API, try it live, or point a speaker at the stream.
               All URLs below are the real addresses for this station (<code className="break-all">{catalog.origin}</code>).
             </div>
           </div>
@@ -125,9 +121,7 @@ export default function ConnectPanel() {
       </section>
 
       {tab === 'endpoints' && <EndpointsTab catalog={catalog} adminFetch={adminFetch} />}
-      {tab === 'mcp' && <McpTab catalog={catalog} />}
       {tab === 'integrations' && <IntegrationsTab catalog={catalog} />}
-      {tab === 'webhooks' && <WebhooksPanel />}
     </div>
   );
 }

@@ -354,7 +354,7 @@ export function ThemeSection({ data, busy, saveSettings, adminFetch }: ThemeSect
   const activeSkinName = SKINS.find(s => s.id === activeSkinId)?.name ?? 'Classic';
   const chooseSkin = (id: string) => { if (!busy) saveSettings({ ui: { skin: id } }); };
 
-  // The editing list carries `builtin`, which decides Edit/Remove. ShowsPanel
+  // The editing list carries `builtin`, which decides Edit/Remove. The roster
   // consumes the same exact query key for show overrides; mutations below
   // patch that one shared response rather than maintaining route-local copies.
   const refreshMutation = useAdminMutation<AdminThemesResponse, void>({

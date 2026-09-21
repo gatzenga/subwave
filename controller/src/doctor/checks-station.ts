@@ -211,20 +211,6 @@ export async function checkTuning(s: StationSettings | null): Promise<Finding[]>
     }
   }
 
-  // --- Listener-request web-resolve needs web search configured ---
-  if (llm.requestWebResolve) {
-    let ready = true;
-    try { ready = searchReady(); } catch { ready = true; }
-    if (!ready) {
-      out.push({
-        label: 'request web-resolve',
-        status: 'warn',
-        detail: 'on, but web search isn’t ready',
-        hint: 'Resolving described track requests ("that song from the film") needs a working web search. Configure it in Settings → Search, or turn Settings → LLM → request web-resolve off.',
-      });
-    }
-  }
-
   // --- Audio-analysis features vs the analyzer flavour actually running ---
   // audio.embeddings / vocalActivity silently no-op on the lean analyzer image
   // (no CLAP / Demucs). Cross-check the setting against the live capability probe.

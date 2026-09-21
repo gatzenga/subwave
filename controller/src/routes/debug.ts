@@ -31,23 +31,12 @@ import { talkAirStatus } from '../broadcast/talk-air.js';
 import { jingleRotateStatus } from '../broadcast/jingle-rotate.js';
 import { LIQ_JINGLE_RATIO_PATH } from '../settings/liquidsoap.js';
 import { handoverStatus } from '../broadcast/handover-policy.js';
-import * as requestLog from '../broadcast/request-log.js';
 import { getStationTimezone } from '../time.js';
 import { publicOrigin } from './public.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { BadStatePathError, listStateDir } from '../util/state-tree.js';
 
 export const router = express.Router();
-
-// Recent listener requests and how the DJ resolved each. Durable across
-// restarts via request-log's on-disk JSONL.
-router.get('/requests', requireAdmin, (req, res) => {
-  try {
-    res.json({ requests: requestLog.snapshot(50) });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // The snapshot is expensive (mood library, Icecast + weather fetches, whole DJ
 // session) and the admin panel polls it every ~2s, so concurrent and rapid hits

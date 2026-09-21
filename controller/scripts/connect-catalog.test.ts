@@ -11,16 +11,12 @@
 // Style matches scripts/llm-pure.test.ts (node:assert via tsx, count failures).
 
 import assert from 'node:assert/strict';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { ENDPOINTS, MCP_TOOLS } from '../src/connect/catalog.js';
+import { ENDPOINTS } from '../src/connect/catalog.js';
 import { toOpenApi } from '../src/connect/openapi.js';
-import { registerSubwaveTools } from '../src/mcp/tools.js';
-import type { SubwaveClient } from '../src/mcp/client.js';
 
 // Every route module that carries a documented endpoint. Import them and merge
 // their router stacks into one "METHOD path" set of real routes.
 import { router as publicRouter } from '../src/routes/public.js';
-import { router as requestRouter } from '../src/routes/request.js';
 import { router as djRouter } from '../src/routes/dj.js';
 import { router as sfxRouter } from '../src/routes/sfx.js';
 import { router as jinglesRouter } from '../src/routes/jingles.js';
@@ -50,7 +46,7 @@ function routeKeys(router: any): Set<string> {
 
 async function main() {
   const real = new Set<string>();
-  for (const r of [publicRouter, requestRouter, djRouter, sfxRouter, jinglesRouter, statsRouter, listenersRouter]) {
+  for (const r of [publicRouter, djRouter, sfxRouter, jinglesRouter, statsRouter, listenersRouter]) {
     for (const k of routeKeys(r)) real.add(k);
   }
 
@@ -84,7 +80,7 @@ async function main() {
   });
   await test('Express :id path params become {id}', () => {
     const doc = toOpenApi('https://radio.example.com');
-    assert.ok(doc.paths['/request/{id}'], ':id should be rewritten to {id}');
+    assert.ok(doc.paths['/cover/{id}'], ':id should be rewritten to {id}');
     assert.ok(!Object.keys(doc.paths).some(p => p.includes(':')), 'no raw :param should leak');
   });
   await test('admin endpoints carry basicAuth, public ones do not', () => {
@@ -104,27 +100,11 @@ async function main() {
     assert.equal(doc.components.securitySchemes.stationAuth.name, 'x-station-auth');
   });
 
-  // MCP_TOOLS is a hand-maintained mirror of the tools registerSubwaveTools
-  // actually registers; assert the two sets match exactly. A stub server
-  // captures names — no transport, no client calls.
-  console.log('\nMCP tool catalog ↔ registered tools:');
-  await test('MCP_TOOLS mirrors registerSubwaveTools exactly', () => {
-    const registered: string[] = [];
-    const stub = { registerTool: (name: string) => { registered.push(name); } } as unknown as McpServer;
-    registerSubwaveTools(stub, {} as SubwaveClient);
-    const documented = MCP_TOOLS.map(t => t.name);
-    assert.deepEqual(
-      [...registered].sort(),
-      [...documented].sort(),
-      'catalog MCP_TOOLS and registerSubwaveTools disagree',
-    );
-  });
-
   if (failures) {
     console.error(`\n✗ ${failures} check(s) failed`);
     process.exit(1);
   }
-  console.log(`\n✓ all checks passed (${ENDPOINTS.length} endpoints, ${MCP_TOOLS.length} MCP tools)`);
+  console.log(`\n✓ all checks passed (${ENDPOINTS.length} endpoints)`);
 }
 
 void main();

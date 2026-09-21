@@ -30,7 +30,6 @@ import { isValidTimezone, setStationTimezone } from './time.js';
 // schemas own them (#1348). They stay in the re-export block below, which
 // forwards straight from vocab.js, so the public surface is unchanged.
 import {
-  CHATTERBOX_VOICE_RE,
   DEFAULT_DJ_PROMPT_TEMPLATE,
   DJ_HOUSE_RULES_MAX,
   DJ_PROMPT_LIMIT,
@@ -44,9 +43,7 @@ import {
   LoudnessSource,
   MOOD_PERIODS,
   PERIOD_MOOD_DEFAULTS,
-  POCKET_TTS_VOICE_RE,
   SEARCH_PROVIDERS,
-  TTS_CLOUD_PROVIDERS,
   TTS_ENGINES,
   WEATHER_CONDITIONS,
   WEATHER_MOOD_DEFAULTS,
@@ -82,6 +79,8 @@ import {
 } from './settings/vocab.js';
 import {
   AAC_BITRATE_SET,
+  HLS_SEGMENT_COUNT_SET,
+  HLS_SEGMENT_DURATION_SET,
   BOUNDS,
   DEFAULTS,
   MP3_BITRATE_SET,
@@ -90,7 +89,6 @@ import {
   coerceMinTrackLengthSeconds,
   rawMaxTrackSec,
 } from './settings/defaults.js';
-import { validateCompatParams } from './settings/compat-params.js';
 import { parseSettingsPatchKey } from './settings/patch-registry.js';
 import {
   DJ_RECAP_CHARS_BOUNDS,
@@ -120,7 +118,6 @@ import {
   normalizeSchedule,
   normalizeScheduleOverride,
   normalizeShows,
-  normalizeWebhooks,
 } from './settings/normalize.js';
 import {
   assertNoOrphanMoods,
@@ -130,7 +127,6 @@ import {
   validateScheduleStrict,
   validateShowsStrict,
   validateTtsBlock,
-  validateWebhooksStrict,
 } from './settings/validate.js';
 import {
   ICECAST_LISTENER_AUTH_PATH,
@@ -184,7 +180,6 @@ export {
   SOUL_MAX,
   TONE_DIALS,
   TRANSITION_EFFECTS,
-  TTS_CLOUD_PROVIDERS,
   TTS_CORRECTIONS_LIMIT,
   TTS_ENGINES,
   TTS_GAIN_CLAMP_DB,
@@ -204,7 +199,6 @@ export {
   normalizeTtsCorrections,
   personaToneDirectives,
 } from './settings/vocab.js';
-export { cloudVoiceSettingsAreDefault } from './settings/defaults.js';
 export {
   get,
   getDefaults,
@@ -265,7 +259,6 @@ export type {
   LoudnessSource,
   NormalizedShow,
   ScheduleOverride,
-  Webhook,
 } from './settings/vocab.js';
 
 // Where uploaded persona avatars live. One file per persona, basename =
@@ -280,28 +273,6 @@ const SETTINGS_PATH = `${STATE_DIR}/settings.json`;
 // always loaded/saved together, so they share one file. On first load after
 // upgrade, load() migrates them out of settings.json into here.
 const SCHEDULE_PATH = `${STATE_DIR}/schedule.json`;
-
-// Integer clamp shared by the settings.requests load()/update() coercions
-// below — round, then clamp into [min, max]; a non-finite input (missing,
-// non-numeric, hand-edited junk) falls back to `def` rather than NaN.
-const intIn = (v: unknown, def: number, min: number, max: number) => {
-  // A CLEARED field is absent, not zero. `Number(null)`, `Number('')`,
-  // `Number('  ')`, `Number(false)` and `Number([])` are ALL 0 — finite — so
-  // without this guard an emptied admin input (parseInt('') → NaN → JSON null
-  // on the wire) clamped to `min` and silently committed that field's FLOOR:
-  // clearing the station hourly cap set it to 5/hour and closed the request
-  // line for everyone, with the form redisplaying 5 as though the operator had
-  // typed it. Only a string that actually contains a number, or a real number,
-  // is a value — anything else (including the CLI/API patch surface's own
-  // spellings of "unset") falls back to `def`.
-  if (typeof v === 'string') {
-    if (!v.trim()) return def;
-  } else if (typeof v !== 'number' && typeof v !== 'bigint') {
-    return def;
-  }
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : def;
-};
 
 // `settingsIntLike` is parseInt-based on the strict save path. Keep the cold
 // load in the same numeric family, but repair a hand-edited out-of-range value
@@ -485,6 +456,23 @@ export async function load() {
         AAC_BITRATE_SET.has(stored.stream.aacBitrate)
           ? stored.stream.aacBitrate
           : DEFAULTS.stream.aacBitrate,
+      // Absent coerces to ON — HLS is the default transport, so an upgrade
+      // from a settings.json predating the key lights it up rather than
+      // leaving the operator with no default stream.
+      hlsEnabled:
+        typeof stored.stream?.hlsEnabled === 'boolean'
+          ? stored.stream.hlsEnabled
+          : DEFAULTS.stream.hlsEnabled,
+      hlsSegmentDuration:
+        typeof stored.stream?.hlsSegmentDuration === 'number' &&
+        HLS_SEGMENT_DURATION_SET.has(stored.stream.hlsSegmentDuration)
+          ? stored.stream.hlsSegmentDuration
+          : DEFAULTS.stream.hlsSegmentDuration,
+      hlsSegments:
+        typeof stored.stream?.hlsSegments === 'number' &&
+        HLS_SEGMENT_COUNT_SET.has(stored.stream.hlsSegments)
+          ? stored.stream.hlsSegments
+          : DEFAULTS.stream.hlsSegments,
       bitrate:
         typeof stored.stream?.bitrate === 'number' && MP3_BITRATE_SET.has(stored.stream.bitrate)
           ? stored.stream.bitrate
@@ -713,39 +701,6 @@ export async function load() {
           ? stored.privacy.publishPersonaSouls
           : DEFAULTS.privacy.publishPersonaSouls,
     },
-    // Listener-request pipeline gates. Absent/malformed settings.json (every
-    // install predating this key) coerces field-by-field to DEFAULTS.requests,
-    // never undefined/NaN — later tasks gate on settings.get()?.requests.
-    requests: {
-      enabled:
-        typeof stored.requests?.enabled === 'boolean'
-          ? stored.requests.enabled
-          : DEFAULTS.requests.enabled,
-      maxPending: intIn(stored.requests?.maxPending, DEFAULTS.requests.maxPending, 1, 50),
-      globalHourlyCap: intIn(
-        stored.requests?.globalHourlyCap,
-        DEFAULTS.requests.globalHourlyCap,
-        5,
-        500,
-      ),
-      repeatCooldownMin: intIn(
-        stored.requests?.repeatCooldownMin,
-        DEFAULTS.requests.repeatCooldownMin,
-        0,
-        1440,
-      ),
-      cooldownSec: intIn(stored.requests?.cooldownSec, DEFAULTS.requests.cooldownSec, 5, 600),
-      perIpHourlyCap: intIn(
-        stored.requests?.perIpHourlyCap,
-        DEFAULTS.requests.perIpHourlyCap,
-        1,
-        100,
-      ),
-      onePendingPerIp:
-        typeof stored.requests?.onePendingPerIp === 'boolean'
-          ? stored.requests.onePendingPerIp
-          : DEFAULTS.requests.onePendingPerIp,
-    },
     personas,
     activePersonaId,
     shows,
@@ -788,117 +743,6 @@ export async function load() {
           KOKORO_LANG_RE.test(canonicalKokoroLang(stored.tts.kokoro.lang))
             ? canonicalKokoroLang(stored.tts.kokoro.lang)
             : DEFAULTS.tts.kokoro.lang,
-      },
-      chatterbox: {
-        referenceVoice:
-          typeof stored.tts?.chatterbox?.referenceVoice === 'string' &&
-          (stored.tts.chatterbox.referenceVoice === '' ||
-            CHATTERBOX_VOICE_RE.test(stored.tts.chatterbox.referenceVoice))
-            ? stored.tts.chatterbox.referenceVoice
-            : DEFAULTS.tts.chatterbox.referenceVoice,
-      },
-      pocketTts: {
-        voice:
-          typeof stored.tts?.pocketTts?.voice === 'string'
-          && (POCKET_TTS_VOICE_RE.test(stored.tts.pocketTts.voice)
-            || CHATTERBOX_VOICE_RE.test(stored.tts.pocketTts.voice))
-            ? stored.tts.pocketTts.voice
-            : DEFAULTS.tts.pocketTts.voice,
-      },
-      cloud: {
-        // Explicit boolean wins; otherwise an install that already had a saved
-        // cloud key keeps cloud on so the upgrade doesn't silently disable it.
-        enabled:
-          typeof stored.tts?.cloud?.enabled === 'boolean'
-            ? stored.tts.cloud.enabled
-            : !!(stored.tts?.cloud?.apiKey || stored.tts?.cloud?.compatApiKey),
-        provider: TTS_CLOUD_PROVIDERS.includes(stored.tts?.cloud?.provider)
-          ? stored.tts.cloud.provider
-          : DEFAULTS.tts.cloud.provider,
-        model:
-          typeof stored.tts?.cloud?.model === 'string' && stored.tts.cloud.model.trim()
-            ? stored.tts.cloud.model.trim()
-            : DEFAULTS.tts.cloud.model,
-        voice:
-          typeof stored.tts?.cloud?.voice === 'string' && stored.tts.cloud.voice.trim()
-            ? stored.tts.cloud.voice.trim()
-            : DEFAULTS.tts.cloud.voice,
-        // Migrate the old shared slot into the dedicated compatibility slot
-        // only when it was saved under the compatibility provider. Managed
-        // provider keys remain legacy-readable but can no longer cross over.
-        apiKey:
-          stored.tts?.cloud?.provider !== 'openai-compatible'
-          && typeof stored.tts?.cloud?.apiKey === 'string'
-            ? stored.tts.cloud.apiKey
-            : '',
-        compatApiKey:
-          typeof stored.tts?.cloud?.compatApiKey === 'string'
-            ? stored.tts.cloud.compatApiKey
-            : stored.tts?.cloud?.provider === 'openai-compatible'
-              && typeof stored.tts?.cloud?.apiKey === 'string'
-              ? stored.tts.cloud.apiKey
-              : '',
-        baseUrl:
-          typeof stored.tts?.cloud?.baseUrl === 'string'
-            ? stored.tts.cloud.baseUrl.trim()
-            : DEFAULTS.tts.cloud.baseUrl,
-        // ElevenLabs voice_settings — clamped to [0,1] on load so a hand-edited
-        // settings.json can't ship an out-of-range value to the provider (which
-        // would 400 the whole speak call, silently dropping the voice).
-        voiceStability:
-          typeof stored.tts?.cloud?.voiceStability === 'number'
-            ? clamp01(stored.tts.cloud.voiceStability)
-            : DEFAULTS.tts.cloud.voiceStability,
-        voiceStyle:
-          typeof stored.tts?.cloud?.voiceStyle === 'number'
-            ? clamp01(stored.tts.cloud.voiceStyle)
-            : DEFAULTS.tts.cloud.voiceStyle,
-        voiceSimilarityBoost:
-          typeof stored.tts?.cloud?.voiceSimilarityBoost === 'number'
-            ? clamp01(stored.tts.cloud.voiceSimilarityBoost)
-            : DEFAULTS.tts.cloud.voiceSimilarityBoost,
-        voiceUseSpeakerBoost:
-          typeof stored.tts?.cloud?.voiceUseSpeakerBoost === 'boolean'
-            ? stored.tts.cloud.voiceUseSpeakerBoost
-            : DEFAULTS.tts.cloud.voiceUseSpeakerBoost,
-        sendSpeed:
-          typeof stored.tts?.cloud?.sendSpeed === 'boolean'
-            ? stored.tts.cloud.sendSpeed
-            : DEFAULTS.tts.cloud.sendSpeed,
-        // Fish Audio controls — lenient load for hand-edited/older settings.
-        // Only the Fish provider sends these fields on the wire.
-        temperature:
-          typeof stored.tts?.cloud?.temperature === 'number' && Number.isFinite(stored.tts.cloud.temperature)
-            ? clamp01(stored.tts.cloud.temperature)
-            : DEFAULTS.tts.cloud.temperature,
-        topP:
-          typeof stored.tts?.cloud?.topP === 'number' && Number.isFinite(stored.tts.cloud.topP)
-            ? clamp01(stored.tts.cloud.topP)
-            : DEFAULTS.tts.cloud.topP,
-        latency:
-          ['low', 'normal', 'balanced'].includes(stored.tts?.cloud?.latency)
-            ? stored.tts.cloud.latency
-            : DEFAULTS.tts.cloud.latency,
-        // Extra openai-compatible body fields. This block composes tts.cloud
-        // field by field rather than spreading DEFAULTS, so a key missing here
-        // is a key that survives a save but vanishes on the next restart —
-        // params would quietly stop applying and nothing would say why.
-        // Lenient like the Fish knobs above: an invalid hand-edited list drops
-        // to none rather than throwing, because settings.load() failing means
-        // the controller doesn't boot at all.
-        compatParams: (() => {
-          try {
-            return validateCompatParams(stored.tts?.cloud?.compatParams);
-          } catch {
-            return [];
-          }
-        })(),
-      },
-      remote: {
-        url:
-          typeof stored.tts?.remote?.url === 'string'
-            ? stored.tts.remote.url.trim()
-            : DEFAULTS.tts.remote.url,
       },
       // Per-engine gain map — one clean gain per known engine, missing keys → 0,
       // unknown keys dropped. So an older save (no gainDb) loads at unity.
@@ -962,10 +806,6 @@ export async function load() {
         stored.llm?.artistVarietyWindow,
         DEFAULTS.llm.artistVarietyWindow,
       ),
-      requestWebResolve:
-        typeof stored.llm?.requestWebResolve === 'boolean'
-          ? stored.llm.requestWebResolve
-          : DEFAULTS.llm.requestWebResolve,
       // Clamped to [5s, 300s]; settings.json files from before the field
       // existed pick up the default.
       agentTimeoutMs: clampAgentTimeout(stored.llm?.agentTimeoutMs, DEFAULTS.llm.agentTimeoutMs),
@@ -984,10 +824,6 @@ export async function load() {
       // and picks up the 0 default (= follow the provider capability table), so
       // an upgraded install behaves exactly as it did before the setting existed.
       discoverySteps: clampDiscoverySteps(stored.llm?.discoverySteps, DEFAULTS.llm.discoverySteps),
-      exemptRequests:
-        typeof stored.llm?.exemptRequests === 'boolean'
-          ? stored.llm.exemptRequests
-          : DEFAULTS.llm.exemptRequests,
       debugRawRequests:
         typeof stored.llm?.debugRawRequests === 'boolean'
           ? stored.llm.debugRawRequests
@@ -1158,13 +994,6 @@ export async function load() {
         ? stored.silenceTrim.minGapMs
         : DEFAULTS.silenceTrim.minGapMs,
     },
-    webhooks: normalizeWebhooks(stored.webhooks),
-    webhooksPolicy: {
-      trackPlayListenerGated:
-        typeof stored.webhooksPolicy?.trackPlayListenerGated === 'boolean'
-          ? stored.webhooksPolicy.trackPlayListenerGated
-          : DEFAULTS.webhooksPolicy.trackPlayListenerGated,
-    },
     scrobble: {
       lastfm: {
         enabled:
@@ -1186,24 +1015,6 @@ export async function load() {
         username:
           typeof stored.scrobble?.lastfm?.username === 'string'
             ? stored.scrobble.lastfm.username.trim().slice(0, 40)
-            : '',
-      },
-      listenbrainz: {
-        enabled:
-          typeof stored.scrobble?.listenbrainz?.enabled === 'boolean'
-            ? stored.scrobble.listenbrainz.enabled
-            : DEFAULTS.scrobble.listenbrainz.enabled,
-        userToken:
-          typeof stored.scrobble?.listenbrainz?.userToken === 'string'
-            ? stored.scrobble.listenbrainz.userToken
-            : '',
-        username:
-          typeof stored.scrobble?.listenbrainz?.username === 'string'
-            ? stored.scrobble.listenbrainz.username.trim().slice(0, 40)
-            : '',
-        baseUrl:
-          typeof stored.scrobble?.listenbrainz?.baseUrl === 'string'
-            ? stored.scrobble.listenbrainz.baseUrl.trim().slice(0, 500)
             : '',
       },
       navidrome: {
@@ -1717,176 +1528,6 @@ export async function update(patch) {
         next.tts.kokoro.lang = v;
       }
     }
-    if (t.chatterbox !== undefined) {
-      const cb = t.chatterbox || {};
-      if (cb.referenceVoice !== undefined) {
-        const v = String(cb.referenceVoice).trim();
-        if (v && !CHATTERBOX_VOICE_RE.test(v)) {
-          throw new Error(
-            'tts.chatterbox.referenceVoice must be a .wav filename (no path), or empty for the default voice',
-          );
-        }
-        next.tts.chatterbox.referenceVoice = v;
-      }
-    }
-    if (t.pocketTts !== undefined) {
-      const pt = t.pocketTts || {};
-      if (pt.voice !== undefined) {
-        const v = String(pt.voice).trim();
-        // Built-in id OR shared-folder .wav filename (issue #213).
-        if (!POCKET_TTS_VOICE_RE.test(v) && !CHATTERBOX_VOICE_RE.test(v)) {
-          throw new Error(
-            'tts.pocketTts.voice must be a built-in voice id (e.g. alba) or a .wav filename',
-          );
-        }
-        next.tts.pocketTts.voice = v;
-      }
-    }
-    if (t.cloud !== undefined) {
-      const c = t.cloud || {};
-      const savedCloudProvider = next.tts.cloud.provider;
-      if (c.enabled !== undefined) {
-        next.tts.cloud.enabled = !!c.enabled;
-      }
-      if (c.provider !== undefined) {
-        if (!TTS_CLOUD_PROVIDERS.includes(c.provider)) {
-          throw new Error(`tts.cloud.provider must be one of: ${TTS_CLOUD_PROVIDERS.join(', ')}`);
-        }
-        next.tts.cloud.provider = c.provider;
-      }
-      if (c.model !== undefined) {
-        const v = String(c.model).trim();
-        if (v.length < 1 || v.length > 100 || /[\r\n]/.test(v)) {
-          throw new Error('tts.cloud.model must be 1-100 chars with no line breaks');
-        }
-        next.tts.cloud.model = v;
-      }
-      if (c.voice !== undefined) {
-        const v = String(c.voice).trim();
-        // openai-compatible voices are server-specific (often arbitrary
-        // cloning ref names) and may legitimately be blank — let the server
-        // pick its own default. openai/elevenlabs require a voice id.
-        const provider = c.provider !== undefined ? c.provider : next.tts.cloud.provider;
-        const allowEmpty = provider === 'openai-compatible';
-        if (v.length > 100 || (!allowEmpty && v.length < 1)) {
-          throw new Error(
-            allowEmpty
-              ? 'tts.cloud.voice must be 0-100 chars'
-              : 'tts.cloud.voice must be 1-100 chars',
-          );
-        }
-        next.tts.cloud.voice = v;
-      }
-      // 'set' is the redaction sentinel from getRedacted() — ignore it so a
-      // round-tripped settings form doesn't overwrite the real key.
-      if (c.apiKey !== undefined && c.apiKey !== 'set') {
-        next.tts.cloud.apiKey = String(c.apiKey);
-      } else if (c.provider !== undefined && c.provider !== savedCloudProvider) {
-        // The shared inline slot belongs to the provider that created it. A
-        // provider transition without an explicit replacement must clear it,
-        // otherwise a managed key can be forwarded to an arbitrary compatible
-        // URL (or a compatibility bearer can be reinterpreted as managed).
-        next.tts.cloud.apiKey = '';
-      }
-      // Dedicated compatibility bearer. Unlike the legacy shared slot, this
-      // may safely persist while another managed provider is selected globally.
-      if (c.compatApiKey !== undefined && c.compatApiKey !== 'set') {
-        next.tts.cloud.compatApiKey = String(c.compatApiKey);
-      }
-      if (c.baseUrl !== undefined) {
-        const v = String(c.baseUrl).trim();
-        if (v.length > 200) throw new Error('tts.cloud.baseUrl must be 0-200 chars');
-        if (v && !/^https?:\/\//i.test(v)) {
-          throw new Error('tts.cloud.baseUrl must start with http:// or https://');
-        }
-        next.tts.cloud.baseUrl = v.replace(/\/+$/, ''); // strip trailing slashes
-      }
-      // ElevenLabs voice_settings — clamped, not rejected. The UI sliders can't
-      // produce out-of-range values, so a strict throw would only fire for a
-      // hand-crafted payload; clamp so the DJ never goes silent on a typo.
-      // Applied for every provider on save so switching provider later
-      // preserves the operator's tuning, but only spread into providerOptions
-      // in cloud-speech.ts when provider === 'elevenlabs' (see there).
-      if (c.voiceStability !== undefined) {
-        const n = Number(c.voiceStability);
-        next.tts.cloud.voiceStability = Number.isFinite(n) ? clamp01(n) : DEFAULTS.tts.cloud.voiceStability;
-      }
-      if (c.voiceStyle !== undefined) {
-        const n = Number(c.voiceStyle);
-        next.tts.cloud.voiceStyle = Number.isFinite(n) ? clamp01(n) : DEFAULTS.tts.cloud.voiceStyle;
-      }
-      if (c.voiceSimilarityBoost !== undefined) {
-        const n = Number(c.voiceSimilarityBoost);
-        next.tts.cloud.voiceSimilarityBoost = Number.isFinite(n) ? clamp01(n) : DEFAULTS.tts.cloud.voiceSimilarityBoost;
-      }
-      if (c.voiceUseSpeakerBoost !== undefined) {
-        next.tts.cloud.voiceUseSpeakerBoost = !!c.voiceUseSpeakerBoost;
-      }
-      // openai-compatible: send `speed` upstream vs. stretch locally (see
-      // speedDirective / issue #942). Plain boolean coercion — only consulted on
-      // the compat path, inert elsewhere.
-      if (c.sendSpeed !== undefined) {
-        next.tts.cloud.sendSpeed = !!c.sendSpeed;
-      }
-      // Fish Audio synthesis controls. Clamp numeric knobs like the existing
-      // ElevenLabs sliders; reject an unknown enum so a typo cannot silently
-      // turn into a provider-side 422 and a different fallback voice.
-      if (c.temperature !== undefined) {
-        const n = Number(c.temperature);
-        next.tts.cloud.temperature = Number.isFinite(n) ? clamp01(n) : DEFAULTS.tts.cloud.temperature;
-      }
-      if (c.topP !== undefined) {
-        const n = Number(c.topP);
-        next.tts.cloud.topP = Number.isFinite(n) ? clamp01(n) : DEFAULTS.tts.cloud.topP;
-      }
-      if (c.latency !== undefined) {
-        if (!['low', 'normal', 'balanced'].includes(c.latency)) {
-          throw new Error('tts.cloud.latency must be one of: low, normal, balanced');
-        }
-        next.tts.cloud.latency = c.latency;
-      }
-      // Extra openai-compatible body fields (issue #1317). Rejected rather than
-      // clamped: unlike a slider, a bad param name or type is a request the
-      // server 4xxs, which mid-show means a silent drop to a local fallback
-      // voice. The rule is shared with the send path — see
-      // settings/compat-params.ts.
-      if (c.compatParams !== undefined) {
-        next.tts.cloud.compatParams = validateCompatParams(c.compatParams);
-      }
-      // Fish credentials live only in process env/state/secrets.env. Clear the
-      // legacy inline compatibility slot on every Fish save so a later provider
-      // switch cannot reinterpret a stale bearer as OpenAI/ElevenLabs.
-      if (next.tts.cloud.provider === 'fish-audio') {
-        next.tts.cloud.apiKey = '';
-      }
-      // An OpenAI-compatible TTS server has no canonical endpoint — refuse to
-      // save the provider without one. Mirrors the LLM-side check below.
-      if (next.tts.cloud.provider === 'openai-compatible' && !next.tts.cloud.baseUrl) {
-        throw new Error('tts.cloud.baseUrl is required when provider is "openai-compatible"');
-      }
-    }
-    if (t.remote !== undefined) {
-      const r = t.remote || {};
-      if (r.url !== undefined) {
-        const v = String(r.url).trim();
-        if (v.length > 200) throw new Error('tts.remote.url must be 0-200 chars');
-        if (v) {
-          // Full parse (not just a prefix test) so a malformed host/port —
-          // e.g. http://host:notaport or http://host:99999 — is rejected at
-          // save time instead of silently failing the /health probe later.
-          let parsed: URL;
-          try {
-            parsed = new URL(v);
-          } catch {
-            throw new Error('tts.remote.url must be a valid http:// or https:// URL');
-          }
-          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            throw new Error('tts.remote.url must start with http:// or https://');
-          }
-        }
-        next.tts.remote.url = v.replace(/\/+$/, ''); // strip trailing slashes
-      }
-    }
     if (t.gainDb !== undefined) {
       if (typeof t.gainDb !== 'object' || t.gainDb === null || Array.isArray(t.gainDb)) {
         throw new Error('tts.gainDb must be an object keyed by engine');
@@ -1932,9 +1573,6 @@ export async function update(patch) {
         Number(l.artistVarietyWindow), next.llm.artistVarietyWindow,
       );
     }
-    if (l.requestWebResolve !== undefined) {
-      next.llm.requestWebResolve = !!l.requestWebResolve;
-    }
     if (l.agentTimeoutMs !== undefined) {
       next.llm.agentTimeoutMs = clampAgentTimeout(Number(l.agentTimeoutMs), next.llm.agentTimeoutMs);
     }
@@ -1949,9 +1587,6 @@ export async function update(patch) {
     }
     if (l.maxOutputTokens !== undefined) {
       next.llm.maxOutputTokens = clampMaxOutputTokens(Number(l.maxOutputTokens), next.llm.maxOutputTokens);
-    }
-    if (l.exemptRequests !== undefined) {
-      next.llm.exemptRequests = !!l.exemptRequests;
     }
     if (l.debugRawRequests !== undefined) {
       next.llm.debugRawRequests = !!l.debugRawRequests;
@@ -2324,43 +1959,9 @@ export async function update(patch) {
       throw new Error('set a station password before turning on a privacy lock');
     }
   }
-  if ('requests' in patch) {
-    // The schema decides "usable or absent" per field; the fallback to the
-    // CURRENT value is this spread. Same result as the old per-field ternaries,
-    // including the load-bearing part: an emptied admin input arrives as JSON
-    // null, which is UNUSABLE rather than 0, so it leaves the stored value
-    // alone instead of clamping to the field's floor and closing the request
-    // line. The rebuild keeps exactly the seven known keys.
-    const rq = parseSettingsPatchKey<Record<string, unknown>>('requests', patch.requests);
-    const curReq = next.requests || DEFAULTS.requests;
-    const pick = <K extends keyof typeof curReq>(k: K) =>
-      (rq[k as string] !== undefined ? rq[k as string] : curReq[k]) as (typeof curReq)[K];
-    next.requests = {
-      enabled: pick('enabled'),
-      maxPending: pick('maxPending'),
-      globalHourlyCap: pick('globalHourlyCap'),
-      repeatCooldownMin: pick('repeatCooldownMin'),
-      cooldownSec: pick('cooldownSec'),
-      perIpHourlyCap: pick('perIpHourlyCap'),
-      onePendingPerIp: pick('onePendingPerIp'),
-    };
-  }
-  if ('webhooks' in patch) {
-    next.webhooks = validateWebhooksStrict(patch.webhooks, next.webhooks || []);
-  }
-  if ('webhooksPolicy' in patch) {
-    const wp = parseSettingsPatchKey<Record<string, unknown>>(
-      'webhooksPolicy',
-      patch.webhooksPolicy,
-    );
-    if (wp.trackPlayListenerGated !== undefined) {
-      next.webhooksPolicy.trackPlayListenerGated = wp.trackPlayListenerGated as boolean;
-    }
-  }
   if ('scrobble' in patch) {
     const sb = parseSettingsPatchKey<{
       lastfm?: Record<string, unknown>;
-      listenbrainz?: Record<string, unknown>;
       navidrome?: Record<string, unknown>;
     }>('scrobble', patch.scrobble);
     const rawSb = (patch.scrobble || {}) as Record<string, Record<string, unknown> | undefined>;
@@ -2376,14 +1977,6 @@ export async function update(patch) {
         if (lf[k] === undefined) continue;
         if (LASTFM_SECRETS.includes(k) && rawSb.lastfm?.[k] === 'set') continue;
         (next.scrobble.lastfm as Record<string, unknown>)[k] = lf[k];
-      }
-    }
-    if (sb.listenbrainz !== undefined) {
-      const lb = sb.listenbrainz;
-      for (const k of ['enabled', 'username', 'userToken', 'baseUrl'] as const) {
-        if (lb[k] === undefined) continue;
-        if (k === 'userToken' && rawSb.listenbrainz?.[k] === 'set') continue;
-        (next.scrobble.listenbrainz as Record<string, unknown>)[k] = lb[k];
       }
     }
     // No secret sentinel here: Navidrome reuses config.navidrome's credentials,

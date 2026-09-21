@@ -176,12 +176,10 @@ export interface LlmForm {
   pickerAgent: boolean;
   noRepeatWindow: string;
   artistVarietyWindow: string;
-  requestWebResolve: boolean;
   agentTimeoutMs: number;
   pauseWhenEmpty: boolean;
   dailyTokenCap: number;
   budgetSoftPct: number;
-  exemptRequests: boolean;
   maxOutputTokens: number;
   // 0 = auto (follow the provider capability table); 1-5 overrides it.
   discoverySteps: number;
@@ -225,13 +223,6 @@ export interface ScrobbleLastfmForm {
   username: string;
 }
 
-export interface ScrobbleListenbrainzForm {
-  enabled: boolean;
-  userToken: string;
-  username: string;
-  baseUrl: string;
-}
-
 /** Navidrome play reporting (#1298). No credentials of its own — the station's
  *  existing Navidrome connection is what it scrobbles through. */
 export interface ScrobbleNavidromeForm {
@@ -240,7 +231,6 @@ export interface ScrobbleNavidromeForm {
 
 export interface ScrobbleForm {
   lastfm: ScrobbleLastfmForm;
-  listenbrainz: ScrobbleListenbrainzForm;
   navidrome: ScrobbleNavidromeForm;
 }
 
@@ -315,19 +305,6 @@ export interface PrivacyForm {
   publishPersonaSouls: boolean;
 }
 
-/** Every field applies live and the controller clamps on save, so the UI doesn't
- *  need to. Numbers are held as strings and parsed on save (the weather lat/lng
- *  idiom). */
-export interface RequestsForm {
-  enabled: boolean;
-  maxPending: string;
-  cooldownSec: string;
-  perIpHourlyCap: string;
-  globalHourlyCap: string;
-  repeatCooldownMin: string;
-  onePendingPerIp: boolean;
-}
-
 export interface SilenceTrimForm {
   enabled: boolean;
   minGapMs: string;
@@ -395,7 +372,6 @@ export interface FormState {
   scrobble: ScrobbleForm;
   privacy: PrivacyForm;
   likes: LikesForm;
-  requests: RequestsForm;
 }
 
 export interface JingleEntry {
@@ -522,18 +498,8 @@ export interface SettingsData {
       password?: string;
       publishPersonaSouls?: boolean;
     };
-    requests?: {
-      enabled?: boolean;
-      maxPending?: number;
-      globalHourlyCap?: number;
-      repeatCooldownMin?: number;
-      cooldownSec?: number;
-      perIpHourlyCap?: number;
-      onePendingPerIp?: boolean;
-    };
     scrobble?: {
       lastfm?: Partial<ScrobbleLastfmForm>;
-      listenbrainz?: Partial<ScrobbleListenbrainzForm>;
       navidrome?: Partial<ScrobbleNavidromeForm>;
     };
     picker?: {
@@ -778,7 +744,7 @@ export function ownedFieldErrors(
  * SettingsPanel's one sticky bar via a portal. Keeping the component in the
  * section's tree is what lets each save keep its own closure, note and error
  * scoping — nothing had to be lifted, and a section with two independent saves
- * (Scrobbling: Last.fm and ListenBrainz are separate services) simply portals
+ * (Scrobbling: Last.fm and Navidrome are separate services) simply portals
  * two rows.
  *
  * No portal target means nothing is unsaved, and the bar renders nothing —

@@ -27,7 +27,6 @@
     "@ai-sdk/elevenlabs": "^3.0.19",
     "@ai-sdk/google": "^4.0.31",
     "@ai-sdk/openai": "^4.0.27",
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "@openrouter/ai-sdk-provider": "^3.0.0",
     "adm-zip": "^0.6.0",
     "ai": "^7.0.48",

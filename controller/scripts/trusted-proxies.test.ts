@@ -83,7 +83,6 @@ test('marker fields are filtered, not trusted — this is a file on disk', () =>
 
 
 const SUPERVISORS = [
-  { name: 'broadcast-entrypoint.sh', path: join(docker, 'broadcast-entrypoint.sh'), lib: 'SUBWAVE_BROADCAST_LIB' },
   { name: 'aio/supervisor.sh', path: join(docker, 'aio', 'supervisor.sh'), lib: 'SUBWAVE_SUPERVISOR_LIB' },
 ] as const;
 
@@ -322,9 +321,4 @@ test('the AIO still trusts loopback by default — Caddy is in that container', 
   // list with no env override is the same "127.0.0.1 ::1" it always was.
   const src = readFileSync(join(docker, 'aio', 'supervisor.sh'), 'utf8');
   assert.match(src, /TRUSTED_LIST="127\.0\.0\.1 ::1"/);
-});
-
-test('the split stack still defaults to DNS for the bundled caddy', () => {
-  const src = readFileSync(join(docker, 'broadcast-entrypoint.sh'), 'utf8');
-  assert.match(src, /ICECAST_TRUSTED_PROXY_HOSTS:-caddy/);
 });

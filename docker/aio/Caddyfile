@@ -22,6 +22,18 @@
 		}
 	}
 
+	# HLS — the default listener transport. Liquidsoap writes segments and a
+	# rolling playlist into the state dir; this serves that directory directly.
+	# The playlist must not be cached: it is rewritten every segment.
+	handle /hls/* {
+		header {
+			Access-Control-Allow-Origin *
+			Cache-Control "no-cache"
+		}
+		root * /var/sub-wave
+		file_server
+	}
+
 	# Icecast's URL-auth callback — NOT reachable from the internet (password
 	# oracle otherwise; icecast calls the controller on loopback directly).
 	# Kept in lockstep with docker/Caddyfile.
@@ -47,7 +59,7 @@
 	}
 
 	# Don't gzip the already-compressed live audio mounts.
-	@compressible not path /stream.mp3 /stream.opus /stream.flac /stream.aac
+	@compressible not path /stream.mp3 /stream.opus /stream.flac /stream.aac /hls/*
 	encode @compressible gzip zstd
 
 	log {

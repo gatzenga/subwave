@@ -4,7 +4,7 @@
 // useCoverColors, accent as the third) and crossfade over twenty seconds at a
 // track change.
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { Headphones, Heart } from 'lucide-react';
 import styles from './Drift.module.css';
@@ -21,7 +21,6 @@ import { useElapsed } from '@/hooks/useElapsed';
 import { useClock } from '@/lib/hooks';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { cn } from '@/lib/cn';
-import { REQUEST_NAME_MAX } from '@/lib/schemas.generated';
 import { fmtTime, normalizeStationLocale } from '@/lib/format';
 import { useStationClient } from '@/lib/stationClient';
 import {
@@ -33,7 +32,7 @@ import {
   stationIdentity,
   turnClock,
 } from '../shared';
-import { useRequestSlip, useSkinMotion, useTrackLike, useVolumeNudge } from '../sharedHooks';
+import { useSkinMotion, useTrackLike, useVolumeNudge } from '../sharedHooks';
 import type { SkinProps } from '../types';
 
 /* Opacity only, paced against the washes' twenty seconds. mode="wait" leaves a
@@ -122,13 +121,6 @@ export default function DriftSkin(_props: SkinProps) {
   const coverSwap = animates ? COVER_DISSOLVE : COVER_CUT;
 
   const [panelOpen, setPanelOpen] = useState(false);
-  const slip = useRequestSlip({
-    sent: 'the DJ has it.',
-    refused: 'not this time.',
-    failed: 'the booth line is down.',
-  });
-  const reqInputRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => { if (panelOpen) reqInputRef.current?.focus(); }, [panelOpen]);
 
   useKeyboardShortcuts(
     {
@@ -306,64 +298,8 @@ export default function DriftSkin(_props: SkinProps) {
 
       {panelOpen && (
         <div className="absolute bottom-16 left-1/2 flex w-[min(420px,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-3 border border-soft-border bg-[var(--bg)]/90 p-4 backdrop-blur-sm">
-          <form
-            className="flex flex-col gap-2"
-            onSubmit={e => { e.preventDefault(); void slip.send(); }}
-          >
-            {slip.ack ? (
-              <div className="flex items-baseline gap-2.5">
-                <span className="min-w-0 flex-1 text-[13px] italic">{slip.ack}</span>
-                <button
-                  type="button"
-                  onClick={slip.reset}
-                  className="v3-focus cursor-pointer border-0 bg-transparent p-0 font-mono text-[10px] tracking-[0.2em] text-muted uppercase hover:text-ink"
-                >
-                  again
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-baseline gap-2.5">
-                  <input
-                    ref={reqInputRef}
-                    value={slip.text}
-                    onChange={e => slip.setText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Escape') setPanelOpen(false); }}
-                    placeholder="ask the dj for something…"
-                    className="v3-focus min-w-0 flex-1 border-0 border-b border-soft-border bg-transparent pb-1 text-[13px] text-ink italic outline-none placeholder:text-muted"
-                  />
-                  <button
-                    type="submit"
-                    disabled={slip.sending || !slip.text.trim()}
-                    className={cn(
-                      'v3-focus border-0 bg-transparent p-0 font-mono text-[10px] tracking-[0.2em] uppercase',
-                      slip.sending || !slip.text.trim()
-                        ? 'cursor-default text-muted opacity-60'
-                        : 'cursor-pointer text-[var(--accent)] hover:opacity-80',
-                    )}
-                  >
-                    {slip.sending ? '…' : 'send'}
-                  </button>
-                </div>
-                {/* Signing is optional, and the DJ reads the name on air when
-                    given one (#1347). Drift keeps it a hairline under the ask
-                    rather than a second framed field. */}
-                <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-[10px] tracking-[0.2em] text-muted uppercase">from</span>
-                  <input
-                    value={slip.name}
-                    onChange={e => slip.setName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Escape') setPanelOpen(false); }}
-                    placeholder="your name (optional)"
-                    maxLength={REQUEST_NAME_MAX}
-                    className="v3-focus min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-ink italic outline-none placeholder:text-muted/70"
-                  />
-                </div>
-              </>
-            )}
-          </form>
           {history.length > 0 && (
-            <div className="flex flex-col gap-1 border-t border-soft-border pt-2.5">
+            <div className="flex flex-col gap-1">
               {history.map((h, i) => (
                 <div key={`${h.t ?? i}-${h.title ?? i}`} className="flex gap-2.5 font-mono text-[10px] tracking-[0.14em] text-muted uppercase">
                   <span>{turnClock(entryTime(h), timezone, stationLocale)}</span>

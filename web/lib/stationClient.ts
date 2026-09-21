@@ -6,8 +6,8 @@
 // origin (stationOrigin.ts) — no call site hardcodes a path.
 //
 // Response handling is deliberately per-endpoint: feed endpoints parse JSON
-// without an ok-check, /schedule and /themes throw on non-OK, /request/:id maps
-// 404 to status 'unknown', the beacon is fire-and-forget. Keep it that way;
+// without an ok-check, /schedule and /themes throw on non-OK, the beacon is
+// fire-and-forget. Keep it that way;
 // this module is plumbing, not policy.
 
 import { useMemo } from 'react';
@@ -19,7 +19,6 @@ import {
 import type { Theme } from '@/lib/theme';
 import type {
   NowPlayingResponse,
-  RequestResult,
   SchedulePayload,
   SessionPayload,
   StationState,
@@ -76,9 +75,6 @@ export interface StationClient {
   health(init?: { signal?: AbortSignal }): Promise<Response>;
   schedule(): Promise<SchedulePayload>;
   themes(): Promise<ThemesPayload>;
-  submitRequest(text: string, name: string): Promise<RequestResult>;
-  /** 404 → status 'unknown'; network error → null so drawers keep polling. */
-  requestStatus(requestId: string): Promise<RequestResult | null>;
   /** `songId` is what the client believes is on air; the controller rejects a
    *  stale tap. null on network error. */
   likeCurrent(songId: string): Promise<LikeResult | null>;
@@ -110,23 +106,6 @@ export function createStationClient(origin: StationOrigin): StationClient {
       const r = await fetch(`${api}/themes`);
       if (!r.ok) throw new Error(`themes fetch ${r.status}`);
       return json<ThemesPayload>(r);
-    },
-    submitRequest: async (text, name) => {
-      const r = await fetch(`${api}/request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, name }),
-      });
-      return json<RequestResult>(r);
-    },
-    requestStatus: async requestId => {
-      try {
-        const r = await fetch(`${api}/request/${requestId}`);
-        if (r.status === 404) return { success: false, status: 'unknown' };
-        return await json<RequestResult>(r);
-      } catch {
-        return null;
-      }
     },
     likeCurrent: async songId => {
       try {

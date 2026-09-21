@@ -10,7 +10,6 @@ import {
   Radio,
   BarChart3,
   Disc3,
-  CalendarClock,
   Drama,
   Sparkles,
   SlidersHorizontal,
@@ -24,24 +23,16 @@ import {
   Plug,
   Coffee,
   MessageCircle,
-  Podcast,
   Palette,
   LogOut,
   ChevronDown,
   ChevronRight,
   MoreHorizontal,
   ListMusic,
-  Telescope,
   Clock,
   CalendarDays,
   Volume2,
-  Music,
-  AudioLines,
-  Waves,
-  Mic,
   Braces,
-  Boxes,
-  Webhook,
 } from 'lucide-react';
 import { useAdminAuth } from '../../lib/adminAuth';
 import type { SignInResult } from '../../lib/adminAuth';
@@ -155,32 +146,10 @@ const NAV_SECTIONS: NavSection[] = [
         icon: Disc3,
         children: [
           { href: '/admin/playlists', id: 'playlists', label: 'Playlists', icon: ListMusic },
-          { href: '/observatory', id: 'observatory', label: 'Observatory', icon: Telescope },
-        ],
-      },
-      {
-        href: '/admin/shows',
-        id: 'shows',
-        label: 'Shows',
-        icon: CalendarClock,
-        children: [
-          { href: '/admin/shows/schedule', id: 'shows-schedule', label: 'Schedule', icon: CalendarDays },
         ],
       },
       { href: '/admin/personas', id: 'personas', label: 'Personas', icon: Drama },
       { href: '/admin/skills', id: 'skills', label: 'Skills', icon: Sparkles },
-      {
-        href: '/admin/imaging',
-        id: 'imaging',
-        label: 'Imaging',
-        icon: Podcast,
-        children: [
-          { href: '/admin/imaging?tab=jingles', id: 'imaging-jingles', label: 'Jingles', icon: Music, tab: 'jingles', defaultTab: true },
-          { href: '/admin/imaging?tab=sfx', id: 'imaging-sfx', label: 'SFX', icon: AudioLines, tab: 'sfx' },
-          { href: '/admin/imaging?tab=beds', id: 'imaging-beds', label: 'Beds', icon: Waves, tab: 'beds' },
-          { href: '/admin/imaging?tab=voices', id: 'imaging-voices', label: 'Voices', icon: Mic, tab: 'voices' },
-        ],
-      },
       {
         href: '/admin/moods',
         id: 'moods',
@@ -208,8 +177,6 @@ const NAV_SECTIONS: NavSection[] = [
         children: [
           { href: '/admin/connect?tab=integrations', id: 'connect-integrations', label: 'Stream URLs', icon: Radio, tab: 'integrations', defaultTab: true },
           { href: '/admin/connect?tab=endpoints', id: 'connect-endpoints', label: 'API', icon: Braces, tab: 'endpoints' },
-          { href: '/admin/connect?tab=mcp', id: 'connect-mcp', label: 'MCP', icon: Boxes, tab: 'mcp' },
-          { href: '/admin/connect?tab=webhooks', id: 'connect-webhooks', label: 'Webhooks', icon: Webhook, tab: 'webhooks' },
         ],
       },
       { href: '/admin/settings', id: 'settings', label: 'Settings', icon: SlidersHorizontal },
@@ -247,7 +214,6 @@ const FOOTER_LINKS: { href: string; label: string; icon: NavIcon; pill: string }
 // explicitly; their crumb sections mirror where the rail stays lit.
 function resolveCrumb(pathname: string | null): { section?: string; page: string } {
   if (pathname?.startsWith('/admin/playlists')) return { section: 'Programming', page: 'Playlists' };
-  if (pathname?.startsWith('/admin/shows/schedule')) return { section: 'Programming', page: 'Schedule' };
   if (pathname?.startsWith('/admin/doctor')) return { section: 'Monitor', page: 'DJ Doc' };
   if (pathname?.startsWith('/admin/stations')) return { section: 'System', page: 'Stations' };
   for (const section of NAV_SECTIONS) {
@@ -265,7 +231,7 @@ export interface AdminShellProps {
 }
 
 // Routes that take the whole inset — no max-width, no padding.
-const FULL_BLEED_ROUTES = ['/admin/shows/schedule'];
+const FULL_BLEED_ROUTES: string[] = [];
 
 export default function AdminShell({ children, defaultOpen = true }: AdminShellProps) {
   const pathname = usePathname();

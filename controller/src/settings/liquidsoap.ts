@@ -21,6 +21,9 @@ const LIQ_FLAC_ENABLED_PATH = `${STATE_DIR}/liquidsoap_flac_enabled.txt`;
 const LIQ_OGG_ICY_METADATA_PATH = `${STATE_DIR}/liquidsoap_ogg_icy_metadata.txt`;
 const LIQ_AAC_ENABLED_PATH = `${STATE_DIR}/liquidsoap_aac_enabled.txt`;
 const LIQ_AAC_BITRATE_PATH = `${STATE_DIR}/liquidsoap_aac_bitrate.txt`;
+const LIQ_HLS_ENABLED_PATH = `${STATE_DIR}/liquidsoap_hls_enabled.txt`;
+const LIQ_HLS_SEGMENT_DURATION_PATH = `${STATE_DIR}/liquidsoap_hls_segment_duration.txt`;
+const LIQ_HLS_SEGMENTS_PATH = `${STATE_DIR}/liquidsoap_hls_segments.txt`;
 export const LIQ_STREAM_BITRATE_PATH = `${STATE_DIR}/liquidsoap_stream_bitrate.txt`;
 // Entrypoint, not radio.liq: sizes Icecast's <burst-size> at broadcast boot.
 export const LIQ_STREAM_BUFFER_SECONDS_PATH = `${STATE_DIR}/liquidsoap_stream_buffer_seconds.txt`;
@@ -51,6 +54,14 @@ export async function writeLiquidsoapSettings(s) {
   await writeFile(LIQ_OGG_ICY_METADATA_PATH, s.stream.oggIcyMetadata ? 'true' : 'false');
   await writeFile(LIQ_AAC_ENABLED_PATH, s.stream.aacEnabled ? 'true' : 'false');
   await writeFile(LIQ_AAC_BITRATE_PATH, String(s.stream.aacBitrate));
+  // Absent coerces to ON in radio.liq, so an upgrade with no key set still
+  // lights HLS up; only an explicit false turns it off.
+  await writeFile(LIQ_HLS_ENABLED_PATH, s.stream.hlsEnabled === false ? 'false' : 'true');
+  await writeFile(
+    LIQ_HLS_SEGMENT_DURATION_PATH,
+    String(s.stream.hlsSegmentDuration ?? DEFAULTS.stream.hlsSegmentDuration),
+  );
+  await writeFile(LIQ_HLS_SEGMENTS_PATH, String(s.stream.hlsSegments ?? DEFAULTS.stream.hlsSegments));
   await writeFile(LIQ_STREAM_BITRATE_PATH, String(s.stream.bitrate));
   await writeFile(LIQ_STREAM_BUFFER_SECONDS_PATH, String(s.stream.bufferSeconds));
   await writeFile(LIQ_ICECAST_MAX_CLIENTS_PATH, String(s.stream.maxListeners));

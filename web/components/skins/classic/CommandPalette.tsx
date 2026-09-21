@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/command';
 import { Kbd } from '@/components/ui/kbd';
 
-export type PlayerDrawer = 'timeline' | 'booth' | 'request' | 'schedule';
+export type PlayerDrawer = 'timeline' | 'booth' | 'schedule';
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -51,8 +51,7 @@ export default function CommandPalette({
     { label: tunedIn ? 'Tune out' : 'Tune in', hint: 'Space', onSelect: run(onTune) },
     { label: 'Open Timeline', hint: '1', onSelect: run(() => onOpenDrawer('timeline')) },
     { label: 'Open Booth feed', hint: '2', onSelect: run(() => onOpenDrawer('booth')) },
-    { label: 'Make a request', hint: '3', onSelect: run(() => onOpenDrawer('request')) },
-    { label: 'Open Schedule', hint: '4', onSelect: run(() => onOpenDrawer('schedule')) },
+    { label: 'Open Schedule', hint: '3', onSelect: run(() => onOpenDrawer('schedule')) },
     { label: muted ? 'Unmute' : 'Mute', hint: 'M', onSelect: run(onToggleMute) },
     { label: 'Keyboard shortcuts', hint: '?', onSelect: run(onShowShortcuts) },
   ];

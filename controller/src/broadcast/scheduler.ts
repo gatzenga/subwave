@@ -28,7 +28,6 @@ import * as djAgent from './dj-agent.js';
 import * as programme from './programme.js';
 import { cleanupOldVoices } from '../audio/tts.js';
 import { cleanupPauseTalkSilence } from '../audio/wav-silence.js';
-import { warmHeavy } from '../audio/ttsHeavyClient.js';
 import { shouldFire } from './dj-gate.js';
 import { speakClockAllowed, stationIdDaypartStamp } from './clock-policy.js';
 import { talkOnlyBetweenTracks, withTalkAir } from './talk-air.js';
@@ -813,15 +812,6 @@ async function runTalkSlot(plan: Extract<TalkPlan, { act: 'fire' }>, rolled: Ses
   // Fired at the FIRE, never on an open window: the talk rows cover ~50
   // minutes of the hour, so warming whenever a window is open would reload the
   // model within a tick of every unload and quietly switch the feature off.
-  // Fire-and-forget and total, exactly like the idle-pause call — a warm that
-  // fails costs the render a model load, which is the un-warmed behaviour.
-  //
-  // The jingle rotate (#1619) is the one row this must skip. It is the table's
-  // only row that is not speech — the clip is already rendered on disk and no
-  // engine is reached at all — so warming for it would reload a model nothing
-  // is about to use, which is the same "quietly switch the unload off" failure
-  // the fire-not-window rule above exists to avoid.
-  if (plan.kind !== 'jingle') void warmHeavy();
   return withTalkAir(plan.air, () => runTalkSlotInner(plan, rolled));
 }
 

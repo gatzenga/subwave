@@ -25,7 +25,6 @@ import { useElapsed } from '@/hooks/useElapsed';
 import { useClock } from '@/lib/hooks';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { cn } from '@/lib/cn';
-import { REQUEST_NAME_MAX } from '@/lib/schemas.generated';
 import { fmtTime, normalizeStationLocale } from '@/lib/format';
 import { useStationClient } from '@/lib/stationClient';
 import {
@@ -37,7 +36,7 @@ import {
   trackMeta,
   turnClock,
 } from '../shared';
-import { useRequestSlip, useSkinMotion, useTrackLike, useVolumeNudge } from '../sharedHooks';
+import { useSkinMotion, useTrackLike, useVolumeNudge } from '../sharedHooks';
 import type { SkinProps } from '../types';
 
 /* Opacity only, so MotionConfig's reducedMotion="user" won't touch it (it drops
@@ -127,12 +126,6 @@ export default function SubampSkin(_props: SkinProps) {
   const deskRef = useRef<HTMLDivElement | null>(null);
   useDynamicStyle(deskRef, { '--sw-amp-tint': coverColors.vibrant });
 
-  const slip = useRequestSlip({
-    sent: 'request received — the DJ is on it.',
-    refused: 'request refused.',
-    failed: 'network error — request not sent.',
-  });
-  const reqInputRef = useRef<HTMLInputElement | null>(null);
 
   useKeyboardShortcuts({
     space: handleTune,
@@ -140,7 +133,6 @@ export default function SubampSkin(_props: SkinProps) {
     arrowup: () => adjustVolume(0.05),
     arrowdown: () => adjustVolume(-0.05),
     m: toggleMute,
-    r: () => reqInputRef.current?.focus(),
   });
 
   // Keyed so a track change restarts the scroll from the left.
@@ -306,15 +298,6 @@ export default function SubampSkin(_props: SkinProps) {
                   {like.liked ? '♥' : '♡'}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => reqInputRef.current?.focus()}
-                className="v3-focus grid h-[34px] w-11 cursor-pointer place-items-center border border-[var(--accent)] bg-[var(--field)] text-[9px] font-bold tracking-[0.1em] text-[var(--accent)] hover:bg-[var(--overlay)]"
-              >
-                REQ
-              </button>
-              {/* VOL is last so it (not REQ) is the flex item that reflows to a
-                  full-width second line when the deck is too narrow for one row */}
               <div className="ml-2 flex min-w-[120px] flex-1 items-center gap-2">
                 <span className="text-[9px] font-bold tracking-[0.16em] text-muted">VOL</span>
                 <input
@@ -397,64 +380,6 @@ export default function SubampSkin(_props: SkinProps) {
             <ConversationScrollButton className="bottom-2 size-7 rounded-none border-soft-border bg-[var(--field)] text-ink hover:bg-[var(--overlay)]" />
           </Conversation>
 
-          <form
-            className="mx-4 mb-3 flex shrink-0 flex-col gap-1.5 border-t border-[var(--line)] pt-2"
-            onSubmit={e => { e.preventDefault(); void slip.send(); }}
-          >
-              <div className="flex items-baseline gap-2.5">
-                {/* Fixed width on both label cells so the ask and the signature
-                    inputs share a left edge — the labels differ in length. */}
-                <span className="w-[68px] flex-none text-[10px] tracking-[0.14em] text-muted select-none">DEAR DJ —</span>
-                {slip.ack ? (
-                  <>
-                    <span className="min-w-0 flex-1 truncate text-[11px] italic">{slip.ack}</span>
-                    <button
-                      type="button"
-                      onClick={slip.reset}
-                      className="v3-focus cursor-pointer border-0 bg-transparent p-0 text-[10px] font-bold tracking-[0.14em] text-muted uppercase hover:text-ink"
-                    >
-                      new
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      ref={reqInputRef}
-                      value={slip.text}
-                      onChange={e => slip.setText(e.target.value)}
-                      placeholder="something with a 303 in it…"
-                      className="v3-focus min-w-0 flex-1 border-0 border-b border-[var(--line)] bg-transparent pb-0.5 font-mono text-[11px] text-ink italic outline-none placeholder:text-muted"
-                    />
-                    <button
-                      type="submit"
-                      disabled={slip.sending || !slip.text.trim()}
-                      className={cn(
-                        'v3-focus border-0 bg-transparent p-0 text-[10px] font-bold tracking-[0.14em] uppercase',
-                        slip.sending || !slip.text.trim()
-                          ? 'cursor-default text-muted opacity-60'
-                          : 'cursor-pointer text-[var(--accent)] hover:opacity-80',
-                      )}
-                    >
-                      {slip.sending ? '…' : 'SEND ↗'}
-                    </button>
-                  </>
-                )}
-              </div>
-              {/* Sign the slip and the DJ says your name on air (#1347).
-                  Hidden once the ack lands — there is nothing left to sign. */}
-              {!slip.ack && (
-                <div className="flex items-baseline gap-2.5">
-                  <span className="w-[68px] flex-none text-[10px] tracking-[0.14em] text-muted select-none">FROM —</span>
-                  <input
-                    value={slip.name}
-                    onChange={e => slip.setName(e.target.value)}
-                    placeholder="your name (optional)"
-                    maxLength={REQUEST_NAME_MAX}
-                    className="v3-focus min-w-0 flex-1 border-0 border-b border-[var(--line)] bg-transparent pb-0.5 font-mono text-[11px] text-ink italic outline-none placeholder:text-muted/70"
-                  />
-                </div>
-              )}
-            </form>
         </Window>
       </div>
     </div>

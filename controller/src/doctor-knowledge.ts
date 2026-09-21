@@ -108,13 +108,12 @@ skills and library tags as a single archive, restorable later. **Proactively sug
 taking a backup** before big changes (re-tagging, switching providers) and on a
 regular cadence — it's cheap insurance.
 
-## Daily token budget (settings.llm.dailyTokenCap / budgetSoftPct / exemptRequests)
+## Daily token budget (settings.llm.dailyTokenCap / budgetSoftPct)
 - \`dailyTokenCap\` (0 = off) is a per-UTC-day token ceiling. It degrades in two tiers:
   at \`budgetSoftPct\`% of the cap ("soft") the DJ forces the cheap pool picker and
   mutes optional segments (links, station IDs, hourly, weather/news); at the cap
   ("hard") it makes NO model call and coasts on the LLM-free auto playlist — music
-  never stops. Listener requests stay exempt through the hard cap unless
-  \`exemptRequests\` is off.
+  never stops.
 - The report's **Tuning → token budget** finding projects today's burn rate against
   the cap ("on track to hit the cap ~15:00 UTC"). If it will exhaust early, advise:
   raise the cap, turn on **pause-when-empty** so idle hours don't spend tokens, or
@@ -180,11 +179,6 @@ regular cadence — it's cheap insurance.
     analyzer micro-service, and swapping the AIO container to one replaces the
     whole station with just an analyzer.
   - Or turn the setting off (it's costing nothing but false expectations).
-
-## Listener-request web-resolve (settings.llm.requestWebResolve)
-- Lets the request agent resolve *described* tracks ("that song from the advert")
-  via web search — so it depends on Settings → Search being configured. If it's on
-  while search isn't ready, the feature is dead; either configure search or turn it off.
 
 ## Where to look when things break
 The admin Debug page is a live snapshot (recent AI calls + success, mixer status,

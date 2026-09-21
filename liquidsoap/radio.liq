@@ -102,6 +102,18 @@ opus_bitrate = ref(96)
 flac_enabled = ref(false)
 aac_enabled = ref(false)
 aac_bitrate = ref(192)
+# HLS — the DEFAULT listener-facing stream. Unlike the icecast mounts this is a
+# directory of segments plus a rolling playlist, served as static files by the
+# edge. Enabled by default: every listener path (browser, app, Sonos via the
+# mp3 mount) keeps working either way, and HLS is what survives a flaky
+# connection without the client having to reconnect to a live socket.
+hls_enabled = ref(true)
+# segment_duration x segments is the listener's distance from the live edge.
+# 4 x 5 = 20s, which is deliberately close to the 22s icecast burst the rest of
+# the timing model is calibrated against (stream.bufferSeconds), so a listener
+# hears the same thing at the same moment on either transport.
+hls_segment_duration = ref(4)
+hls_segments = ref(5)
 stream_bitrate = ref(192)
 ogg_icy_metadata = ref(true)
 station_name = ref("SUB/WAVE")
@@ -192,6 +204,24 @@ if file.exists("#{state_dir}/liquidsoap_aac_bitrate.txt") then
   raw = string.trim(file.contents("#{state_dir}/liquidsoap_aac_bitrate.txt"))
   v = int_of_string(default=192, raw)
   if v > 0 then aac_bitrate := v end
+end
+
+# HLS. Opt OUT rather than in: absent file leaves it on.
+if file.exists("#{state_dir}/liquidsoap_hls_enabled.txt") then
+  raw = string.trim(file.contents("#{state_dir}/liquidsoap_hls_enabled.txt"))
+  hls_enabled := not (raw == "false")
+end
+
+if file.exists("#{state_dir}/liquidsoap_hls_segment_duration.txt") then
+  raw = string.trim(file.contents("#{state_dir}/liquidsoap_hls_segment_duration.txt"))
+  v = int_of_string(default=4, raw)
+  if v > 0 then hls_segment_duration := v end
+end
+
+if file.exists("#{state_dir}/liquidsoap_hls_segments.txt") then
+  raw = string.trim(file.contents("#{state_dir}/liquidsoap_hls_segments.txt"))
+  v = int_of_string(default=5, raw)
+  if v > 0 then hls_segments := v end
 end
 
 # Opt IN to the Ogg-FLAC mount — a lossless capture of the PROCESSED bus at the
@@ -1784,6 +1814,57 @@ def make_stream_outputs() =
     else
       fun () -> ()
     end
+  # HLS — the default listener transport. Segments and the rolling playlist are
+  # written into the shared state dir; the edge serves that directory as plain
+  # static files, so there is no second socket to keep alive and a listener who
+  # drops off simply fetches the next segment when they come back.
+  #
+  # Built INSIDE make_stream_outputs like every icecast mount, so it follows the
+  # same on-air lifecycle: /stream-off stops writing segments rather than
+  # publishing the emergency loop to the world.
+  #
+  # `persist_at` keeps the segment numbering across a mixer restart, so a client
+  # mid-playlist doesn't see the sequence jump backwards and stall.
+  #
+  # The bitrate branches are literals for the same reason the icecast encoders
+  # are: an encoder parameter is resolved at parse time and a ref won't do.
+  hls_shutdown =
+    if hls_enabled() then
+      hls_dir = "#{state_dir}/hls"
+      ignore(file.mkdir(parents=true, hls_dir))
+      # Four AAC variants. Liquidsoap writes one sub-playlist per stream plus a
+      # master playlist that lists them, which is what makes the client switch:
+      # the player measures its own download rate per segment and steps down a
+      # rung when it can't keep ahead, back up when it can. No server decision,
+      # no operator knob — the ladder IS the feature, so the rungs are fixed.
+      #
+      # Literal bitrates because an encoder parameter resolves at parse time.
+      hls_out = output.file.hls(
+        id="stream_hls",
+        fallible=true,
+        playlist="live.m3u8",
+        segment_duration=float_of_int(hls_segment_duration()),
+        segments=hls_segments(),
+        # Keep a couple of expired segments on disk past the playlist window so a
+        # client that is a beat behind still resolves the URL it already holds.
+        segments_overhead=2,
+        persist_at="#{state_dir}/hls.config",
+        hls_dir,
+        [
+          ("aac_320", %ffmpeg(format="mpegts", %audio(codec="aac", b="320k", channels=2, samplerate=44100))),
+          ("aac_256", %ffmpeg(format="mpegts", %audio(codec="aac", b="256k", channels=2, samplerate=44100))),
+          ("aac_192", %ffmpeg(format="mpegts", %audio(codec="aac", b="192k", channels=2, samplerate=44100))),
+          ("aac_128", %ffmpeg(format="mpegts", %audio(codec="aac", b="128k", channels=2, samplerate=44100))),
+        ],
+        radio
+      )
+      log("HLS on: #{hls_dir}/live.m3u8 · AAC 320/256/192/128k · #{hls_segment_duration()}s x #{hls_segments()} segments")
+      hls_out.shutdown
+    else
+      log("HLS disabled — set stream.hlsEnabled=true in settings to re-enable")
+      fun () -> ()
+    end
+
   # Hourly archive. A second MP3 encoder running 24/7 is the biggest CPU cost in
   # the broadcast container, so the whole output is guarded. Built in here so it
   # follows the on-air lifecycle — off air stops the recording, rather than
@@ -1815,6 +1896,7 @@ def make_stream_outputs() =
     opus_shutdown()
     flac_shutdown()
     aac_shutdown()
+    hls_shutdown()
     archive_shutdown()
   end
 end

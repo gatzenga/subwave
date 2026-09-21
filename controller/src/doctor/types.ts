@@ -73,9 +73,7 @@ export interface StationSettings {
     provider?: string;
     numCtx?: number;
     maxOutputTokens?: number;
-    requestWebResolve?: boolean;
     toolChoice?: string;
-    exemptRequests?: boolean;
     pauseWhenEmpty?: boolean;
     noRepeatWindow?: number;
   };

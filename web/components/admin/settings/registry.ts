@@ -110,7 +110,7 @@ export const SECTIONS = [
   },
   {
     id: 'scrobble', group: 'listeners', label: 'Scrobbling',
-    hint: 'last.fm · listenbrainz · navidrome', icon: Activity,
+    hint: 'last.fm · navidrome', icon: Activity,
     formKeys: ['scrobble'],
   },
   {
@@ -305,10 +305,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'API secret', section: 'scrobble', card: 'Last.fm', keywords: 'lastfm shared secret handshake' },
   { label: 'Session key', section: 'scrobble', card: 'Last.fm', keywords: 'authorize session token' },
   { label: 'Username (display)', section: 'scrobble', card: 'Last.fm', keywords: 'lastfm user dash' },
-  { label: 'Enabled', section: 'scrobble', card: 'ListenBrainz', keywords: 'listenbrainz scrobble spins' },
-  { label: 'User token', section: 'scrobble', card: 'ListenBrainz', keywords: 'listenbrainz profile token' },
-  { label: 'API base URL', section: 'scrobble', card: 'ListenBrainz', keywords: 'self hosted instance endpoint' },
-  { label: 'Username (display)', section: 'scrobble', card: 'ListenBrainz', keywords: 'listenbrainz user dash' },
   { label: 'Enabled', section: 'scrobble', card: 'Navidrome', keywords: 'navidrome play count last played smart playlist nsp rotation subsonic' },
 
   // ── archives ───────────────────────────────────────────────────────────────

@@ -1,3 +1,0 @@
-node_modules
-# Stray temp artifacts left by `bun build --compile`.
-*.bun-build

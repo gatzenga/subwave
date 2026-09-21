@@ -758,10 +758,6 @@ export function clampPersonaDial(v: unknown): number {
 export const TTS_ENGINES = [
   'piper',
   'kokoro',
-  'chatterbox',
-  'pocket-tts',
-  'cloud',
-  'remote',
 ] as const;
 
 /**
@@ -1717,43 +1713,6 @@ export function normalizeRecipeRow(raw: unknown): {
   };
 }
 
-// ─── from controller/src/schemas/request.ts ──────────────────────────────
-
-// Shared listener-request schema — POST /request's `{ text, name }`. Run at the
-// route boundary and once in PlayerCore's submitRequest, the chokepoint every
-// skin's box goes through. The on-air safety pipeline (injection stripping,
-// opener cuts, reserved-name screening, 'anon' fallback) is NOT here: that is
-// util/request-guard.ts, which repairs rather than refuses.
-
-// One figure for the route, the guard and the browser; request-guard's NAME_MAX
-// is an alias of this.
-export const REQUEST_TEXT_MAX = 280;
-export const REQUEST_NAME_MAX = 40;
-
-// Explicit null reads as absent. (Named per-module: the mirror is one flat file.)
-const requestNullToUndefined = (v: unknown) => (v == null ? undefined : v);
-
-// Messages are listener-facing and stand alone without a field prefix, so this
-// schema MUST be mounted through middleware/validate.ts's validatePublicBody —
-// the ordinary validateBody prefixes the dotted path onto every one of them.
-export const listenerRequestSchema = z.object({
-  text: z
-    .string({ error: 'Empty request' })
-    .trim()
-    .min(1, 'Empty request')
-    .max(REQUEST_TEXT_MAX, `Keep it under ${REQUEST_TEXT_MAX} characters.`),
-  // Optional, but refused rather than sliced; no `.catch()` (it cannot tell a
-  // wrong type from a too-long value). Reserved names are the guard's business.
-  name: z.preprocess(
-    requestNullToUndefined,
-    z
-      .string({ error: 'Names must be plain text.' })
-      .trim()
-      .max(REQUEST_NAME_MAX, `Keep the name under ${REQUEST_NAME_MAX} characters.`)
-      .default(''),
-  ),
-});
-
 // ─── from controller/src/schemas/schedule.ts ─────────────────────────────
 
 // Shared schedule schema — the weekly grid and the timed takeover (#930). Run
@@ -2697,10 +2656,6 @@ export const transitionsPatchSchema = settingsBlockOf({
   effects: transitionEffectsPatchSchema,
 });
 
-export const webhooksPolicyPatchSchema = settingsBlockOf({
-  trackPlayListenerGated: settingsBoolLike(),
-});
-
 export const uiPatchSchema = settingsBlockOf({
   boothBuddy: settingsBoolLike(),
   tuneInOverlay: settingsBoolLike(),
@@ -2813,8 +2768,22 @@ export const backupsPatchSchema = settingsBlockOf({
   ),
 });
 
+// HLS AAC bitrates. A separate ladder from the icecast AAC mount: HLS is the
+// default listener transport, so its rungs start lower for mobile.
+export const SETTINGS_HLS_SEGMENT_DURATIONS = [2, 4, 6, 8] as const;
+export const SETTINGS_HLS_SEGMENT_COUNTS = [3, 4, 5, 6, 8, 10] as const;
+
 export const streamPatchSchema = settingsBlockOf({
   opusEnabled: settingsBoolLike(),
+  hlsEnabled: settingsBoolLike(),
+  hlsSegmentDuration: settingsIntOneOf(
+    SETTINGS_HLS_SEGMENT_DURATIONS,
+    `stream.hlsSegmentDuration must be one of: ${SETTINGS_HLS_SEGMENT_DURATIONS.join(', ')}`,
+  ),
+  hlsSegments: settingsIntOneOf(
+    SETTINGS_HLS_SEGMENT_COUNTS,
+    `stream.hlsSegments must be one of: ${SETTINGS_HLS_SEGMENT_COUNTS.join(', ')}`,
+  ),
   flacEnabled: settingsBoolLike(),
   oggIcyMetadata: settingsBoolLike(),
   aacEnabled: settingsBoolLike(),
@@ -3173,50 +3142,6 @@ export const privacyPatchSchema = settingsBlockOf({
       }
     })
     .transform((raw) => String(raw ?? '').trim()),
-});
-
-/**
- * `requests` — every field falls back to the CURRENT stored value, so the
- * schema's job is to decide "usable or absent" and let update() spread the
- * result over what is stored.
- *
- * The usability rule is `intIn`'s and it is deliberately narrow: only a number,
- * a bigint or a NON-BLANK string counts. `null`, `''`, `false` and `[]` all
- * coerce to 0 under `Number()`, and without this guard an emptied admin input
- * (which arrives as JSON null) clamped to the field's FLOOR and silently
- * committed it — clearing the station hourly cap set it to 5/hour and closed
- * the request line. Anything unusable is dropped here, which update() reads as
- * "leave it alone".
- *
- * Note the booleans are `typeof === 'boolean'`, NOT `!!` — a truthy non-boolean
- * is IGNORED rather than coerced, the opposite posture to ui/privacy. Both are
- * shipping behaviour and neither may be unified onto the other.
- */
-function settingsRequestsInt(bounds: SettingsNumericBound) {
-  return z.unknown().transform((raw) => {
-    if (typeof raw === 'string') {
-      if (!raw.trim()) return undefined;
-    } else if (typeof raw !== 'number' && typeof raw !== 'bigint') {
-      return undefined;
-    }
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return undefined;
-    return Math.min(bounds.max, Math.max(bounds.min, Math.round(n)));
-  });
-}
-
-function settingsRequestsBool() {
-  return z.unknown().transform((raw) => (typeof raw === 'boolean' ? raw : undefined));
-}
-
-export const requestsPatchSchema = settingsBlockOf({
-  enabled: settingsRequestsBool(),
-  onePendingPerIp: settingsRequestsBool(),
-  maxPending: settingsRequestsInt({ min: 1, max: 50 }),
-  globalHourlyCap: settingsRequestsInt({ min: 5, max: 500 }),
-  repeatCooldownMin: settingsRequestsInt({ min: 0, max: 1440 }),
-  cooldownSec: settingsRequestsInt({ min: 5, max: 600 }),
-  perIpHourlyCap: settingsRequestsInt({ min: 1, max: 100 }),
 });
 
 // --- the mood family -------------------------------------------------------
@@ -4564,94 +4489,3 @@ export type StationCreate = z.output<typeof stationCreateSchema>;
 // Rename is display-name only — the slug and data folder stay put — so it
 // shares the name rule and nothing else.
 export const stationRenameSchema = z.object({ name: stationNameSchema });
-
-// ─── from controller/src/schemas/webhook.ts ──────────────────────────────
-
-// Shared webhook schema — the single source of truth for the outbound-webhook
-// shape, executed on BOTH sides. The controller runs it in
-// settings.validate.validateWebhooksStrict() and in the route middleware; the
-// browser runs the mirrored copy (web/lib/schemas.generated.ts) as the form
-// resolver.
-//
-// HARD RULE: this file may import ONLY from 'zod'. It is copied verbatim into
-// the web bundle, so a project import or a node builtin here breaks the mirror.
-// Enforced by controller/eslint.config.mjs.
-//
-// Rules that are NOT pure functions of one value — the authHeader redaction
-// sentinel, id minting, cross-item id de-duplication — deliberately live in
-// webhook-server.ts, which is NOT mirrored.
-
-// Event names the outbound webhook fan-out can subscribe to. This is now the
-// ONE definition; settings/vocab.ts and broadcast/webhooks.ts re-export it.
-export const WEBHOOK_EVENTS = [
-  'track.play',          // a track started playing
-  'dj.say',              // station ID / weather / hourly — heavy-ducked voice
-  'dj.link',              // between-track auto-DJ link — light-ducked voice
-  'request.received',    // a listener submitted a request
-  // The same speech as dj.say/dj.link, but as a WINDOW rather than a ping:
-  // start carries the measured duration, end fires when the words finish (#1382).
-  // Subscribe to these instead of dj.* when you need the segment's real extent.
-  // queued lands first, before the words — the one event in the set that is a
-  // forecast rather than an observation, for consumers that must PREPARE for
-  // speech (hand back from a call, close a gate) rather than react to it.
-  'voice.queued',        // the station committed to speaking — not audible yet
-  'voice.start',         // a spoken segment became audible on the stream
-  'voice.end',           // …and finished
-] as const;
-
-export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
-
-export const WEBHOOKS_LIMIT = 16;
-
-// Exported because the LENIENT load-path normaliser (settings/normalize.ts)
-// tests ids against it too. Two copies of this pattern would mean an id that is
-// valid at boot and invalid on the next save — exactly the drift this shared
-// module exists to remove. Named for its feature, not `ID_RE`: the mirror is one
-// flat file, so every top-level name here shares a scope with every other
-// schema module's.
-export const WEBHOOK_ID_RE = /^[a-z0-9_]{3,32}$/;
-
-export const webhookSchema = z.object({
-  // Optional because a brand-new row has no id yet — the server mints one.
-  // Carries its own message for the same reason url does: zod's built-in
-  // regex/length text is written for a developer ("Invalid string: must match
-  // pattern /^[a-z0-9_]{3,32}$/") and this string reaches an operator's toast.
-  id: z
-    .string()
-    .regex(WEBHOOK_ID_RE, 'id must be 3-32 characters: lowercase letters, digits or underscores')
-    .optional(),
-  url: z
-    .string()
-    .trim()
-    .max(500, 'URL must be 500 characters or fewer')
-    .regex(/^https?:\/\//, 'URL must start with http:// or https://'),
-  events: z
-    .array(z.enum(WEBHOOK_EVENTS), { error: 'Pick at least one event' })
-    .min(1, 'Pick at least one event')
-    .transform((xs) => [...new Set(xs)]),
-  enabled: z.boolean().default(true),
-  // '' means no header. The literal 'set' is the redaction sentinel from
-  // settings.getRedacted() meaning "keep whatever is stored" — resolving it
-  // needs the CURRENT list, so see mergeWebhookSecrets() in webhook-server.ts.
-  authHeader: z
-    .string()
-    .max(500, 'Authorization header must be 500 characters or fewer')
-    .default(''),
-});
-
-export type WebhookParsed = z.output<typeof webhookSchema>;
-export type Webhook = WebhookParsed & { id: string };
-
-export const webhooksSchema = z
-  // Explicit, so a non-array reads as something an operator can act on rather
-  // than zod's 'Invalid input: expected array, received number'. Both callers
-  // root this schema at 'webhooks'.
-  .array(webhookSchema, { error: 'must be an array' })
-  .max(WEBHOOKS_LIMIT, `At most ${WEBHOOKS_LIMIT} webhooks`);
-
-// Both fields optional: the route lets the listener gate save on its own
-// without re-submitting (and re-validating) the hook list, and vice versa.
-export const webhooksPatchSchema = z.object({
-  webhooks: webhooksSchema.optional(),
-  trackPlayListenerGated: z.boolean().optional(),
-});

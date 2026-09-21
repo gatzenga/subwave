@@ -26,7 +26,6 @@ process.env.STATE_DIR = root;
 const settings = await import('../src/settings.js');
 const { voiceEnabled, autoVoiceAllowed, voiceStatus } = await import('../src/broadcast/voice-policy.js');
 const { shouldFire } = await import('../src/broadcast/dj-gate.js');
-const { requestSchema } = await import('../src/broadcast/dj-agent/schemas.js');
 
 // requestSchema() is now wrapped in modelTolerant (z.preprocess) — see the C1
 // chat-escape work (Task 5) — so the plain ZodObject's `.shape` sits one level
@@ -88,15 +87,9 @@ try {
     }
   }
 
-  // The request agent's contract follows the switch: voice off removes the
-  // intro field entirely, so no tokens are ever spent writing a line that
-  // can't air (the pick-path counterpart is wantLink=false).
-  assert.ok(!('intro' in shapeOf(requestSchema())), 'voice off: requestSchema drops the intro field');
-
   // ── Back ON: the ladder resumes exactly as before ──────────────────────────
   await settings.update({ tts: { enabled: true } });
   assert.equal(voiceEnabled(), true, 'the switch is reversible');
-  assert.ok('intro' in shapeOf(requestSchema()), 'voice on: requestSchema offers the intro field again');
   const resumed = MINUTES.flatMap(m => KINDS.map(k => ({ k, m })))
     .filter(({ k, m }) => shouldFire(k, atMinute(m)));
   assert.deepEqual(resumed, liveSlots, 'flipping back restores the exact same slots');

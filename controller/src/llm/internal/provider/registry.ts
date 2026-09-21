@@ -2,12 +2,10 @@
 // Every model call goes through here; call sites never name a provider.
 // `ollama` is the default and needs no key; cloud providers are opt-in.
 
-import { createGateway } from 'ai';
 import { createOllama } from 'ai-sdk-ollama';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createDeepSeek } from '@ai-sdk/deepseek';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { config } from '../../../config.js';
 import * as settings from '../../../settings.js';
@@ -211,7 +209,6 @@ export function headersSig(cfg: any): string {
 export function resolveModelId(cfg: any): string {
   if (cfg.model) return cfg.model;
   if (cfg.provider === 'ollama') return config.ollama.model;
-  if (cfg.provider === 'deepseek') return 'deepseek-v4-flash';
   throw new Error(
     `llm.provider is "${cfg.provider}" but llm.model is empty — set a model in Settings`
   );
@@ -221,7 +218,7 @@ export function resolveModelId(cfg: any): string {
 // An explicit cfg (the fallback leg) shares the same cache.
 export function languageModel(cfg: any = llmCfg(), opts: { forceNoThink?: boolean } = {}) {
   const id = resolveModelId(cfg);
-  const baseUrlSig = cfg.provider === 'locca' ? loccaBaseUrl(cfg) : (cfg.baseUrl || '');
+  const baseUrlSig = cfg.baseUrl || '';
   // Two provider families can't suppress thinking per-call, so a forced-tool leg
   // needs its own instance: OpenRouter fixes reasoning at model build, and
   // openai-compatible/locca bind the body wrapper at construction. Everyone else
@@ -252,18 +249,8 @@ export function languageModel(cfg: any = llmCfg(), opts: { forceNoThink?: boolea
       model = openAICompatibleModel(cfg, id, cfg.baseUrl, 'openai-compatible', bodyNoThink);
       break;
     }
-    case 'locca': {
-      // Same transport as openai-compatible, with a default base URL.
-      model = openAICompatibleModel(cfg, id, loccaBaseUrl(cfg), 'locca', bodyNoThink);
-      break;
-    }
     case 'google': {
       const provider = createGoogleGenerativeAI({ fetch: debugFetch, ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}) });
-      model = provider(id);
-      break;
-    }
-    case 'deepseek': {
-      const provider = createDeepSeek({ fetch: debugFetch, ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}) });
       model = provider(id);
       break;
     }
@@ -282,26 +269,6 @@ export function languageModel(cfg: any = llmCfg(), opts: { forceNoThink?: boolea
       model = suppressReasoning
         ? provider(id, { extraBody: { reasoning: reasoningMandatoryModel(id) ? { effort: 'minimal' } : { enabled: false } } })
         : provider(id);
-      break;
-    }
-    case 'requesty': {
-      // Same createOpenAI transport as openai-compatible on a fixed base URL.
-      // Hosted aggregator with no thinking knob, so no body injection — that
-      // only makes sense for self-hosted llama.cpp/vLLM. A real key is required.
-      const provider = createOpenAI({
-        baseURL: DEFAULT_REQUESTY_BASE_URL,
-        apiKey: cfg.apiKey || process.env.REQUESTY_API_KEY || 'unused',
-        name: 'requesty',
-        fetch: debugFetch,
-      });
-      model = provider.chat(id);
-      break;
-    }
-    case 'gateway': {
-      // Always constructed so debugFetch can be wired in; with no apiKey it
-      // resolves the same env / OIDC credentials the default instance would.
-      const provider = createGateway({ fetch: debugFetch, ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}) });
-      model = provider(id);
       break;
     }
     case 'ollama':

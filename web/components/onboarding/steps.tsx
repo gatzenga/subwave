@@ -4,20 +4,10 @@ import { useRef, useState } from 'react';
 import { z } from 'zod';
 import { useController } from 'react-hook-form';
 import { useZodForm, fieldAria } from '@/lib/form';
-import { TextField, SelectField, SwitchField } from '@/lib/form-fields';
+import { TextField, SelectField } from '@/lib/form-fields';
 import {
-  Field,
-  FieldLabel,
   FieldError,
 } from '@/components/ui/field';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   llmProbeSchema,
   navidromeProbeSchema,
@@ -428,28 +418,8 @@ const TTS_ENGINE_OPTIONS = [
   { value: 'remote', label: 'Remote (your own server)' },
 ];
 
-// Only the three cloud providers the wizard collects credentials for.
-// TTS_CLOUD_PROVIDERS also lists 'openai-compatible', which has no base-URL
-// field here.
-const TTS_CLOUD_PROVIDER_OPTIONS = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'elevenlabs', label: 'ElevenLabs' },
-  { value: 'fish-audio', label: 'Fish Audio' },
-];
-
 export function TtsStep({ w }: { w: WizardController }) {
-  // WizardData's cloud.provider is a plain `string` (it also holds
-  // 'openai-compatible'), so cast the seed once rather than widen the schema.
   const form = useZodForm(ttsStepSchema, { ...w.data.tts } as z.input<typeof ttsStepSchema>);
-  const engine = form.watch('defaultEngine');
-  const heavyEnabled = form.watch('heavyEnabled');
-  const cloudEnabled = form.watch('cloud.enabled');
-  const heavyPicked = engine === 'chatterbox' || engine === 'pocket-tts';
-
-  // Side-effecting onChange (clears the credential, pre-fills Fish Audio
-  // defaults), so a raw useController rather than SelectField.
-  const cloudProviderField = useController({ control: form.control, name: 'cloud.provider' });
-  const cloudProviderAria = fieldAria('tts-cloud-provider', cloudProviderField.fieldState.error);
 
   const onNext = form.handleSubmit(vals => {
     w.patch(d => ({ tts: { ...d.tts, ...vals } }));
@@ -460,7 +430,7 @@ export function TtsStep({ w }: { w: WizardController }) {
     <form onSubmit={onNext} noValidate>
       <StepHeader
         title="Choose a voice engine"
-        blurb="Piper is the default — fast, local, decent. Kokoro is slower but more natural. Cloud routes through OpenAI, ElevenLabs, or Fish Audio."
+        blurb="Piper is the default — fast, local, decent. Kokoro is slower but more natural."
       />
       <div className="grid gap-3">
         <SelectField
@@ -469,103 +439,6 @@ export function TtsStep({ w }: { w: WizardController }) {
           label="Default engine"
           options={TTS_ENGINE_OPTIONS}
         />
-        <SwitchField
-          control={form.control}
-          name="heavyEnabled"
-          label="Enable Chatterbox + PocketTTS (tts-heavy sidecar, ~5–6 GB)"
-        />
-        {heavyEnabled && (
-          <V3Alert title="Heavy TTS enabled">
-            The sidecar isn&apos;t started by default. On the machine running
-            this stack, either:
-            <ul className="mt-2 ml-5 list-disc space-y-1">
-              <li>
-                Add <code>COMPOSE_PROFILES=tts-heavy</code> to your <code>.env</code>, then run{' '}
-                <code>docker compose up -d</code> — this enables it permanently.
-              </li>
-              <li>
-                Or run <code>docker compose --profile tts-heavy up -d</code> for a one-off start.
-              </li>
-            </ul>
-          </V3Alert>
-        )}
-        {heavyPicked && !heavyEnabled && (
-          <V3Alert tone="error" title="Heads up">
-            {engine === 'chatterbox' ? 'Chatterbox' : 'PocketTTS'} runs in the
-            optional <code>tts-heavy</code> sidecar but you haven&apos;t enabled
-            it above — this persona will silently fall back to Piper until the
-            sidecar is started.
-          </V3Alert>
-        )}
-        <SwitchField
-          control={form.control}
-          name="cloud.enabled"
-          label="Enable cloud TTS as a fallback"
-        />
-        {cloudEnabled && (
-          <>
-            <Field data-invalid={cloudProviderAria.invalid || undefined}>
-              <FieldLabel {...cloudProviderAria.labelProps}>Cloud TTS provider</FieldLabel>
-              <Select
-                value={cloudProviderField.field.value}
-                onValueChange={(provider) => {
-                  cloudProviderField.field.onChange(provider);
-                  // Credentials are provider-specific: never carry a typed key
-                  // across a selector change.
-                  form.setValue('cloud.apiKey', '', { shouldValidate: true, shouldDirty: true });
-                  if (provider === 'fish-audio') {
-                    form.setValue('cloud.model', 's2.1-pro', { shouldValidate: true, shouldDirty: true });
-                    form.setValue('cloud.voice', '', { shouldValidate: true, shouldDirty: true });
-                  }
-                }}
-              >
-                <SelectTrigger
-                  {...cloudProviderAria.controlProps}
-                  onBlur={cloudProviderField.field.onBlur}
-                  ref={cloudProviderField.field.ref}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {TTS_CLOUD_PROVIDER_OPTIONS.map(o => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <FieldError {...cloudProviderAria.errorProps} errors={cloudProviderField.fieldState.error ? [cloudProviderField.fieldState.error] : undefined} />
-            </Field>
-            <TextField
-              control={form.control}
-              name="cloud.apiKey"
-              label="API key"
-              type="password"
-              autoComplete="off"
-            />
-            {form.watch('cloud.provider') === 'fish-audio' && (
-              <>
-                <TextField
-                  control={form.control}
-                  name="cloud.model"
-                  label="Fish model id"
-                  placeholder="s2.1-pro"
-                  maxLength={100}
-                />
-                <TextField
-                  control={form.control}
-                  name="cloud.voice"
-                  label="Fish voice reference id"
-                  placeholder="Paste an account, public, or custom reference_id"
-                  maxLength={100}
-                />
-                <p className="text-xs text-muted">
-                  Account voice discovery is available after setup in Admin → Settings → TTS.
-                </p>
-              </>
-            )}
-          </>
-        )}
         <NextButton disabled={!form.formState.isValid} />
       </div>
     </form>

@@ -3,7 +3,6 @@ import {
   AVATAR_TARGET_PX, DICEBEAR_STYLES, DIAL_NEUTRAL,
   CHATTERBOX_VOICE_RE, POCKET_TTS_VOICE_RE,
 } from './constants';
-import { CLOUD_PROVIDER_ENV_KEY, cloudProviderLabel } from '../tts/cloudProviderMeta';
 import { PERSONA_TTS_INHERIT, resolvePersonaVoiceSlot } from '../../../lib/schemas.generated';
 
 /**
@@ -182,34 +181,10 @@ export function voiceForSave(engine: string, voice: string): string {
   return voice; // piper ignores voice; cloud carries its own
 }
 
-// Why this persona's cloud voice won't play, or null when it will.
-//
-// The controller's readiness flag (`cloudByProvider`) folds two causes into one
-// boolean: no credentials, and the station-wide `tts.cloud.enabled` switch being
-// off. So credentials are checked first and the readiness flag only speaks for
-// what's left, the station switch.
-export function cloudIssue(persona: Persona | undefined, data: SettingsResponse | null): string | null {
-  // Resolved, not raw: a persona following the station default is voiced by the
-  // cloud whenever the station is.
-  const tts = effectiveTts(persona, data);
-  if (tts?.engine !== 'cloud') return null;
-  const provider = tts.cloudProvider;
-  // openai-compatible has no env-key convention: its URL, model and optional
-  // bearer live in tts.cloud settings rather than state/secrets.env.
-  if (provider === 'openai-compatible') return null;
-  const readiness = data?.tts?.available?.cloudByProvider;
-  const ready = readiness && provider in readiness ? readiness[provider] : undefined;
-  if (ready === true) return null;
-
-  const envKey = CLOUD_PROVIDER_ENV_KEY[provider];
-  // `data.env` absent means the settings payload hasn't landed; stay quiet
-  // rather than accusing a key of being missing before we can see it.
-  if (envKey && data?.env && !data.env[envKey]) {
-    return `${envKey} is not configured in Settings.`;
-  }
-  if (ready === false) {
-    return `${cloudProviderLabel(provider)} has a key on file, but Cloud TTS is switched off for the station. Turn it on under Settings → Voice.`;
-  }
+// Kept as the one place a persona's voice problem would be described. With
+// only the two bundled local engines left there is no credential to be missing,
+// so it is always null — the callers' alert shape stays wired for the next one.
+export function cloudIssue(_persona: Persona | undefined, _data: SettingsResponse | null): string | null {
   return null;
 }
 

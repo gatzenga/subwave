@@ -15,7 +15,6 @@
 // nextIdleState().
 
 import * as settings from '../settings.js';
-import { warmHeavy } from '../audio/ttsHeavyClient.js';
 import { gatedListenerCount, refresh, setStreamIdle } from './listeners.js';
 import { idleOn, idleOff, idleStatus } from './liquidsoap-control.js';
 import { queue } from './queue.js';
@@ -58,11 +57,6 @@ async function tick() {
       );
     } else if (action === 'resume') {
       await idleOff();
-      // Warm the tts-heavy sidecar (#1579): a cold Chatterbox reload is
-      // 30-60s, audible if it lands on the first link after the room fills.
-      // Not awaited and never throws — the render path reloads on its own, so
-      // this must not delay idleOff() or trip the catch into holding the pause.
-      void warmHeavy();
       queue.log(
         'scheduler',
         count !== null && count > 0

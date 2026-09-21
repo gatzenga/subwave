@@ -17,7 +17,6 @@ process.env.STATE_DIR = root;
 const settings = await import('../src/settings.js');
 const { banterSystem } = await import('../src/llm/internal/prompts/banter.js');
 const { exchangeSystem } = await import('../src/llm/internal/prompts/programme.js');
-const { requestMatcherSystem } = await import('../src/llm/internal/prompts/request.js');
 
 try {
   await settings.load();
@@ -99,12 +98,6 @@ try {
     /canonical Latin spelling/i,
     'programme exchanges carry the policy',
   );
-  assert.match(
-    requestMatcherSystem(noLangPersona),
-    /canonical Latin spelling/i,
-    'the legacy request fallback acknowledgement carries the policy',
-  );
-
   // A custom template with {language} owns its anchor but must still inherit
   // the global spoken-name policy (#1179).
   await settings.update({

@@ -1,6 +1,6 @@
 'use client';
 
-// The "list" half of the cards/list toggle on /admin/skills, /admin/shows and
+// The "list" half of the cards/list toggle on /admin/skills and
 // /admin/personas. Hand-rolled in the house table style (StatsPanel, DashPanel)
 // rather than pulling in a table dependency. The whole row is the edit target,
 // and any control inside it still acts in place.

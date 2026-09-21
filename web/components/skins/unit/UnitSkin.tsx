@@ -39,9 +39,9 @@ import {
 } from '../shared';
 import { useAnalyser } from '@/lib/hooks';
 import { useLiteMode } from '@/hooks/useLiteMode';
-import { useRequestSlip, useTrackLike, useVolumeNudge } from '../sharedHooks';
+import { useTrackLike, useVolumeNudge } from '../sharedHooks';
 import type { SkinProps } from '../types';
-import { BoothWindow, RequestWindow, TimelineWindow, type UnitModal } from './UnitWindows';
+import { BoothWindow, TimelineWindow, type UnitModal } from './UnitWindows';
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
@@ -354,7 +354,7 @@ export default function UnitSkin(_props: SkinProps) {
   } = usePlayerFeed();
   const { audioRef, tunedIn, status, volume, muted, offline, signal } = usePlayerAudio();
   const { toggleMute, setVolume } = usePlayerActions();
-  const { showOverlay, showTuneIn, tuneInFromOverlay, handleTune } = useTuneInGate();
+  const { showOverlay, tuneInFromOverlay, handleTune } = useTuneInGate();
   const client = useStationClient();
 
   const elapsed = useElapsed(trackStartedAt);
@@ -405,16 +405,6 @@ export default function UnitSkin(_props: SkinProps) {
 
   const like = useTrackLike();
   const adjustVolume = useVolumeNudge();
-  const slip = useRequestSlip({
-    sent: 'Receipt logged — the booth has your request.',
-    refused: 'The booth waved this one off.',
-    failed: 'The booth line is down — try again in a moment.',
-  });
-  const reqInputRef = useRef<HTMLInputElement | null>(null);
-  const openRequest = () => {
-    setModal('req');
-    requestAnimationFrame(() => reqInputRef.current?.focus());
-  };
 
   useKeyboardShortcuts({
     space: handleTune,
@@ -424,7 +414,6 @@ export default function UnitSkin(_props: SkinProps) {
     m: toggleMute,
     t: () => toggleModal('timeline'),
     b: () => toggleModal('booth'),
-    r: () => { if (!showTuneIn) openRequest(); },
     escape: () => setModal(null),
   });
 
@@ -528,9 +517,6 @@ export default function UnitSkin(_props: SkinProps) {
     <>
       {modal === 'timeline' && <TimelineWindow onClose={() => setModal(null)} />}
       {modal === 'booth' && <BoothWindow onClose={() => setModal(null)} />}
-      {modal === 'req' && (
-        <RequestWindow onClose={() => setModal(null)} slip={slip} inputRef={reqInputRef} />
-      )}
     </>
   );
 
@@ -610,13 +596,6 @@ export default function UnitSkin(_props: SkinProps) {
                 onClick: toggleMute,
                 down: muted,
                 aria: muted ? 'Unmute' : 'Mute',
-                extra: 'h-[clamp(116px,17.5vh,160px)]',
-              })}
-              {hardKey('req', {
-                onClick: () => (modal === 'req' ? setModal(null) : openRequest()),
-                down: modal === 'req',
-                led: true,
-                aria: 'Open the request window',
                 extra: 'h-[clamp(116px,17.5vh,160px)]',
               })}
             </div>
@@ -886,15 +865,6 @@ export default function UnitSkin(_props: SkinProps) {
             onClick: toggleMute,
             down: muted,
             aria: muted ? 'Unmute' : 'Mute',
-            text: 'text-[12px] tracking-[0.14em]',
-            extra: 'h-[62px]',
-          })}
-          {hardKey('req', {
-            onClick: () => (modal === 'req' ? setModal(null) : openRequest()),
-            down: modal === 'req',
-            led: true,
-            ledSm: true,
-            aria: 'Open the request window',
             text: 'text-[12px] tracking-[0.14em]',
             extra: 'h-[62px]',
           })}

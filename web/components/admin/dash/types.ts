@@ -130,29 +130,6 @@ export function trustedProxyHint(s: TrustedProxyState | undefined): string | nul
   return dropped.trim() || null;
 }
 
-// Mirrors the durable record the controller's request-log writes (GET /requests).
-export interface RequestEntry {
-  t?: string;
-  requester?: string;
-  text?: string;
-  status?: string;
-  ms?: number | null;
-  path?: string | null;
-  pickSource?: string | null;
-  intent?: string | null;
-  mood?: string | null;
-  scope?: string | null;
-  sort?: string | null;
-  artist?: string | null;
-  genre?: string | null;
-  language?: string | null;
-  searchTerms?: string[] | null;
-  track?: { title?: string; artist?: string; id?: string } | null;
-  ack?: string | null;
-  introScript?: string | null;
-  message?: string | null;
-}
-
 // Likes left the dash in #1253 — they live on the Library page's Liked mode now.
 // GET /likes still serves the totals + top + recent shape for API callers.
 

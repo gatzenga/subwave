@@ -16,11 +16,6 @@ const docker = join(here, '..', '..', 'docker');
 
 const RENDERERS = [
   {
-    name: 'broadcast entrypoint',
-    path: join(docker, 'broadcast-entrypoint.sh'),
-    lib: 'SUBWAVE_BROADCAST_LIB',
-  },
-  {
     name: 'AIO supervisor',
     path: join(docker, 'aio', 'supervisor.sh'),
     lib: 'SUBWAVE_SUPERVISOR_LIB',

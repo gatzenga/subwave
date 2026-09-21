@@ -20,7 +20,7 @@
 //   2. The two SUPERVISORS resolve the value identically, and env WINS. The
 //      env var shipped first and is wired into all three compose files, so
 //      demoting it would silently re-ceiling a configured station on upgrade.
-//      docker/broadcast-entrypoint.sh and docker/aio/supervisor.sh carry the
+//      docker/aio/supervisor.sh carries the
 //      same resolve_max_clients(); a drift between them is exactly the class
 //      the root CLAUDE.md's "keep the entrypoint and the AIO supervisor in
 //      lockstep" rule exists for, so both are driven from ONE table below.
@@ -129,7 +129,6 @@ test('changing the ceiling asks for a mixer restart', async () => {
 // ---------------------------------------------------------------------------
 
 const SUPERVISORS = [
-  { name: 'broadcast-entrypoint.sh', path: join(docker, 'broadcast-entrypoint.sh'), lib: 'SUBWAVE_BROADCAST_LIB' },
   { name: 'aio/supervisor.sh', path: join(docker, 'aio', 'supervisor.sh'), lib: 'SUBWAVE_SUPERVISOR_LIB' },
 ] as const;
 

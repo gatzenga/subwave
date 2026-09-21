@@ -1,5 +1,0 @@
-FROM caddy:2-alpine
-
-# Baked in so prod compose needs no bind mount or clone. To customise, rebuild
-# from a fork or mount your own file over /etc/caddy/Caddyfile.
-COPY docker/Caddyfile /etc/caddy/Caddyfile

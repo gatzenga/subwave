@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Masthead from '@/components/landing/Masthead';
-import StationFooter from '@/components/landing/StationFooter';
 
 // Site-wide error boundary, below the root layout; a throw in the root layout
 // itself falls through to global-error.tsx. Most failures here are data
@@ -41,7 +39,6 @@ export default function Error({
 
   return (
     <div className="min-h-screen bg-bg text-ink">
-      <Masthead />
       <main className="bs-paper">
         <article>
           <header className="bs-news-hero">
@@ -84,7 +81,6 @@ export default function Error({
             </p>
           )}
         </article>
-        <StationFooter />
       </main>
     </div>
   );

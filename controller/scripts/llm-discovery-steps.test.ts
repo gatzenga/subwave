@@ -123,10 +123,9 @@ test('the per-provider budget reaches only the agents that opted in', async () =
   assert.equal(runDiscoverySteps(llm, true), 5, 'opted-in agents follow descriptor + override');
   assert.equal(runDiscoverySteps(llm, false), 1, 'everyone else keeps the single historical step');
 
-  const { pickerAgent, requestAgent } = await import('../src/broadcast/dj-agent/agents.js');
+  const { pickerAgent } = await import('../src/broadcast/dj-agent/agents.js');
   const { directorAgent } = await import('../src/skills/_agent.js');
   assert.equal(pickerAgent.providerDiscoveryBudget, true, 'picker opts in');
-  assert.equal(requestAgent.providerDiscoveryBudget, true, 'request matcher opts in');
   assert.equal(directorAgent.providerDiscoveryBudget, false, 'the director must NOT opt in');
 });
 

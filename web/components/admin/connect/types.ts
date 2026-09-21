@@ -29,21 +29,13 @@ export interface EndpointGroup {
   endpoints: EndpointDoc[];
 }
 
-export interface McpToolDoc {
-  name: string;
-  title: string;
-  description: string;
-  endpoint: string;
-  auth: 'none' | 'admin' | 'station';
-  mutatesAir?: boolean;
-}
-
 export interface StreamMountDoc {
   mount: string;
   format: string;
   codec: string;
   description: string;
-  settingFlag: 'opusEnabled' | 'flacEnabled' | 'aacEnabled' | null;
+  settingFlag: 'opusEnabled' | 'flacEnabled' | 'aacEnabled' | 'hlsEnabled' | null;
+  kind?: 'icecast' | 'hls';
   alwaysOn: boolean;
   enabled: boolean;
 }
@@ -54,8 +46,6 @@ export interface Catalog {
   origin: string;
   version: string;
   groups: EndpointGroup[];
-  mcpTools: McpToolDoc[];
-  mcpHttpPath: string;
   streamMounts: StreamMountDoc[];
   openapiPath: string;
 }

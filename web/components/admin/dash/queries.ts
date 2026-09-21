@@ -9,7 +9,6 @@ import {
   type DashStatus,
   type HealthStats,
   type QueueState,
-  type RequestEntry,
 } from './types';
 import { scheduleKeys, type ScheduleLiveData } from '../schedule/queries';
 
@@ -18,7 +17,6 @@ export const dashKeys = {
   status: () => ['dash', 'status'] as const,
   connections: () => ['dash', 'connections'] as const,
   stats: () => ['dash', 'stats'] as const,
-  requests: () => ['dash', 'requests'] as const,
   suggestions: () => ['dash', 'suggestions'] as const,
   takeover: () => ['dash', 'takeover'] as const,
   // Nested under takeover() on purpose: a pin write invalidates that prefix,
@@ -64,13 +62,6 @@ export async function fetchConnections(fetcher: AdminFetch, signal: AbortSignal)
 
 export function fetchHealthStats(fetcher: AdminFetch, signal: AbortSignal): Promise<HealthStats> {
   return adminJson(fetcher, '/stats', undefined, signal);
-}
-
-export async function fetchRequests(fetcher: AdminFetch, signal: AbortSignal): Promise<RequestEntry[]> {
-  const body = await adminJson<{ requests?: RequestEntry[] }>(
-    fetcher, '/requests', undefined, signal,
-  );
-  return body?.requests ?? [];
 }
 
 export async function fetchSuggestions(fetcher: AdminFetch, signal: AbortSignal): Promise<string[] | null> {

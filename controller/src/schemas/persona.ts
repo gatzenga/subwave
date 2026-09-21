@@ -78,10 +78,6 @@ export function clampPersonaDial(v: unknown): number {
 export const TTS_ENGINES = [
   'piper',
   'kokoro',
-  'chatterbox',
-  'pocket-tts',
-  'cloud',
-  'remote',
 ] as const;
 
 /**

@@ -1,7 +1,7 @@
 'use client';
 
 // Scene vocabulary (#1577) -- the genre tag set as one curatable list, inside
-// the Tagging panel. "Scene" is the Observatory's name for a genre tag; the
+// the Tagging panel. "Scene" is the library's name for a genre tag; the
 // storage is `tracks.genres`. Self-contained (own fetching + merge, modelled on
 // BlockRulesCard). Fetched on EXPAND rather than polled.
 

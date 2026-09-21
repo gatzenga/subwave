@@ -1,13 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import PlayerApp from '@/components/PlayerApp';
 import PlayerPageEffects from '@/components/player/PlayerPageEffects';
-import Landing from '@/components/Landing';
 import { absoluteUrl } from '@/lib/seo';
 import { fetchStationMeta } from '@/lib/station';
-import { getShowcaseStations } from '@/lib/stations';
 
-// Read at request time so a deployment can flip player ↔ landing by just
-// restarting the web container with a different env value, no rebuild.
+// Read at request time so station name/description changes reach the share
+// card without a rebuild.
 export const dynamic = 'force-dynamic';
 
 // Per-request metadata for the root. The baseline pins canonical + og:url to
@@ -23,9 +21,6 @@ export async function generateMetadata(): Promise<Metadata> {
     alternates: { canonical: absoluteUrl('/') },
     openGraph: { url: absoluteUrl('/') },
   };
-
-  const mode = (process.env.SUBWAVE_HOMEPAGE || 'player').toLowerCase();
-  if (mode !== 'player') return base;
 
   // allowPersonaTagline: issue #272 shipped tagline-personalised previews, so
   // keep them for installs with no station description. Setting one (admin →
@@ -59,11 +54,7 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-export default async function HomePage() {
-  const mode = (process.env.SUBWAVE_HOMEPAGE || 'player').toLowerCase();
-  if (mode === 'landing') {
-    return <Landing stations={await getShowcaseStations()} />;
-  }
+export default function HomePage() {
   return (
     <>
       <PlayerPageEffects />

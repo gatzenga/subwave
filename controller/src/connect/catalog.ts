@@ -4,10 +4,8 @@
 // API: the ~50 endpoints a listener, hardware player, agent, or home-automation
 // hub would actually call — not every internal onboarding/backup/doctor route.
 //
-// Three exports:
+// Two exports:
 //   ENDPOINTS      — the documented HTTP endpoints, grouped for display.
-//   MCP_TOOLS      — the tools the subwave-mcp server exposes (mirrors
-//                    mcp-subwave/src/index.ts + docs/mcp-server.md).
 //   STREAM_MOUNTS  — the Icecast stream mounts, keyed to their settings flag.
 //
 // Paths are written WITHOUT the `/api` prefix, matching how the web layer's
@@ -59,23 +57,15 @@ export interface EndpointGroup {
   endpoints: EndpointDoc[];
 }
 
-export interface McpToolDoc {
-  name: string;
-  title: string;
-  description: string;
-  // The controller endpoint(s) it wraps, for the "what does this call" column.
-  endpoint: string;
-  auth: 'none' | 'admin' | 'station';
-  mutatesAir?: boolean;
-}
-
 export interface StreamMountDoc {
   mount: string;
   format: string;
   codec: string;
   description: string;
   // Which settings.stream flag gates it. `null` for the always-served floor.
-  settingFlag: 'opusEnabled' | 'flacEnabled' | 'aacEnabled' | null;
+  settingFlag: 'opusEnabled' | 'flacEnabled' | 'aacEnabled' | 'hlsEnabled' | null;
+  /** 'hls' groups the adaptive playlist apart from the icecast sockets. */
+  kind?: 'icecast' | 'hls';
   alwaysOn: boolean;
 }
 
@@ -315,55 +305,12 @@ export const ENDPOINT_GROUPS: EndpointGroup[] = [
     ],
   },
   {
-    id: 'requests',
-    label: 'Listener Requests',
-    blurb:
-      'The public request path — the same endpoint the listener request drawer ' +
-      'hits. Submit a free-text request; the booth interprets it, picks a track, ' +
-      'and you poll for the outcome. Rate-limited per IP.',
-    endpoints: [
-      {
-        method: 'POST',
-        path: '/request',
-        summary: 'Submit a song request',
-        description:
-          'Submit a free-text request ("something slower", "play some Bowie"). ' +
-          'Returns a 202 receipt with a requestId immediately; the booth resolves ' +
-          'it asynchronously. Poll GET /request/:id for the result. Rate-limited ' +
-          'and paused when nobody is listening.',
-        auth: 'none',
-        mutatesAir: true,
-        bodyExample: { text: 'something slower than this', name: 'alex' },
-        responseExample: { success: true, requestId: '4f3c…', status: 'pending' },
-      },
-      {
-        method: 'GET',
-        path: '/request/:id',
-        summary: 'Poll a request outcome',
-        description:
-          'Poll the outcome of a submitted request. Status walks pending → ' +
-          'resolved | rejected | failed. When resolved, carries the matched track ' +
-          'and its queue position. 404 (status "unknown") means stop polling.',
-        auth: 'none',
-        pathParams: [{ name: 'id', required: true, description: 'requestId from POST /request', example: '4f3c…' }],
-        responseExample: {
-          status: 'resolved',
-          success: true,
-          ack: 'Cooling it down — here\'s Jon Hopkins.',
-          track: { title: 'Open Eye Signal', artist: 'Jon Hopkins' },
-          queuePosition: 1,
-          message: null,
-        },
-      },
-    ],
-  },
-  {
     id: 'dj-control',
     label: 'DJ Control',
     blurb:
       'Admin-gated operator actions that drive the live broadcast: make the DJ ' +
       'speak, fire a segment or skill, queue an exact track, skip, or rebuild the ' +
-      'fallback playlist. These are the surface the MCP server wraps.',
+      'fallback playlist.',
     endpoints: [
       {
         method: 'POST',
@@ -647,40 +594,24 @@ export const ENDPOINT_GROUPS: EndpointGroup[] = [
 export const ENDPOINTS: EndpointDoc[] = ENDPOINT_GROUPS.flatMap(g => g.endpoints);
 
 // ---------------------------------------------------------------------------
-// MCP tools — mirrors mcp-subwave/src/index.ts. Kept here so the Connect page's
-// MCP tab renders from the same source as the endpoint docs.
-// ---------------------------------------------------------------------------
-
-export const MCP_TOOLS: McpToolDoc[] = [
-  { name: 'subwave_health', title: 'Liveness', description: 'Is the station up?', endpoint: 'GET /health', auth: 'none' },
-  { name: 'subwave_now_playing', title: 'Now playing', description: 'Current track, station context, listener count.', endpoint: 'GET /now-playing', auth: 'none' },
-  { name: 'subwave_station_state', title: 'Queue & history', description: 'Upcoming queue, recent history, DJ booth log.', endpoint: 'GET /state', auth: 'none' },
-  { name: 'subwave_schedule', title: 'Schedule', description: 'Personas, shows, and the weekly grid.', endpoint: 'GET /schedule', auth: 'none' },
-  { name: 'subwave_session', title: 'DJ session', description: 'Live session identity and recent transcript turns.', endpoint: 'GET /session', auth: 'none' },
-  { name: 'subwave_request_song', title: 'Request a song', description: 'Submit a free-text request and poll for the outcome.', endpoint: 'POST /request + GET /request/:id', auth: 'none', mutatesAir: true },
-  { name: 'subwave_request_status', title: 'Check a request', description: 'Poll a submitted request by id.', endpoint: 'GET /request/:id', auth: 'none' },
-  { name: 'subwave_search_library', title: 'Search library', description: 'Search the music library for queue-ready tracks.', endpoint: 'GET /dj/search', auth: 'admin' },
-  { name: 'subwave_similar_tracks', title: 'Tracks that sound like this', description: 'CLAP sound-alike neighbours for a seed track.', endpoint: 'GET /similar-tracks', auth: 'station' },
-  { name: 'subwave_queue_track', title: 'Queue an exact track', description: 'Push a specific track to the queue.', endpoint: 'POST /dj/queue-track', auth: 'admin', mutatesAir: true },
-  { name: 'subwave_queue_block', title: 'Queue an album or artist block', description: 'Queue a whole album, or a run of tracks by one artist, in one action.', endpoint: 'POST /dj/queue-block', auth: 'admin', mutatesAir: true },
-  { name: 'subwave_skip_track', title: 'Skip the track', description: 'Force-end the current track.', endpoint: 'POST /dj/skip', auth: 'admin', mutatesAir: true },
-  { name: 'subwave_dj_announce', title: 'DJ announce', description: 'Make the DJ speak text on air.', endpoint: 'POST /dj/say', auth: 'admin', mutatesAir: true },
-  { name: 'subwave_dj_segment', title: 'DJ segment', description: 'Fire a canned voice segment.', endpoint: 'POST /dj/segment', auth: 'admin', mutatesAir: true },
-  { name: 'subwave_list_skills', title: 'List skills', description: 'The DJ\'s skill-segment catalogue.', endpoint: 'GET /dj/skills', auth: 'admin' },
-  { name: 'subwave_run_skill', title: 'Run a skill', description: 'Run a named skill segment on air.', endpoint: 'POST /dj/skill', auth: 'admin', mutatesAir: true },
-  { name: 'subwave_list_sfx', title: 'List sound effects', description: 'The sound-effect stinger library.', endpoint: 'GET /sfx', auth: 'admin' },
-  { name: 'subwave_play_sfx', title: 'Play a sound effect', description: 'Play a stinger on air now.', endpoint: 'POST /sfx/:name/play', auth: 'admin', mutatesAir: true },
-  { name: 'subwave_list_jingles', title: 'List jingles', description: 'The jingle library — idents and announcements, no length cap.', endpoint: 'GET /jingles', auth: 'admin' },
-  { name: 'subwave_play_jingle', title: 'Air a jingle', description: 'Queue a jingle to air at the next safe boundary, at full level.', endpoint: 'POST /jingles/:filename/play', auth: 'admin', mutatesAir: true },
-  { name: 'subwave_refresh_playlist', title: 'Refresh playlist', description: 'Rebuild the fallback auto-playlist.', endpoint: 'POST /dj/refresh-playlist', auth: 'admin' },
-];
-
-// ---------------------------------------------------------------------------
 // Stream mounts — static descriptors. Live enabled state is resolved from
 // settings in routes/connect.ts (the flags here name which setting gates each).
 // ---------------------------------------------------------------------------
 
 export const STREAM_MOUNTS: StreamMountDoc[] = [
+  {
+    mount: '/hls/live.m3u8',
+    format: 'HLS',
+    codec: 'aac',
+    description:
+      'The default listener stream. A master playlist over four AAC rungs — ' +
+      '320, 256, 192 and 128 kbps — that the player steps between on its own as ' +
+      'the connection changes. Plays natively in Safari and iOS; other browsers ' +
+      'need hls.js.',
+    settingFlag: 'hlsEnabled',
+    kind: 'hls',
+    alwaysOn: false,
+  },
   {
     mount: '/stream.mp3',
     format: 'MP3',
@@ -689,6 +620,7 @@ export const STREAM_MOUNTS: StreamMountDoc[] = [
       'The universal floor — always served. Every player can decode it: Sonos, ' +
       'hardware radios, car receivers, browsers. Point any client here first.',
     settingFlag: null,
+    kind: 'icecast',
     alwaysOn: true,
   },
   {
@@ -699,6 +631,7 @@ export const STREAM_MOUNTS: StreamMountDoc[] = [
       'Low-bitrate, high-quality Opus at 48kHz. Enable in Settings → Danger zone. ' +
       'Chromium-based browsers upgrade to it automatically; iOS/Firefox stay on MP3.',
     settingFlag: 'opusEnabled',
+    kind: 'icecast',
     alwaysOn: false,
   },
   {
@@ -709,6 +642,7 @@ export const STREAM_MOUNTS: StreamMountDoc[] = [
       'Lossless capture of the processed bus at 44.1kHz. Enable in Settings → ' +
       'Danger zone. For external players — the web/native players do not auto-select it.',
     settingFlag: 'flacEnabled',
+    kind: 'icecast',
     alwaysOn: false,
   },
   {
@@ -719,6 +653,7 @@ export const STREAM_MOUNTS: StreamMountDoc[] = [
       'AAC-LC at 44.1kHz, served as audio/aac. Enable in Settings → Danger zone. For ' +
       'external players that prefer AAC.',
     settingFlag: 'aacEnabled',
+    kind: 'icecast',
     alwaysOn: false,
   },
 ];

@@ -11,10 +11,7 @@ import * as sfx from './broadcast/sfx.js';
 import * as beds from './broadcast/beds.js';
 import { queue } from './broadcast/queue.js';
 import * as session from './broadcast/session.js';
-import * as remoteTts from './audio/remoteTts.js';
 import * as kokoro from './audio/kokoro.js';
-import * as chatterbox from './audio/chatterbox.js';
-import * as pocketTts from './audio/pocketTts.js';
 import { getFullContext } from './context.js';
 import { loadCuriosityLedger } from './skills/curiosity.js';
 import { startScheduler } from './broadcast/scheduler.js';
@@ -26,7 +23,6 @@ import { cors } from './middleware/cors.js';
 import { createStartupGate } from './middleware/startup.js';
 import { assertAdminConfigured } from './middleware/auth.js';
 import { router as publicRoutes } from './routes/public.js';
-import { router as requestRoutes } from './routes/request.js';
 import { router as settingsRoutes } from './routes/settings.js';
 import { router as jingleRoutes } from './routes/jingles.js';
 import { router as sfxRoutes } from './routes/sfx.js';
@@ -40,7 +36,6 @@ import { router as playlistsRoutes } from './routes/playlists.js';
 import { router as onboardingRoutes } from './routes/onboarding.js';
 import { router as archivesRoutes } from './routes/archives.js';
 import { router as listenersRoutes } from './routes/listeners.js';
-import { router as webhooksRoutes } from './routes/webhooks.js';
 import { router as scrobbleRoutes } from './routes/scrobble.js';
 import { router as likesRoutes } from './routes/likes.js';
 import { router as personasRoutes } from './routes/personas.js';
@@ -53,7 +48,6 @@ import { router as systemRoutes } from './routes/system.js';
 import { router as generateRoutes } from './routes/generate.js';
 import { router as doctorRoutes } from './routes/doctor.js';
 import { router as connectRoutes } from './routes/connect.js';
-import { router as mcpRoutes } from './routes/mcp.js';
 import { loadSecretsIntoEnv } from './setup/secrets.js';
 import { loadSetupConfig } from './setup/config.js';
 import { getSetupStatus } from './setup/firstRun.js';
@@ -79,7 +73,7 @@ function shutdown(signal: string): void {
   console.log(`[shutdown] ${signal} — reaping TTS workers + closing library DB`);
   // Reap resident Python TTS workers so they don't outlive a bare-process
   // shutdown. Each guarded so a dead worker never blocks the rest of shutdown.
-  for (const stopWorker of [kokoro.stop, chatterbox.stop, pocketTts.stop]) {
+  for (const stopWorker of [kokoro.stop]) {
     try {
       stopWorker();
     } catch (err) {
@@ -128,7 +122,6 @@ app.use(startup.middleware);
 
 // Routes. `requireAdmin` is applied per-route inside the admin modules.
 app.use(publicRoutes);
-app.use(requestRoutes);
 app.use(settingsRoutes);
 app.use(jingleRoutes);
 app.use(sfxRoutes);
@@ -142,7 +135,6 @@ app.use(playlistsRoutes);
 app.use(onboardingRoutes);
 app.use(archivesRoutes);
 app.use(listenersRoutes);
-app.use(webhooksRoutes);
 app.use(scrobbleRoutes);
 app.use(likesRoutes);
 app.use(personasRoutes);
@@ -155,7 +147,6 @@ app.use(systemRoutes);
 app.use(generateRoutes);
 app.use(doctorRoutes);
 app.use(connectRoutes);
-app.use(mcpRoutes);
 
 // There is no manual skip — Liquidsoap controls pacing.
 
@@ -230,7 +221,6 @@ app.listen(config.server.port, async () => {
   // URL lives in settings (not env), so it can't self-start at import time the
   // way the env-configured tts-heavy probe does. Best-effort; never fatal.
   try {
-    remoteTts.start();
   } catch (err: any) {
     console.error('[remote] tts probe start failed:', err.message);
   }
@@ -320,15 +310,6 @@ app.listen(config.server.port, async () => {
     .catch(err => console.error('[jingles] ident generation failed:', err.message));
   sfx.ensureDefaults().catch(err => console.error('[sfx] default generation failed:', err.message));
   beds.ensureDefaults().catch(err => console.error('[beds] default install failed:', err.message));
-
-  // Re-project the Observatory sound map when stale. Spawns a child; never
-  // blocks this loop.
-  try {
-    const { maybeProjectOnBoot } = await import('./music/map-projection.js');
-    maybeProjectOnBoot();
-  } catch (err: any) {
-    console.error('[map-projection] boot hook failed:', err.message);
-  }
   startup.markReady();
   console.log('[startup] Controller ready');
 });

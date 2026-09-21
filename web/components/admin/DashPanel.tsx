@@ -45,7 +45,6 @@ import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 import { RefreshCw, X } from 'lucide-react';
 import StationHeader, { type HealthMetrics } from './StationHeader';
 import { cn } from '../../lib/cn';
-import { RequestsCard } from './dash/RequestsCard';
 import { TakeoverCard } from './dash/TakeoverCard';
 import QueueHeldBadge from './dash/QueueHeldBadge';
 import { BoothTurnText, SegmentButton, SortableTh, ToggleRow, classTone } from './dash/bits';
@@ -55,7 +54,6 @@ import type {
   DashStatus,
   HealthStats,
   QueueState,
-  RequestEntry,
   SortState,
 } from './dash/types';
 import {
@@ -73,7 +71,6 @@ import {
   fetchConnections,
   fetchDashStatus,
   fetchHealthStats,
-  fetchRequests,
   fetchSuggestions,
   runDashAction,
 } from './dash/queries';
@@ -121,12 +118,6 @@ export default function DashPanel() {
     refetchInterval: () => 15_000,
     request: fetchHealthStats,
   });
-  // A review surface, not a live ticker.
-  const requestsQuery = useAdminQuery<RequestEntry[]>({
-    key: dashKeys.requests(), adminFetch, enabled: ready, staleTime: 0,
-    refetchInterval: () => 10_000,
-    request: fetchRequests,
-  });
   const suggestionsQuery = useAdminQuery<string[] | null>({
     key: dashKeys.suggestions(), adminFetch, enabled: ready,
     request: fetchSuggestions,
@@ -138,8 +129,6 @@ export default function DashPanel() {
   const proxyHint = trustedProxyHint(conns?.trustedProxies);
   const connErr = connectionsQuery.error ? errorMessage(connectionsQuery.error) : null;
   const stats = statsQuery.data ?? null;
-  const requests = requestsQuery.data ?? null;
-  const reqErr = requestsQuery.error ? errorMessage(requestsQuery.error) : null;
   const saySuggestions = suggestionsQuery.data ?? SAY_SUGGESTIONS;
 
   const refreshSuggestionsMutation = useAdminMutation<{ suggestions?: string[] }, void>({
@@ -236,7 +225,6 @@ export default function DashPanel() {
     onDone: async (_data, _id, client) => {
       await Promise.all([
         client.invalidateQueries({ queryKey: dashKeys.status() }),
-        client.invalidateQueries({ queryKey: dashKeys.requests() }),
       ]);
     },
   });
@@ -263,7 +251,6 @@ export default function DashPanel() {
     onDone: async (_data, _id, client) => {
       await Promise.all([
         client.invalidateQueries({ queryKey: dashKeys.status() }),
-        client.invalidateQueries({ queryKey: dashKeys.requests() }),
       ]);
     },
   });
@@ -309,7 +296,6 @@ export default function DashPanel() {
       // old full envelope over a newer poll; ask both owners for truth.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: dashKeys.status() }),
-        queryClient.invalidateQueries({ queryKey: dashKeys.requests() }),
       ]);
       notify.err(`cancel: ${errorMessage(e)}`);
     } finally {
@@ -825,8 +811,6 @@ export default function DashPanel() {
           </ScrollArea>
         )}
       </Card>
-
-      <RequestsCard requests={requests} err={reqErr} tz={tz} locale={locale} />
 
       {!status && !err && <div className="text-muted italic">connecting…</div>}
 

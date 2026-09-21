@@ -24,8 +24,6 @@ import { usePlayer, type PlayerStatus } from '@/hooks/usePlayer';
 import { useSignal, type Signal } from '@/hooks/useSignal';
 import { useMediaSession } from '@/hooks/useMediaSession';
 import { useStationClient, type LikeResult, type LikeStatus } from '@/lib/stationClient';
-import { listenerRequestSchema } from '@/lib/schemas.generated';
-import type { RequestResult } from '@/lib/types';
 
 export interface PlayerAudio {
   audioRef: RefObject<HTMLAudioElement | null>;
@@ -49,11 +47,6 @@ export interface PlayerActions {
   stop: () => void;
   toggleMute: () => void;
   setVolume: Dispatch<SetStateAction<number>>;
-  /** Submit a listener request. Rejects on network error. */
-  submitRequest: (text: string, name: string) => Promise<RequestResult>;
-  /** Poll a submitted request's outcome (null on network error, so drawers
-   *  keep trying). */
-  pollRequest: (requestId: string) => Promise<RequestResult | null>;
   /** Like the currently playing track (#991). null on network error; error
    *  statuses come back as a LikeResult with `error`. */
   likeCurrent: (songId: string) => Promise<LikeResult | null>;
@@ -121,21 +114,6 @@ export function PlayerCoreProvider({ children }: { children: ReactNode }) {
       stop: () => stopRef.current(),
       toggleMute: () => muteRef.current(),
       setVolume,
-      // Pre-flight against the shared request schema, the same rule the
-      // controller's validateBody enforces, run once here for every skin. A
-      // refusal comes back as an ordinary failed RequestResult and never touches
-      // the network.
-      submitRequest: (text, name) => {
-        const parsed = listenerRequestSchema.safeParse({ text, name });
-        if (!parsed.success) {
-          return Promise.resolve({
-            success: false,
-            message: parsed.error.issues[0]?.message,
-          });
-        }
-        return client.submitRequest(parsed.data.text, parsed.data.name);
-      },
-      pollRequest: requestId => client.requestStatus(requestId),
       likeCurrent: songId => client.likeCurrent(songId),
       likeStatus: () => client.likeStatus(),
     }),

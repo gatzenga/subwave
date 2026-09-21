@@ -18,7 +18,6 @@ import { useDynamicStyle } from '@/hooks/useDynamicStyle';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/cn';
-import { REQUEST_NAME_MAX } from '@/lib/schemas.generated';
 import { fmtTime, normalizeStationLocale } from '@/lib/format';
 import { useStationClient } from '@/lib/stationClient';
 import {
@@ -31,7 +30,7 @@ import {
   trackMeta,
   turnClock,
 } from '../shared';
-import { useRequestSlip, useSkinMotion, useTrackLike, useVolumeNudge } from '../sharedHooks';
+import { useSkinMotion, useTrackLike, useVolumeNudge } from '../sharedHooks';
 import type { SkinProps } from '../types';
 
 /* Shares the tonearm's easing curve (Platter.module.css) so the deck reads as
@@ -159,7 +158,7 @@ export default function PlatterSkin(_props: SkinProps) {
   } = usePlayerFeed();
   const { tunedIn, status, volume, muted, offline, signal } = usePlayerAudio();
   const { toggleMute, setVolume } = usePlayerActions();
-  const { showTuneIn, showOverlay, tuneInFromOverlay, handleTune } = useTuneInGate();
+  const { showOverlay, tuneInFromOverlay, handleTune } = useTuneInGate();
 
   const elapsed = useElapsed(trackStartedAt);
   const listenerCount = listenerCountOf(listeners);
@@ -208,12 +207,6 @@ export default function PlatterSkin(_props: SkinProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   useDynamicStyle(rootRef, { '--pf': ratio ?? 0, '--vf': volume });
 
-  const slip = useRequestSlip({
-    sent: 'Slip on the platter — the booth has your note.',
-    refused: 'The booth waved this one off.',
-    failed: 'The booth line is down — try again in a moment.',
-  });
-  const reqInputRef = useRef<HTMLInputElement | null>(null);
 
   useKeyboardShortcuts({
     space: handleTune,
@@ -221,7 +214,6 @@ export default function PlatterSkin(_props: SkinProps) {
     arrowup: () => adjustVolume(0.05),
     arrowdown: () => adjustVolume(-0.05),
     m: toggleMute,
-    r: () => { if (!showTuneIn) reqInputRef.current?.focus(); },
   });
 
   return (
@@ -468,62 +460,6 @@ export default function PlatterSkin(_props: SkinProps) {
               )}
             </ScrollArea>
           </div>
-
-          <form
-            className="border border-ink bg-surface px-4 py-3"
-            onSubmit={e => { e.preventDefault(); void slip.send(); }}
-          >
-            {slip.ack ? (
-              <div className="flex flex-col gap-2">
-                <div className="text-[13px] leading-relaxed italic">{slip.ack}</div>
-                <button
-                  type="button"
-                  onClick={slip.reset}
-                  className="v3-focus cursor-pointer self-start border-0 bg-transparent p-0 font-mono text-[10px] font-bold tracking-[0.14em] text-muted uppercase hover:text-ink"
-                >
-                  new slip
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-baseline gap-3">
-                  <span className="w-[76px] flex-none font-mono text-[10px] font-bold tracking-[0.16em] text-muted uppercase">Dear DJ —</span>
-                  <input
-                    ref={reqInputRef}
-                    value={slip.text}
-                    onChange={e => slip.setText(e.target.value)}
-                    placeholder="a song, an artist, a feeling…"
-                    className="v3-focus min-w-0 flex-1 border-0 border-b border-soft-border bg-transparent pb-1 text-[13px] text-ink italic outline-none placeholder:text-muted"
-                  />
-                  <button
-                    type="submit"
-                    disabled={slip.sending || !slip.text.trim()}
-                    className={cn(
-                      'v3-focus flex-none border-0 bg-transparent p-0 font-mono text-[10px] font-bold tracking-[0.14em] uppercase',
-                      slip.sending || !slip.text.trim()
-                        ? 'cursor-default text-muted opacity-60'
-                        : 'cursor-pointer text-[var(--accent)] hover:opacity-80',
-                    )}
-                  >
-                    {slip.sending ? 'sending…' : 'send ↗'}
-                  </button>
-                </div>
-                {/* The slip already reads as a letter, so the name is its
-                    sign-off. Optional — but when it's filled the DJ says it on
-                    air (#1347). */}
-                <div className="flex items-baseline gap-3">
-                  <span className="w-[76px] flex-none font-mono text-[10px] font-bold tracking-[0.16em] text-muted uppercase">Yours —</span>
-                  <input
-                    value={slip.name}
-                    onChange={e => slip.setName(e.target.value)}
-                    placeholder="your name (optional)"
-                    maxLength={REQUEST_NAME_MAX}
-                    className="v3-focus min-w-0 flex-1 border-0 border-b border-soft-border bg-transparent pb-1 text-[12px] text-ink italic outline-none placeholder:text-muted/70"
-                  />
-                </div>
-              </div>
-            )}
-          </form>
         </div>
       </div>
 
