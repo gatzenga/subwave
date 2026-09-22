@@ -260,13 +260,6 @@ export function LibrarySection({ data, form, setForm, busy, saveSettings, adminF
       <SectionHeader
         eyebrow="library tagger"
         title="Embedding-propagated mood tagging."
-        sub={<>
-          The tagger embeds every track once (embedding provider below),
-          LLM-tags a small representative seed set using your DJ&rsquo;s LLM
-          (Settings → LLM), then KNN-propagates moods + energy to the rest.
-          Cuts LLM call count ~10× vs. brute-force per-track tagging. Tune
-          below; changes apply the next time the bulk tagger runs.
-        </>}
         metrics={[
           {
             n: String(data.libraryStats?.total ?? '—'),

@@ -110,12 +110,6 @@ export function NavidromeSection({ data, adminFetch, refresh }: NavidromeSection
       <SectionHeader
         eyebrow="music source"
         title="The Navidrome server the DJ pulls from."
-        sub={<>
-          Every track pick, cover, and library lookup goes through this
-          Subsonic connection. Changes apply immediately — no restart — and the
-          auto playlist is rebuilt against the new server. The same values are
-          managed by the onboarding wizard and <code>subwave setup</code>.
-        </>}
       />
 
       <Card title="Navidrome server" sub="url · credentials">

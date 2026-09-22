@@ -56,7 +56,6 @@ export function DjBehaviourSection({ form, setForm, busy, saveSettings, fieldErr
       <SectionHeader
         eyebrow="dj behaviour"
         title="Decide how the DJ occupies the station."
-        sub="These controls shape speech placement and show-boundary behaviour. Voice engines and voices stay under TTS voice."
       />
 
       <Card title="Talk placement" sub={form.djTalkOnlyBetweenTracks ? 'between tracks' : 'any time'}>

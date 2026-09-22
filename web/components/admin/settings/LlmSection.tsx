@@ -338,7 +338,6 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
       <SectionHeader
         eyebrow="llm provider"
         title="The model that writes scripts and picks tracks."
-        sub="Ollama runs on the homelab box and needs no key; the cloud providers are opt-in. Switching here reroutes every LLM call, no redeploy."
         metrics={[{ n: String((data.llm?.providers || []).length), l: 'providers' }]}
         manualHref="/manual/llm"
       />

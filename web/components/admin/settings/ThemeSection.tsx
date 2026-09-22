@@ -501,7 +501,6 @@ export function ThemeSection({ data, busy, saveSettings, adminFetch }: ThemeSect
       <SectionHeader
         eyebrow="skin & themes"
         title="The player’s layout and the station-wide palette."
-        sub={<>The <strong>skin</strong> is the full-screen layout every listener sees; the <strong>theme</strong> is the palette it (and the admin UI) render in. Built-in themes ship with the controller; drop custom JSONs in <code>state/themes/</code> and hit <em>Refresh</em>.</>}
         metrics={[
           { n: activeSkinName, l: 'skin', accent: true },
           { n: themes ? String(themes.length) : '—', l: 'themes' },

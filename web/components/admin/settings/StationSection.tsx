@@ -55,7 +55,6 @@ export function StationSection({ data, form, setForm, busy, saveSettings, fieldE
       <SectionHeader
         eyebrow="station"
         title="How the DJ identifies this radio on air."
-        sub="The station name is substituted into the DJ prompt as {station}. The location is the point the Open-Meteo forecast is read for, and stays private to this page. The on-air location is what the DJ actually says and what public listeners see; set it to a broader area if you'd rather not name your exact town. The timezone sets the clock the DJ lives on; locale controls how station times are displayed. All apply live, no mixer restart."
         metrics={[
           { n: data.values?.station || 'SUB/WAVE', l: 'station', accent: true },
         ]}

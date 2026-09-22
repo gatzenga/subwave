@@ -629,14 +629,13 @@ interface MetricSpec {
 interface SectionHeaderProps {
   eyebrow: ReactNode;
   title: ReactNode;
-  sub: ReactNode;
   metrics?: MetricSpec[];
   manualHref?: string;
   manualLabel?: ReactNode;
   actions?: ReactNode;
 }
 
-export function SectionHeader({ eyebrow, title, sub, metrics, manualHref, manualLabel, actions }: SectionHeaderProps) {
+export function SectionHeader({ eyebrow, title, metrics, manualHref, manualLabel, actions }: SectionHeaderProps) {
   const hasMetrics = !!(metrics && metrics.length > 0);
   const hasBar = hasMetrics || !!manualHref || !!actions;
   return (
@@ -645,9 +644,6 @@ export function SectionHeader({ eyebrow, title, sub, metrics, manualHref, manual
         <Eyebrow className="text-vermilion">{eyebrow}</Eyebrow>
         <div className="mt-1.5 text-[22px] font-extrabold tracking-[-0.02em]">
           {title}
-        </div>
-        <div className="mt-1.5 max-w-[600px] text-[14px] leading-[1.55] text-muted">
-          {sub}
         </div>
         {manualHref && !hasBar && (
           <a

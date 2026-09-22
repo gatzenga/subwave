@@ -370,7 +370,6 @@ export default function FestivalsSection() {
       <SectionHeader
         eyebrow="festivals"
         title="Festival calendar."
-        sub="Dates that set a mood, marked across the year. Add your local holidays, regional celebrations, or personal landmarks — the station leans into the nearest one as it comes around."
         metrics={loaded ? [{ n: String(watchedFestivals.length), l: `date${watchedFestivals.length === 1 ? '' : 's'}`, accent: true }] : undefined}
         actions={
           <Btn tone="accent" className="min-h-9 sm:min-h-0" onClick={startAdd} disabled={!loaded}>

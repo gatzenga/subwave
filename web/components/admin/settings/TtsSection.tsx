@@ -219,15 +219,6 @@ export function TtsSection({ data, form, setForm, busy, saveSettings, adminFetch
       <SectionHeader
         eyebrow="tts voice"
         title="Pick a voice engine, then configure it."
-        sub={<>
-          Every spoken segment is voiced by the <strong>persona on air</strong>. Set each
-          persona’s engine and voice on the Personas page. Here you pick the station’s
-          default engine (used for jingles and as the fallback) and configure whichever
-          one you choose.
-          {selectorAvailable.kokoro === false && (
-            <span className="text-[var(--danger)]"> Kokoro is unavailable in this build.</span>
-          )}
-        </>}
         metrics={[
           { n: String(engines.length), l: 'engines', accent: true },
         ]}

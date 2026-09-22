@@ -1128,7 +1128,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             <SectionHeader
               eyebrow="danger zone"
               title="Crossfade, stream control, and mixer restart."
-              sub="Crossfade is grouped here because it needs a mixer restart to apply. Stream stop and mixer restart both affect every current listener."
               metrics={[
                 {
                   n: data?.streamOnAir == null ? '—' : data.streamOnAir ? 'on air' : 'off air',

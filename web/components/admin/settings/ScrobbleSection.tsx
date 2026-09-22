@@ -128,14 +128,6 @@ export function ScrobbleSection({ data, form, setForm, busy, saveSettings, admin
       <SectionHeader
         eyebrow="scrobbling"
         title="Station-wide scrobbling to Last.fm and your own Navidrome."
-        sub={<>
-          Each backend is independent, pick either. Last.fm scrobbles only when at
-          least one listener is tuned in to the stream;
-          Navidrome logs every track the station airs, because that is what keeps
-          smart playlists rotating. For Last.fm, enter your API key and secret, then
-          hit <strong>Connect to Last.fm</strong> to authorize, no session-key
-          wrangling. Nothing here leaves the controller.
-        </>}
         metrics={[
           { n: lfReady ? 'on' : 'off', l: 'last.fm', accent: lfReady },
           { n: ndReady ? 'on' : 'off', l: 'navidrome', accent: ndReady },

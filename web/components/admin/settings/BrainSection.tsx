@@ -187,7 +187,6 @@ export function BrainSection({ data, form, saveSettings, adminFetch, refresh, bu
       <SectionHeader
         eyebrow="dj brain"
         title="One URL and one token wire the DJ's brain and its voice."
-        sub="The hosted DJ Brain fronts the chat LLM and the cloud TTS voice behind a single OpenAI-compatible proxy. Paste its base URL and access token once — Save configures both the LLM provider and Cloud TTS in one go. You can still fine-tune each under LLM provider and TTS voice."
       />
 
       <Card title="DJ Brain endpoint" sub="shared by the brain (LLM) + voice (TTS)">
