@@ -1,6 +1,6 @@
 // Admin-gated GET /debug — everything-at-a-glance for the debug UI.
 import express from 'express';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { config } from '../config.js';
 import * as dj from '../llm/dj.js';
@@ -23,6 +23,7 @@ import * as subsonicLog from '../music/subsonic-log.js';
 import { getFullContext } from '../context.js';
 import * as settings from '../settings.js';
 import { queue } from '../broadcast/queue.js';
+import { hlsListenerCount } from '../broadcast/hls-listeners.js';
 import * as session from '../broadcast/session.js';
 import { budgetStatus } from '../broadcast/dj-budget.js';
 import { voiceStatus } from '../broadcast/voice-policy.js';
@@ -35,6 +36,10 @@ import { getStationTimezone } from '../time.js';
 import { publicOrigin } from './public.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { BadStatePathError, listStateDir } from '../util/state-tree.js';
+
+// The HLS ladder, for display only — it is fixed in radio.liq (the rungs ARE
+// the adaptive-bitrate feature, so there is no setting to read them from).
+const HLS_RUNGS_KBPS = [320, 256, 192, 128] as const;
 
 export const router = express.Router();
 
@@ -159,16 +164,64 @@ async function buildDebugSnapshot(req: express.Request): Promise<any> {
         url: `${origin}${path}`,
       };
     };
-    const list = [
+    const icecastMounts = [
       mountEntry('/stream.mp3', 'MP3', true, st.bitrate ?? 192),
       mountEntry('/stream.opus', 'Opus', st.opusEnabled === true, st.opusBitrate ?? 96),
       mountEntry('/stream.flac', 'FLAC', st.flacEnabled === true, null),
       mountEntry('/stream.aac', 'AAC-LC', st.aacEnabled === true, st.aacBitrate ?? 192),
     ];
+
+    // HLS has no Icecast source to read, so both halves come from elsewhere:
+    // liveness from the master playlist's mtime (Liquidsoap rewrites it every
+    // segment, so a stale one means the mixer stopped writing), listeners from
+    // the edge's playlist access log via broadcast/hls-listeners.ts. A null
+    // count is "not counted", never 0.
+    const hlsEnabled = st.hlsEnabled !== false;
+    const segmentDuration = Number(st.hlsSegmentDuration) || 4;
+    const segments = Number(st.hlsSegments) || 5;
+    let playlistAgeSec: number | null = null;
+    try {
+      const { mtimeMs } = await stat(`${config.stateDir}/hls/live.m3u8`);
+      playlistAgeSec = Math.max(0, Math.round((Date.now() - mtimeMs) / 1000));
+    } catch {
+      /* no playlist on disk — HLS off, or the mixer never wrote one */
+    }
+    const hlsMount = {
+      path: '/hls/live.m3u8',
+      codec: 'HLS',
+      configured: hlsEnabled,
+      live: playlistAgeSec !== null && playlistAgeSec <= segmentDuration * 3,
+      bitrate: null,
+      listeners: hlsListenerCount(),
+      // Not measured off a source like the Icecast rows are — the ladder is
+      // fixed in radio.liq, so it is stated as a note rather than faked into
+      // the bitrate/samplerate fields.
+      sampleRate: null,
+      channels: null,
+      contentType: 'application/vnd.apple.mpegurl',
+      url: `${origin}/hls/live.m3u8`,
+      note: `${HLS_RUNGS_KBPS.join('/')} kbps · ${segmentDuration}s × ${segments}`,
+    };
+
+    out.hls = {
+      enabled: hlsEnabled,
+      live: hlsMount.live,
+      listeners: hlsMount.listeners,
+      segmentDuration,
+      segments,
+      playlistAgeSec,
+      playlist: hlsMount.url,
+    };
+
     out.mounts = {
-      list,
+      // HLS first: it is the default transport. Mounts that are switched OFF are
+      // left out rather than listed as dead rows — the operator turned them off
+      // and a row that only ever says "disabled" is noise. One that is live
+      // without being configured stays, because that IS news.
+      list: [hlsMount, ...icecastMounts].filter(m => m.configured || m.live),
       tuneIn: {
-        entryCount: list.filter(m => m.configured).length,
+        // Icecast mounts only: /listen.pls and /listen.m3u carry no HLS entry.
+        entryCount: icecastMounts.filter(m => m.configured).length,
         pls: `${origin}/listen.pls`,
         m3u: `${origin}/listen.m3u`,
       },

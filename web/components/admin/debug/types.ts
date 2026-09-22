@@ -173,11 +173,26 @@ export interface DebugMount {
   configured: boolean;
   live: boolean;
   bitrate: number | null;
+  /** null = not counted (HLS with no access log), never "nobody". */
   listeners: number | null;
   sampleRate: number | null;
   channels: number | null;
   contentType: string | null;
   url: string;
+  /** Stated instead of a measured bitrate — HLS's fixed ladder and segmenting. */
+  note?: string | null;
+}
+
+/** The HLS leg: liveness off the master playlist's mtime, listeners off the
+ *  edge's playlist access log. `listeners: null` means not counted. */
+export interface DebugHls {
+  enabled: boolean;
+  live: boolean;
+  listeners: number | null;
+  segmentDuration: number;
+  segments: number;
+  playlistAgeSec: number | null;
+  playlist: string;
 }
 
 export interface DebugMounts {
@@ -213,6 +228,7 @@ export interface DebugData {
   session?: DebugSession;
   config?: Record<string, unknown>;
   mounts?: DebugMounts;
+  hls?: DebugHls;
   error?: string;
 }
 

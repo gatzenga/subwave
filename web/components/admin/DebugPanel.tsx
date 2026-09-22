@@ -76,12 +76,34 @@ export default function DebugPanel() {
             <Btn sm onClick={() => setPaused(!paused)}>{paused ? 'Resume' : 'Pause'}</Btn>
           </span>
         </div>
-        <div className="strip-mobile grid grid-cols-5">
+        <div className="strip-mobile grid grid-cols-6">
           <HealthCell
             label="Icecast"
             status={data?.icecast && !data.icecast.error ? 'ok' : err ? 'down' : 'idle'}
             v={fmtListeners(data?.icecast)}
             sub={data?.icecast?.peakListeners != null ? `peak ${data.icecast.peakListeners}` : '—'}
+          />
+          {/* The other half of the audience: listeners who hold no socket, counted
+              from the edge's playlist log. Sits next to Icecast because the two
+              add up to the figure every gate and every scrobble reads. */}
+          <HealthCell
+            label="HLS"
+            status={
+              data?.hls?.enabled === false ? 'off'
+                : data?.hls?.live ? 'ok'
+                  : err ? 'down' : 'idle'
+            }
+            v={
+              !data?.hls ? '—'
+                : data.hls.listeners == null ? 'not counted'
+                  : `${data.hls.listeners} ${data.hls.listeners === 1 ? 'listener' : 'listeners'}`
+            }
+            sub={
+              !data?.hls ? '—'
+                : data.hls.enabled === false ? 'disabled'
+                  : data.hls.live ? `${data.hls.segmentDuration}s × ${data.hls.segments} segments`
+                    : 'no segments written'
+            }
           />
           <HealthCell
             label="Liquidsoap"

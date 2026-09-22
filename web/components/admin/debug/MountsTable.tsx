@@ -16,6 +16,20 @@ function MountStatus({ m }: { m: DebugMount }) {
   );
 }
 
+// The right-hand line. `note` wins over a measured bitrate (HLS states its
+// fixed ladder instead), and a null listener count reads "not counted" rather
+// than 0 — that is the difference between nobody listening and nobody counting.
+function mountDetail(m: DebugMount): string {
+  if (!m.live) return m.configured ? 'enabled · no source (restart mixer?)' : 'disabled';
+  const rate = m.note || (m.bitrate ? `${m.bitrate} kbps` : m.codec === 'FLAC' ? 'lossless' : '—');
+  const listeners =
+    m.listeners == null
+      ? 'listeners not counted'
+      : `${m.listeners} ${m.listeners === 1 ? 'listener' : 'listeners'}`;
+  const sample = m.sampleRate ? ` · ${(m.sampleRate / 1000).toFixed(1)}k` : '';
+  return `${rate} · ${listeners}${sample}`;
+}
+
 export function MountsTable({ mounts }: { mounts?: DebugMounts }) {
   if (!mounts) return null;
   return (
@@ -29,17 +43,7 @@ export function MountsTable({ mounts }: { mounts?: DebugMounts }) {
               <span className="font-medium">{m.codec}</span>
               <code className="truncate text-[11px] text-muted">{m.path}</code>
             </span>
-            <span className="text-right text-[11px] text-muted">
-              {m.live
-                ? `${m.bitrate ? `${m.bitrate} kbps` : m.codec === 'FLAC' ? 'lossless' : '—'} · ${
-                    m.listeners ?? 0
-                  } ${m.listeners === 1 ? 'listener' : 'listeners'}${
-                    m.sampleRate ? ` · ${(m.sampleRate / 1000).toFixed(1)}k` : ''
-                  }`
-                : m.configured
-                  ? 'enabled · no source (restart mixer?)'
-                  : 'disabled'}
-            </span>
+            <span className="text-right text-[11px] text-muted">{mountDetail(m)}</span>
           </div>
         ))}
       </div>
