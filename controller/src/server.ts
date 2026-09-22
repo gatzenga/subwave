@@ -303,9 +303,10 @@ app.listen(config.server.port, async () => {
   queue.startWatcher();
   // Idle pause is gone with its admin card. Leaving the monitor running would
   // be worse than leaving it reachable: nothing can clear a stored
-  // `stream.idleWhenEmpty: true` any more, and the count it gates on comes from
-  // Icecast sockets only — an HLS-only audience reads as an empty room, so the
-  // station would freeze mid-track for listeners who are actually there.
+  // `stream.idleWhenEmpty: true` any more, so the station would freeze mid-track
+  // on a count nobody can override. The count itself now sees an HLS-only
+  // audience (broadcast/hls-listeners.ts), but freezing the PROGRAMME on it is
+  // still the wrong trade — an LLM gate costs tokens, this costs the music.
   // isIdle() therefore stays false for good, which is the pre-feature answer.
   startAudienceMonitor().catch(err => console.error('[audience] init failed:', err.message));
   // Up front so the sync readers see data from the first pick.

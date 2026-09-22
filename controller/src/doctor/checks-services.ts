@@ -257,17 +257,18 @@ export function clearNavidromeCache() {
   navidromeCache = null;
 }
 
-export async function checkBroadcast(): Promise<Finding[]> {
+export async function checkBroadcast(s: StationSettings | null = null): Promise<Finding[]> {
   const out: Finding[] = [];
 
-  // Icecast — is anything actually being served, and to whom.
+  // Icecast — is anything actually being served, and to whom. The ICECAST leg
+  // of the count, not the combined figure: this line is about this mount.
   try {
     const st = getStreamStatus();
     out.push({
       label: 'Icecast stream',
       status: st.online ? 'ok' : 'fail',
       detail: st.online
-        ? `online · ${st.listeners?.current ?? 0} listening · ${st.bitrate ?? '?'}kbps`
+        ? `online · ${st.listeners?.icecast ?? 0} listening · ${st.bitrate ?? '?'}kbps`
         : 'offline — nothing on /stream.mp3',
       hint: st.online
         ? undefined
@@ -276,6 +277,32 @@ export async function checkBroadcast(): Promise<Finding[]> {
     });
   } catch (err) {
     out.push({ label: 'Icecast stream', status: 'skip', detail: err?.message || 'status unavailable' });
+  }
+
+  // The HLS leg. Worth its own line because its failure mode is SILENT: an
+  // edge that isn't writing the playlist access log (an image built before that
+  // Caddyfile change) makes every HLS listener invisible, which reads as a
+  // quiet station and stops Last.fm scrobbling rather than erroring anywhere.
+  try {
+    const st = getStreamStatus();
+    if (s?.stream?.hlsEnabled === false) {
+      out.push({ label: 'HLS listeners', status: 'skip', detail: 'HLS is switched off' });
+    } else if (st.listeners.hls === null) {
+      out.push({
+        label: 'HLS listeners',
+        status: 'warn',
+        detail: 'not counted — no playlist access log',
+        hint: 'The edge writes /var/sub-wave/hls-access.log for *.m3u8 requests and the controller counts listeners from it. Without it an HLS-only audience reads as an empty room and Last.fm scrobbling stops. Rebuild and redeploy the image.',
+      });
+    } else {
+      out.push({
+        label: 'HLS listeners',
+        status: 'ok',
+        detail: `${st.listeners.hls} listening · counted from playlist polls`,
+      });
+    }
+  } catch (err) {
+    out.push({ label: 'HLS listeners', status: 'skip', detail: err?.message || 'status unavailable' });
   }
 
   // Liquidsoap telnet — proves the mixer process is alive and reachable. Reads

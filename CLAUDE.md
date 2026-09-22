@@ -88,17 +88,30 @@ live edge, deliberately close to `stream.bufferSeconds` so both transports are
 in step.
 
 **Icecast stays up alongside it and is load-bearing beyond compatibility.**
-`/stream.mp3` is the universal floor (Sonos, hardware radios, car receivers),
-*and* it is where the listener COUNT comes from — which is what
-`llm.pauseWhenEmpty` and the DJ gates read. Removing the Icecast mounts would
-take those with it. Do not treat it as legacy.
+`/stream.mp3` is the universal floor (Sonos, hardware radios, car receivers).
+Do not treat it as legacy.
 
-That count is also why the **stream idle gate is gone** — the admin card and
-the monitor both. It froze the programme mid-track after N empty minutes, and
-"empty" here means zero Icecast sockets: an HLS-only audience fetches static
-segments and is invisible to it, so the station would have gone quiet for
-listeners who were there. `radio.liq` keeps the gate and its telnet commands
-(`idle_on`/`idle_off`); nothing asks for them.
+**The listener count has TWO LEGS and one number.** Icecast contributes sockets;
+HLS contributes listeners who hold no socket at all, counted from the edge's
+playlist access log. `broadcast/listeners.ts` owns the Icecast leg and the
+combination; `broadcast/hls-listeners.ts` owns the HLS leg. Everything downstream —
+`llm.pauseWhenEmpty`, the DJ gates, `presentListeners()` and therefore every
+Last.fm scrobble, the sparkline, the admin audience table — reads the combined
+figure. An HLS listener leaves exactly one trace: a playing client re-fetches
+the MEDIA playlist about once per segment, so `docker/aio/Caddyfile` routes
+`*.m3u8` (never segments) into `hls-access.log` and the controller reads its
+tail. The two legs are combined by **two functions with opposite failure
+directions, which must never be unified**: `combineCounts` (fail CLOSED — an
+unreadable leg contributes nothing, two unknowns stay unknown) feeds the
+presence check and every display, `combineGatedCounts` (fail OPEN — ANY
+unreadable leg makes the figure unknown) feeds `djCallsAllowed` and the analysis
+quiet gate. HLS switched off reports a measured 0, not unknown.
+
+The **stream idle gate is still gone** — the admin card and the monitor both. It
+froze the programme mid-track after N empty minutes, nothing can clear a stored
+`stream.idleWhenEmpty: true` any more, and a gate that stops the programme on a
+count is a worse trade than one that only stops LLM spend. `radio.liq` keeps the
+gate and its telnet commands (`idle_on`/`idle_off`); nothing asks for them.
 
 The web player still requests `/stream.mp3`, not HLS. Chrome and Firefox need
 hls.js for the HLS URL; Safari and iOS can play it natively.

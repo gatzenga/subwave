@@ -28,7 +28,7 @@ export { reviewReport } from './doctor/review.js';
 const SECTION_CHECKS: Array<{ name: string; run: (s: StationSettings | null) => Promise<Finding[]> }> = [
   { name: 'LLM', run: (s) => checkLlm(s) },
   { name: 'Navidrome & library', run: () => checkNavidrome() },
-  { name: 'Broadcast', run: () => checkBroadcast() },
+  { name: 'Broadcast', run: (s) => checkBroadcast(s) },
   { name: 'Voice (TTS)', run: (s) => checkTts(s) },
   { name: 'Capabilities', run: (s) => checkCapabilities(s) },
   { name: 'Content', run: () => checkContent() },

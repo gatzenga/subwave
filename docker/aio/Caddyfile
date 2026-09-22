@@ -36,6 +36,13 @@
 		# not, so state it.
 		@hls_segment path *.ts
 		header @hls_segment Content-Type video/mp2t
+		# An HLS listener holds no socket, so Icecast cannot see them — the only
+		# trace they leave is re-fetching the media playlist once per segment
+		# while they play. Routing just those requests into their own access log
+		# is what broadcast/hls-listeners.ts counts. SEGMENTS ARE NOT LOGGED:
+		# they are 4x the volume and say nothing the playlist poll doesn't.
+		@hls_playlist path *.m3u8
+		log_name @hls_playlist hls_access
 		root * /var/sub-wave
 		file_server
 	}
@@ -71,5 +78,25 @@
 	log {
 		output stdout
 		format console
+	}
+
+	# HLS playlist polls, and only those (`no_hostname` keeps every other request
+	# on the default logger above, which also keeps the 4s-per-listener chatter
+	# out of the container log). JSON because broadcast/hls-listeners.ts parses
+	# it: `ts`, `request.client_ip`, `request.uri`, `request.headers.User-Agent`.
+	#
+	# Rolling is bounded and UNCOMPRESSED on purpose — the reader walks back into
+	# the most recent rolled file when the current one doesn't reach far enough
+	# back, and a .gz would make that read a decompressor.
+	log hls_access {
+		output file /var/sub-wave/hls-access.log {
+			mode 644
+			roll_size 4mb
+			roll_keep 2
+			roll_keep_for 24h
+			roll_uncompressed
+		}
+		format json
+		no_hostname
 	}
 }
