@@ -15,10 +15,10 @@
 // over-long track is simply not picked.
 //
 // The cue-out stamp stays as the backstop, not as the mechanism. Two paths can
-// still put an over-long track on air — a listener request, which is exempt
-// from every length rule by design, and the never-starve fallback below — and
-// the station must not hand Liquidsoap an hour-long file because a filter
-// emptied the pool.
+// still put an over-long track on air — an operator's own studio push, which
+// `requestedBy` exempts from every length rule by design, and the never-starve
+// fallback below — and the station must not hand Liquidsoap an hour-long file
+// because a filter emptied the pool.
 //
 // Pure and import-free, so it unit-tests without a library, settings cache or
 // mixer (scripts/track-window.test.ts).

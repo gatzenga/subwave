@@ -1491,8 +1491,8 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                   <div className="field-hint">
                     The shortest a track can be to get picked, on both pickers and the
                     offline fallback playlist &mdash; the way to keep 40-second skits,
-                    interludes and album intros off air. A show can set its own; listener
-                    requests are always exempt.
+                    interludes and album intros off air. A show can set its own, and a track
+                    you queue yourself from the studio plays whatever its length.
                   </div>
                 </div>
                 <div className="field mt-4">
@@ -1520,10 +1520,10 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                     DJ sets never enter the rotation. Together with the floor above this is a
                     window: set 150 and 300 and only 2&frac12;&ndash;5 minute tracks are
                     chosen. Anything that slips through anyway is still faded out at this
-                    figure rather than airing in full, which is what keeps a listener request
-                    or an unmeasured file from taking the hour. Requests themselves play any
-                    length, and a show can override this with its own limit (0 there means
-                    unlimited). Applies on the next pick; no restart needed.
+                    figure rather than airing in full, which is what keeps an unmeasured
+                    file from taking the hour. A track you queue yourself from the studio is
+                    exempt and plays in full, and a show can override this with its own limit
+                    (0 there means unlimited). Applies on the next pick; no restart needed.
                   </div>
                 </div>
               </Card>
@@ -1549,8 +1549,8 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                     track of a show can still be playing well into the next one, so the incoming
                     host talks over the outgoing show&rsquo;s music. With this on, a track that
                     would run past the boundary is faded out there instead. A short overrun is
-                    left alone, a track is never cut down to a stub, and listener requests always
-                    play in full. Each show can override this. Applies on the next pick; no
+                    left alone, a track is never cut down to a stub, and a track you queue
+                    yourself from the studio always plays in full. Each show can override this. Applies on the next pick; no
                     restart needed.
                   </div>
                   {(() => {

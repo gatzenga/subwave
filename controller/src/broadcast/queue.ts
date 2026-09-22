@@ -1009,13 +1009,13 @@ class Queue {
   // request. That is the whole bug being fixed: the operator learns why.
   //
   // Gated on `requestedBy` — the same discriminator as the cap and the boundary
-  // cut exemptions above — because a request is the one path deliberately
+  // cut exemptions above — because an explicit push is the one path deliberately
   // exempt from every length rule the controller owns (maxTrackSeconds,
   // picker.minTrackLengthSeconds), and therefore the only path where a
-  // sub-crossfade track is expected to arrive at all. push() is the chokepoint
-  // every producer funnels through, so the listener route's three resolutions,
-  // the DJ agent's request path, MCP and the studio queue are all covered by
-  // this one call — there is no branch in routes/request.ts.
+  // sub-crossfade track is expected to arrive at all. On this fork the listener
+  // request routes are gone and the studio queue is what sets it; push() is
+  // still the chokepoint every producer funnels through, so nothing needs a
+  // branch of its own.
   //
   // The span is the PLAYABLE one, resolved by music/silence-trim.ts: a trimmed
   // head or tail is exactly what the buffer eats, and subtracting cue points
