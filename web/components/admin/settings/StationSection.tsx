@@ -1,41 +1,19 @@
 'use client';
 
 import type { ChangeEvent } from 'react';
-import { useEffect, useState } from 'react';
-import { fmtClockMinute, normalizeStationLocale, type StationLocale } from '../../../lib/format';
+import { normalizeStationLocale } from '../../../lib/format';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup,
 } from '../../ui/select';
-import { Card, Btn, Pill, Seg } from '../ui';
+import { Card, Pill, Seg } from '../ui';
 import { Advanced } from './section-chrome';
-import { LocationPicker, type GeocodeResult } from '../../LocationPicker';
+import { LocationPicker } from '../../LocationPicker';
 import {
   SectionHeader, SaveBar, SettingsFieldError,
   type SectionProps,
 } from './shared';
-
-// Intl.supportedValuesOf exists in every runtime this UI supports; the guard keeps
-// an exotic browser from crashing the whole settings page.
-const TZ_GROUPS: Array<{ region: string; zones: string[] }> = (() => {
-  let zones: string[] = [];
-  try { zones = Intl.supportedValuesOf('timeZone'); } catch { /* select offers Auto only */ }
-  const byRegion = new Map<string, string[]>();
-  for (const z of zones) {
-    const region = z.includes('/') ? z.slice(0, z.indexOf('/')) : 'Other';
-    if (!byRegion.has(region)) byRegion.set(region, []);
-    byRegion.get(region)!.push(z);
-  }
-  return [...byRegion.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([region, zs]) => ({ region, zones: zs }));
-})();
-
-// Wall-clock preview for a zone, or '' when the zone can't be formatted.
-function clockPreview(timeZone: string, locale: StationLocale) {
-  return fmtClockMinute(new Date(), timeZone || undefined, locale);
-}
 
 const ON_OFF = [
   { id: 'on', label: 'On' },
@@ -49,14 +27,17 @@ export function StationSection({ data, form, setForm, busy, saveSettings, fieldE
   const save = () => saveSettings({
     station: form.station,
     stationDescription: form.stationDescription,
-    timezone: form.timezone,
+    // Pinned rather than read off the form: their cards are gone, so a value
+    // stored before this would be one nothing could change again. '' is the
+    // AUTO timezone, i.e. the container's TZ — docker-compose sets
+    // Europe/Zurich, which is the point.
+    timezone: '',
     locale: form.locale,
     weather: {
       lat: parseFloat(form.weather.lat),
       lng: parseFloat(form.weather.lng),
       locationName: form.weather.locationName,
-      onAirLocation: form.weather.onAirLocation,
-      units: form.weather.units,
+      units: 'metric',
     },
     privacy: {
       privatePlayer: form.privacy.privatePlayer,
@@ -68,29 +49,6 @@ export function StationSection({ data, form, setForm, busy, saveSettings, fieldE
     },
   });
 
-  // Re-render every 30s so the station-clock preview keeps walking.
-  const [, setClockTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setClockTick(t => t + 1), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const serverTz = data.serverTimezone || 'server timezone';
-  // '' = Auto → preview the server's zone, which is what the station runs on.
-  const previewTz = form.timezone || data.serverTimezone || '';
-  const preview = clockPreview(previewTz, form.locale);
-  const localeLabel = form.locale === 'en-US' ? 'English (US)' : 'English (UK)';
-
-  // A picked city's IANA zone is *suggested*, not written: the operator may have
-  // deliberately set a different station clock.
-  const [tzSuggestion, setTzSuggestion] = useState<string | null>(null);
-  const handleGeocodePick = (r: GeocodeResult) => {
-    const effective = form.timezone || data.serverTimezone || '';
-    setTzSuggestion(r.timezone && r.timezone !== effective ? r.timezone : null);
-  };
-  // Radix Select needs a matching <SelectItem> to render a value, so a picked zone
-  // outside TZ_GROUPS gets a fallback item.
-  const tzInGroups = !form.timezone || TZ_GROUPS.some(g => g.zones.includes(form.timezone));
 
   return (
     <>
@@ -155,30 +113,7 @@ export function StationSection({ data, form, setForm, busy, saveSettings, fieldE
             onChange={next =>
               setForm(f => ({ ...f, weather: { ...f.weather, ...next } }))
             }
-            onPick={handleGeocodePick}
           />
-          {tzSuggestion ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
-              <span className="text-muted-foreground">
-                Set station timezone to <span className="text-foreground">{tzSuggestion}</span>?
-              </span>
-              <Btn
-                onClick={() => {
-                  setForm(f => ({ ...f, timezone: tzSuggestion }));
-                  setTzSuggestion(null);
-                }}
-              >
-                Apply
-              </Btn>
-              <button
-                type="button"
-                className="text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => setTzSuggestion(null)}
-              >
-                Dismiss
-              </button>
-            </div>
-          ) : null}
           <div className="field-hint">
             The point the Open-Meteo forecast is read for (current: {data.values?.weather?.locationName} @ {data.values?.weather?.lat}, {data.values?.weather?.lng}).
             Stays on this page: never spoken on air, never returned by a public
@@ -186,97 +121,6 @@ export function StationSection({ data, form, setForm, busy, saveSettings, fieldE
           </div>
         </div>
 
-        <div className="field">
-          <Label>On-air location <span className="text-muted-foreground">(optional)</span></Label>
-          <Input
-            placeholder="e.g. the Peak District"
-            value={form.weather.onAirLocation}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setForm(f => ({ ...f, weather: { ...f.weather, onAirLocation: e.target.value } }))
-            }
-            className="w-[260px] max-w-full"
-            maxLength={80}
-          />
-          <div className="field-hint">
-            What the DJ says on air and what listeners see: the {'{location}'} placeholder, plus
-            the location in the public now-playing and DJ responses. Leave blank to use the
-            location above (currently saying{' '}
-            <span className="text-foreground">
-              {data.values?.weather?.onAirLocation || data.values?.weather?.locationName}
-            </span>
-            ). Set a broader area if pairing your station name with your exact town would identify
-            you; the forecast still reads the precise coordinates. Applies live; the DJ may still
-            reference the old name until the current session rolls.
-          </div>
-        </div>
-
-        <div className="field">
-          <Label>Weather units</Label>
-          <Select
-            value={form.weather.units}
-            onValueChange={val =>
-              setForm(f => ({
-                ...f,
-                weather: { ...f.weather, units: val === 'imperial' ? 'imperial' : 'metric' },
-              }))
-            }
-          >
-            <SelectTrigger className="w-[240px] max-w-full" aria-label="Weather units"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="metric">Metric (°C)</SelectItem>
-                <SelectItem value="imperial">Imperial (°F)</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <div className="field-hint">
-            What the DJ announces on air (current: {data.values?.weather?.units === 'imperial' ? 'Imperial / °F' : 'Metric / °C'}). Applies live.
-          </div>
-        </div>
-      </Card>
-
-      <Card title="Timezone" sub="The station clock the DJ lives on">
-        <div className="field">
-          <Label>Station timezone</Label>
-          <Select
-            // Radix forbids empty-string item values, so Auto rides a sentinel.
-            value={form.timezone || 'auto'}
-            onValueChange={val =>
-              setForm(f => ({ ...f, timezone: val === 'auto' ? '' : val }))
-            }
-          >
-            <SelectTrigger className="w-[300px] max-w-full" aria-label="Station timezone"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="auto">Auto, server timezone ({serverTz})</SelectItem>
-              </SelectGroup>
-              {/* Radix needs an item to show a zone outside the enumerated groups. */}
-              {!tzInGroups ? (
-                <SelectGroup>
-                  <SelectItem value={form.timezone}>{form.timezone}</SelectItem>
-                </SelectGroup>
-              ) : null}
-              {TZ_GROUPS.map(g => (
-                <SelectGroup key={g.region}>
-                  <SelectLabel>{g.region}</SelectLabel>
-                  {g.zones.map(z => (
-                    <SelectItem key={z} value={z}>{z}</SelectItem>
-                  ))}
-                </SelectGroup>
-              ))}
-            </SelectContent>
-          </Select>
-          {preview && (
-            <div className="field-hint">
-              Station clock: <span className="mono-num">{preview}</span> in {localeLabel}. If that doesn’t match your watch, pick your zone above.
-            </div>
-          )}
-          <div className="field-hint">
-            Drives everything the DJ derives from the clock: time-of-day moods, schedule slots,
-            hourly time checks, festival dates. Applies live. Hourly archive filenames still follow
-            the server’s TZ.
-          </div>
-        </div>
       </Card>
 
       <Card title="Localization" sub="Language variant and clock display">
