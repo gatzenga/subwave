@@ -3,7 +3,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { config } from '../config.js';
-import * as settings from '../settings.js';
 import * as subLog from './subsonic-log.js';
 import * as blocklist from './blocklist.js';
 import * as sceneVocab from './scene-vocab.js';
@@ -867,12 +866,18 @@ export function getAnnotatedUri(song, opts: { maxDurationSec?: number | null; cu
   if (eraYear) fields.push(`year="${escAnnotate(eraYear)}"`);
   const genres = songGenres(song);
   if (genres.length) fields.push(`genre="${escAnnotate(genres.join(', '))}"`);
-  // Per-transition crossfade length (seconds). radio.liq runs cross with
-  // persist_override=true, so a stamp LINGERS until the next one arrives —
-  // every annotated track must carry an explicit value (falling back to the
-  // configured crossfade) or a washout's 12s canvas outlives its transition.
-  const crossSec = song.crossSec ?? settings.get()?.crossfadeDuration ?? null;
-  if (crossSec != null) fields.push(`liq_cross_duration="${escAnnotate(crossSec)}"`);
+  // No liq_cross_duration here any more: AUTOCUE owns the handover.
+  //
+  // This used to carry a length computed from tempo and key compatibility, and
+  // for a track that stops on a hard beat it still asked for seconds of
+  // overlap — so two hip-hop tracks, one ending cold and the next starting
+  // cold, played over each other. Liquidsoap measures the actual audio at
+  // resolution time and answers with `start_next`: no overlap where the track
+  // stops dead, an overlap inside the decay where it rings out. A stamp from
+  // here would win over that measurement, so there is none.
+  //
+  // radio.liq's cross still runs persist_override=true, and autocue supplies a
+  // value per track, so nothing lingers from the track before.
   // Per-track loudness gain offset, in the "<n> dB" form Liquidsoap's amplify
   // override parses. Applied before the ducking layers. Absent = unity.
   if (song.gainDb != null) fields.push(`liq_amplify="${escAnnotate(song.gainDb)} dB"`);

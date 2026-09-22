@@ -6,6 +6,21 @@ settings.log.level := 3
 settings.log.file := true
 settings.log.file.path := "/var/log/liquidsoap/radio.log"
 
+# AUTOCUE — the transition, measured from the audio instead of guessed from the
+# metadata. Liquidsoap analyses every resolved file and attaches where it really
+# starts and stops making sound, its fades, and `start_next`: the moment the
+# next track should begin. A track that ends on a hard beat hands over with NO
+# overlap; one that rings out hands over inside its own decay. That single
+# measurement replaces what four of our own systems used to argue about, and it
+# is the reason a hip-hop pair with a cold stop and a cold start no longer
+# collides for several seconds.
+#
+# amplify_behavior "keep": autocue also measures loudness, but levels are this
+# station's own business (settings.loudness + the per-track liq_amplify stamp),
+# so its gain is recorded and not applied.
+settings.autocue.amplify_behavior := "keep"
+enable_autocue_metadata()
+
 # Telnet server — the controller's only channel into the mixer (restart, skip,
 # stream/idle gates). Container-private network only; not exposed to the host.
 settings.server.telnet := true
