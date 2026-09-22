@@ -62,7 +62,6 @@ import {
   timezoneSchema,
   transitionsPatchSchema,
   uiPatchSchema,
-  weatherMoodsSchema,
   weatherPatchSchema,
 } from '../schemas/settings.js';
 import {
@@ -122,7 +121,6 @@ export const SETTINGS_PATCH_KEYS = [
   'theme',
   'moods',
   'moodSchedule',
-  'weatherMoods',
   'festivals',
   'djPrompts',
   'activeDjPromptId',
@@ -228,7 +226,6 @@ export const SETTINGS_PATCH_SCHEMAS: Readonly<Partial<Record<SettingsPatchKey, S
   likes: likesPatchSchema,
   moods: moodsSchema,
   moodSchedule: moodScheduleSchema,
-  weatherMoods: weatherMoodsSchema,
   festivals: festivalsSchema,
   timezone: timezoneSchema,
   privacy: privacyPatchSchema,

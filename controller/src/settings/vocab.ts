@@ -608,15 +608,6 @@ export const PERIOD_MOOD_DEFAULTS: Record<string, string> = {
 export const WEATHER_CONDITIONS = [
   'clear', 'cloudy', 'foggy', 'rainy', 'snowy', 'stormy',
 ] as const;
-export const WEATHER_MOOD_DEFAULTS: Record<string, string> = {
-  clear: 'sunny',
-  cloudy: '',
-  foggy: 'rainy',
-  rainy: 'rainy',
-  snowy: 'reflective',
-  stormy: 'rainy',
-};
-
 export const MOODS_LIMIT = 40;
 export const MOOD_PROMPT_MAX = 200;
 

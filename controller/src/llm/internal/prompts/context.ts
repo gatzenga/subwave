@@ -180,6 +180,15 @@ export function buildContextLines(
     lines.push(context?.activeShow?.moods?.length
       ? `Period: ${context.time.period}`
       : `Period: ${context.time.period} (${context.time.vibe})`);
+    // The mood the moment resolved to. It has always steered the PICK
+    // (music/picker.ts, prompts/picker.ts) and never the talk, so an operator
+    // who set a morning mood heard it in the music and never in the voice.
+    // Stood down when a show pins its own, for the same reason the vibe is:
+    // the show line below carries the tone and two sources pull against each
+    // other.
+    if (!context?.activeShow?.moods?.length && context.dominantMood) {
+      lines.push(`Mood: ${context.dominantMood} — let it colour the delivery, never say the word.`);
+    }
   }
   if (on('weather') && context?.weather && context.weather.condition && context.weather.condition !== 'unknown') {
     // Spoken form ("24 degrees Celsius"), not display form ("24°C") — the

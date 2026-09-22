@@ -1,5 +1,5 @@
 // Unit tests for the live mood accessors (settings.ts): moodVocab / moodEntries
-// / moodPromptFor / moodScheduleFor / weatherMoodFor — the single seam every
+// / moodPromptFor / moodScheduleFor — the single seam every
 // mood consumer reads through. These must answer from the SEED defaults before
 // settings.load() (get() returns DEFAULTS), which is what keeps the standalone
 // audio-moods + tagger paths working without a loaded settings.json.
@@ -11,16 +11,12 @@ import {
   moodEntries,
   moodPromptFor,
   moodScheduleFor,
-  weatherMoodFor,
   validateMoodsStrict,
   validateMoodScheduleStrict,
-  validateWeatherMoodsStrict,
   assertNoOrphanMoods,
   MOOD_DEFAULTS,
   PERIOD_MOOD_DEFAULTS,
-  WEATHER_MOOD_DEFAULTS,
   MOOD_PERIODS,
-  WEATHER_CONDITIONS,
 } from '../src/settings.js';
 
 // ── vocabulary ───────────────────────────────────────────────────────────────
@@ -51,17 +47,6 @@ for (const period of MOOD_PERIODS) {
   assert.equal(moodScheduleFor(period), PERIOD_MOOD_DEFAULTS[period], `schedule seed for ${period}`);
   assert.ok(moodVocab().includes(moodScheduleFor(period)), `${period} maps to a real mood`);
 }
-
-// ── weather → mood ───────────────────────────────────────────────────────────
-
-// Every condition resolves to its seed; '' (cloudy) stays "no steer", and any
-// non-empty value is a real vocabulary entry.
-for (const cond of WEATHER_CONDITIONS) {
-  assert.equal(weatherMoodFor(cond), WEATHER_MOOD_DEFAULTS[cond], `weather seed for ${cond}`);
-  const v = weatherMoodFor(cond);
-  if (v) assert.ok(moodVocab().includes(v), `${cond} maps to a real mood`);
-}
-assert.equal(weatherMoodFor('cloudy'), '', 'cloudy has no mood steer by default');
 
 // ── validateMoodsStrict ──────────────────────────────────────────────────────
 
@@ -122,26 +107,11 @@ assert.throws(
   'non-object schedule rejected',
 );
 
-// ── validateWeatherMoodsStrict ───────────────────────────────────────────────
-
-// '' (no steer) is allowed; missing conditions default to '' — so a partial map fills out.
-const weatherOut = validateWeatherMoodsStrict({ clear: 'energetic', rainy: '' }, NAMES);
-assert.equal(weatherOut.clear, 'energetic', 'known mood kept');
-assert.equal(weatherOut.rainy, '', 'blank = no steer kept');
-assert.equal(weatherOut.stormy, '', 'omitted condition defaults to no steer');
-assert.equal(Object.keys(weatherOut).length, WEATHER_CONDITIONS.length, 'all conditions present');
-assert.throws(
-  () => validateWeatherMoodsStrict({ clear: 'banana' }, NAMES),
-  /weatherMoods\.clear/,
-  'a condition pointing at an unknown mood is rejected',
-);
-
 // ── assertNoOrphanMoods (the in-use removal guard) ───────────────────────────
 
 const baseState = () => ({
   moods: [{ name: 'energetic', clapPrompt: '' }, { name: 'calm', clapPrompt: '' }],
   moodSchedule: { 'drive-time': 'energetic', evening: 'calm' },
-  weatherMoods: { clear: 'energetic', rainy: '' },
   festivals: [{ name: 'Diwali', mood: 'calm' }],
   shows: [{ name: 'Breakfast', moods: ['energetic'] }],
 });
@@ -162,21 +132,11 @@ assert.doesNotThrow(() => assertNoOrphanMoods(baseState()), 'consistent state pa
   s.festivals = [];
   assert.throws(() => assertNoOrphanMoods(s), /evening time-of-day slot/, 'schedule ref blocks removal');
 }
-// Weather slot referencing the removed mood → names the condition.
-{
-  const s = baseState();
-  s.moods = [{ name: 'calm', clapPrompt: '' }];
-  s.moodSchedule = { 'drive-time': 'calm', evening: 'calm' };
-  s.festivals = [];
-  s.shows = [];
-  assert.throws(() => assertNoOrphanMoods(s), /clear weather slot/, 'weather ref blocks removal');
-}
 // Show referencing the removed mood → names the show.
 {
   const s = baseState();
   s.moods = [{ name: 'calm', clapPrompt: '' }];
   s.moodSchedule = { 'drive-time': 'calm', evening: 'calm' };
-  s.weatherMoods = { clear: 'calm', rainy: '' };
   s.festivals = [];
   assert.throws(() => assertNoOrphanMoods(s), /show "Breakfast"/, 'show ref blocks removal');
 }
@@ -185,7 +145,6 @@ assert.doesNotThrow(() => assertNoOrphanMoods(baseState()), 'consistent state pa
   const s = baseState();
   s.moods = [{ name: 'energetic', clapPrompt: '' }, { name: 'serene', clapPrompt: '' }];
   s.moodSchedule = { 'drive-time': 'energetic', evening: 'serene' };
-  s.weatherMoods = { clear: 'energetic', rainy: '' };
   s.festivals = [{ name: 'Diwali', mood: 'serene' }];
   s.shows = [{ name: 'Breakfast', moods: ['energetic'] }];
   assert.doesNotThrow(() => assertNoOrphanMoods(s), 'a fully-repointed rename passes');

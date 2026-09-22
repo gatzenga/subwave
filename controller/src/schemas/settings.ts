@@ -1247,10 +1247,6 @@ export function moodScheduleSchema(ctx: SettingsMoodContext) {
   return settingsMoodMap(SETTINGS_MOOD_PERIODS, 'moodSchedule', false, ctx);
 }
 
-export function weatherMoodsSchema(ctx: SettingsMoodContext) {
-  return settingsMoodMap(SETTINGS_WEATHER_CONDITIONS, 'weatherMoods', true, ctx);
-}
-
 // Festival field bounds. Named rather than left as literals inside the schema
 // because the admin editor needs the same numbers for its maxLength / min / max
 // attributes, and it was hard-coding them — the drift that had already bitten

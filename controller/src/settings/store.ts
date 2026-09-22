@@ -5,7 +5,7 @@
 //
 // Part of the settings/ split — see ../settings.ts for the public barrel.
 
-import { MOOD_DEFAULTS, PERIOD_MOOD_DEFAULTS, WEATHER_MOOD_DEFAULTS } from './vocab.js';
+import { MOOD_DEFAULTS, PERIOD_MOOD_DEFAULTS } from './vocab.js';
 import { DEFAULTS } from './defaults.js';
 
 // The loaded settings. Null until load() has run. Only settings.ts writes it,
@@ -67,10 +67,6 @@ export function moodPromptFor(name: string): string {
 export function moodScheduleFor(period: string): string {
   const s = get().moodSchedule || {};
   return s[period] ?? PERIOD_MOOD_DEFAULTS[period] ?? '';
-}
-export function weatherMoodFor(condition: string): string {
-  const w = get().weatherMoods || {};
-  return (w[condition] ?? WEATHER_MOOD_DEFAULTS[condition] ?? '') || '';
 }
 
 // Resolve the operator-entered inline API key for a provider from the

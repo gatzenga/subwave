@@ -35,7 +35,6 @@ const {
   moodsSchema,
   privacyPatchSchema,
   timezoneSchema,
-  weatherMoodsSchema,
   scrobblePatchSchema,
   searchPatchSchema,
   sfxPatchSchema,
@@ -604,7 +603,7 @@ test('the converted keys are exactly the ones with schemas', () => {
     'picker',
     'privacy', 'schedule', 'scheduleOverride', 'scrobble', 'search',
     'sfx', 'shows', 'silenceTrim', 'station', 'stationDescription', 'stream',
-    'theme', 'timezone', 'transitions', 'ui', 'weather', 'weatherMoods',
+    'theme', 'timezone', 'transitions', 'ui', 'weather',
   ]);
 });
 
@@ -876,21 +875,6 @@ test('a mood map validates SHAPE only when the caller has no vocabulary', () => 
   );
 });
 
-test('weatherMoods allows empty and BLANKS unmentioned conditions', () => {
-  // The sharp difference from moodSchedule: an omitted condition becomes '', so a
-  // patch naming one silently clears the other five and succeeds.
-  const strict = weatherMoodsSchema({ moodNames: ['chill'] });
-  const r = strict.parse({ clear: 'chill' });
-  assert.equal(r.clear, 'chill');
-  assert.equal(r.rainy, '');
-  assert.equal(Object.keys(r).length, 6);
-  assert.equal(strict.safeParse({ clear: 'nope' }).success, false);
-  assert.match(
-    strict.safeParse({ clear: 'nope' }).error?.issues[0]?.message ?? '',
-    /must be a mood \(chill\) or empty$/,
-  );
-});
-
 test('festivals keeps the leap-day allowance and month-before-day ordering', () => {
   const strict = festivalsSchema({ moodNames: ['chill'] });
   // Feb 29 is allowed by design — in a common year it fires Mar 1.
@@ -929,16 +913,13 @@ test('update() judges the mood maps against the SAME-PATCH vocabulary', async ()
       'early-morning': 'newmood', morning: 'newmood', midday: 'chill', afternoon: 'chill',
       'drive-time': 'chill', evening: 'chill', 'late-evening': 'chill', 'after-hours': 'chill',
     },
-    weatherMoods: { clear: 'newmood' },
     festivals: [{ name: 'Test', month: 1, day: 1, mood: 'newmood' }],
   });
   assert.equal(r.saved.moodSchedule.morning, 'newmood');
-  assert.equal(r.saved.weatherMoods.clear, 'newmood');
-  assert.equal(r.saved.weatherMoods.rainy, '');
   assert.equal(r.saved.festivals[0].mood, 'newmood');
 
   // And a mood that is NOT in the effective vocabulary is still refused.
-  await assert.rejects(() => settings.update({ weatherMoods: { clear: 'ghost' } }));
+  await assert.rejects(() => settings.update({ moodSchedule: { morning: 'ghost' } }));
 });
 
 test('the route checks mood-map SHAPE without guessing the vocabulary', () => {
@@ -947,7 +928,7 @@ test('the route checks mood-map SHAPE without guessing the vocabulary', () => {
   assert.ok(bad);
   assert.equal(bad.error, 'moodSchedule must be an object');
   // ...but an unknown mood name is update()'s call, not the middleware's.
-  assert.equal(validateSettingsPatch({ weatherMoods: { clear: 'ghost' } }), null);
+  assert.equal(validateSettingsPatch({ moodSchedule: { morning: 'ghost' } }), null);
 });
 
 test('update() round-trips the second slice, coercions and restarts intact', async () => {

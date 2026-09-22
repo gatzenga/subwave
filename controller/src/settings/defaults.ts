@@ -33,7 +33,6 @@ import {
   OPUS_BITRATES,
   PERIOD_MOOD_DEFAULTS,
   SEED_PERSONAS,
-  WEATHER_MOOD_DEFAULTS,
   emptyWeek,
 } from './vocab.js';
 
@@ -191,7 +190,6 @@ export const DEFAULTS = {
   // ('' = no steer). Read live via moodVocab()/moodScheduleFor()/weatherMoodFor().
   moods: MOOD_DEFAULTS,
   moodSchedule: PERIOD_MOOD_DEFAULTS,
-  weatherMoods: WEATHER_MOOD_DEFAULTS,
   // Presentational player toggles, read via GET /state and applied live.
   // `boothBuddy` gates the DJ-line mascot. `skin` is a slug only — the web app
   // owns the registry and falls back on an unknown id, so nothing validates it

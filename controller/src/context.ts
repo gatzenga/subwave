@@ -3,7 +3,7 @@
 
 import { config } from './config.js';
 import { fetchWithTimeout } from './util/fetch-timeout.js';
-import { resolveActiveShow, resolveOnAirLocation, get as getSettings, moodScheduleFor, weatherMoodFor } from './settings.js';
+import { resolveActiveShow, resolveOnAirLocation, get as getSettings, moodScheduleFor } from './settings.js';
 import * as session from './broadcast/session.js';
 import { getListenerCount } from './broadcast/listeners.js';
 import { zonedParts, zonedISODate, clockDisplay, spokenHourPhrase, spokenTimePhrases, spokenDaypartPhrase } from './time.js';
@@ -125,7 +125,6 @@ export async function getWeather() {
     const condition = mapWeatherCode(code);
     const result = {
       condition,
-      mood: weatherToMood(condition),
       temp: Math.round(data.current.temperature_2m),
       tempUnit,
       isDay: data.current.is_day === 1,
@@ -134,7 +133,7 @@ export async function getWeather() {
     weatherCache = { data: result, fetchedAt: Date.now(), configKey };
     return result;
   } catch {
-    return { condition: 'unknown', mood: null, temp: null, tempUnit, location: attributedLocation(weather) };
+    return { condition: 'unknown', temp: null, tempUnit, location: attributedLocation(weather) };
   }
 }
 
@@ -147,13 +146,6 @@ function mapWeatherCode(code: number) {
   if (code >= 71 && code <= 77) return 'snowy';
   if (code >= 80 && code <= 99) return 'stormy';
   return 'cloudy';
-}
-
-// Operator-editable weather → mood map (settings.weatherMoods). '' (no steer)
-// normalises to null so the dominantMood chain (festival > weather > time)
-// falls through to the time mood, exactly as the old hardcoded default did.
-function weatherToMood(condition) {
-  return weatherMoodFor(condition) || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -431,11 +423,17 @@ export async function getFullContext(at?: Date) {
     }
   }
 
-  // Show > festival > weather > time, in that order of priority for mood.
+  // Show > festival > time, in that order of priority for mood. Weather used
+  // to sit between festival and time; it was removed because a condition the
+  // operator had left unset fell through to a seeded default and silently
+  // outranked the time-of-day mood they HAD set — the steer they configured
+  // never reached the air. The weather still reaches the prompt as context the
+  // DJ can talk about; it just no longer decides the mood.
+  //
   // dominantMood is a single value by contract (scenario lines, session keys,
   // mood-pool seeds), so a multi-mood show leads with its FIRST mood here; the
   // pick paths union the full moods list themselves (picker/scheduler #929).
-  const dominantMood = activeShow?.moods?.[0] || festival?.mood || weather.mood || time.mood;
+  const dominantMood = activeShow?.moods?.[0] || festival?.mood || time.mood;
 
   // Live audience size, from the cached Icecast monitor. `count` is null when
   // it couldn't be read — callers treat that as "unknown" and stay quiet.

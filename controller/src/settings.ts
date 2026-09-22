@@ -45,8 +45,6 @@ import {
   PERIOD_MOOD_DEFAULTS,
   SEARCH_PROVIDERS,
   TTS_ENGINES,
-  WEATHER_CONDITIONS,
-  WEATHER_MOOD_DEFAULTS,
   applyInlineKey,
   applyLlmLegPatch,
   canonicalKokoroLang,
@@ -186,8 +184,6 @@ export {
   TTS_SPEED_DEFAULT,
   TTS_SPEED_MAX,
   TTS_SPEED_MIN,
-  WEATHER_CONDITIONS,
-  WEATHER_MOOD_DEFAULTS,
   clampMaxOutputTokens,
   clampDiscoverySteps,
   clampEffectiveTtsSpeed,
@@ -211,7 +207,6 @@ export {
   moodScheduleFor,
   moodVocab,
   resolveMaxOutputTokens,
-  weatherMoodFor,
 } from './settings/store.js';
 export {
   assertNoOrphanMoods,
@@ -225,7 +220,6 @@ export {
   validateMoodsStrict,
   validatePersonasStrict,
   validateShowsStrict,
-  validateWeatherMoodsStrict,
 } from './settings/validate.js';
 export {
   agentLanguageReminder,
@@ -666,7 +660,6 @@ export async function load() {
     // empty); the two maps fill missing keys from their seed defaults.
     moods: normalizeMoods(stored.moods),
     moodSchedule: normalizeMoodMap(stored.moodSchedule, MOOD_PERIODS, PERIOD_MOOD_DEFAULTS),
-    weatherMoods: normalizeMoodMap(stored.weatherMoods, WEATHER_CONDITIONS, WEATHER_MOOD_DEFAULTS),
     ui: {
       boothBuddy:
         typeof stored.ui?.boothBuddy === 'boolean'
@@ -1328,9 +1321,6 @@ export async function update(patch) {
   const moodCtx = { moodNames, showIds: null };
   if ('moodSchedule' in patch) {
     next.moodSchedule = parseSettingsPatchKey('moodSchedule', patch.moodSchedule, moodCtx);
-  }
-  if ('weatherMoods' in patch) {
-    next.weatherMoods = parseSettingsPatchKey('weatherMoods', patch.weatherMoods, moodCtx);
   }
   if ('festivals' in patch) {
     next.festivals = parseSettingsPatchKey('festivals', patch.festivals, moodCtx);

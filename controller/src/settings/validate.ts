@@ -16,7 +16,6 @@ import {
   festivalsSchema,
   moodScheduleSchema,
   moodsSchema,
-  weatherMoodsSchema,
 } from '../schemas/settings.js';
 import { firstMessage } from '../util/zod-error.js';
 
@@ -160,12 +159,8 @@ export function validateMoodScheduleStrict(raw: any, moodNames: string[]): Recor
   return runMoodSchema(moodScheduleSchema({ moodNames }), raw);
 }
 
-export function validateWeatherMoodsStrict(raw: any, moodNames: string[]): Record<string, string> {
-  return runMoodSchema(weatherMoodsSchema({ moodNames }), raw);
-}
-
 // Reject a vocabulary edit that would orphan a mood still referenced by the
-// festival calendar, either mood map, or a scheduled show. Renames are a
+// festival calendar, the time-of-day map, or a scheduled show. Renames are a
 // two-step (add the new name, repoint the referrers, remove the old) — this is
 // the guard that names exactly what still points at a removed mood.
 export function assertNoOrphanMoods(next: any): void {
@@ -173,9 +168,6 @@ export function assertNoOrphanMoods(next: any): void {
   const refs: string[] = [];
   for (const [period, mood] of Object.entries(next.moodSchedule || {})) {
     if (mood && !names.has(mood as string)) refs.push(`the ${period} time-of-day slot`);
-  }
-  for (const [cond, mood] of Object.entries(next.weatherMoods || {})) {
-    if (mood && !names.has(mood as string)) refs.push(`the ${cond} weather slot`);
   }
   for (const f of next.festivals || []) {
     if (f.mood && !names.has(f.mood)) refs.push(`festival "${f.name}"`);
