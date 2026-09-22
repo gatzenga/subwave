@@ -233,11 +233,4 @@ test('the configured header is what lands on the wire', async () => {
   assert.equal(sent['x-gateway-session'], 'subwave-1');
   assert.equal(sent['x-tenant'], 'radio');
   assert.ok(sent.authorization, 'and the bearer token is still sent alongside');
-
-  // locca is the same transport and the same builder, so it carries them too.
-  const locca = await headersOnTheWire({
-    provider: 'locca', model: 'gemma', baseUrl: 'https://locca.example/v1',
-    headers: { 'x-gateway-session': 'via-locca' },
-  });
-  assert.equal(locca['x-gateway-session'], 'via-locca');
 });

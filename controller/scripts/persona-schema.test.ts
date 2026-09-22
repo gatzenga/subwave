@@ -277,22 +277,6 @@ test('per-engine voice rules are unchanged', () => {
   // kokoro demands a <lang><gender>_<name> id — empty is NOT allowed.
   assert.equal(ok(slot({ engine: 'kokoro', voice: 'bf_isabella' })), true);
   assert.equal(ok(slot({ engine: 'kokoro', voice: '' })), false);
-  // chatterbox: empty = built-in default, else a bare .wav.
-  assert.equal(ok(slot({ engine: 'chatterbox', voice: '' })), true);
-  assert.equal(ok(slot({ engine: 'chatterbox', voice: 'ref.wav' })), true);
-  assert.equal(ok(slot({ engine: 'chatterbox', voice: 'a/b.wav' })), false);
-  // pocket-tts: empty becomes 'alba'; a built-in id or a .wav both pass.
-  assert.equal(
-    ttsVoiceSlotSchema('tts').parse(slot({ engine: 'pocket-tts', voice: '' })).voice,
-    'alba',
-  );
-  assert.equal(ok(slot({ engine: 'pocket-tts', voice: 'clone.wav' })), true);
-  // cloud: openai-compatible may be empty, the others may not.
-  assert.equal(ok({ engine: 'cloud', cloudProvider: 'openai-compatible', voice: '' }), true);
-  assert.equal(ok({ engine: 'cloud', cloudProvider: 'openai', voice: '' }), false);
-  assert.equal(ok({ engine: 'cloud', cloudProvider: 'openai', voice: 'alloy' }), true);
-  // remote: server-specific, empty is fine.
-  assert.equal(ok(slot({ engine: 'remote', voice: '' })), true);
   // piper: empty, an .onnx, OR a kokoro-shaped id (#454 — the seed roster).
   assert.equal(ok(slot({ engine: 'piper', voice: '' })), true);
   assert.equal(ok(slot({ engine: 'piper', voice: 'en_GB-alba.onnx' })), true);

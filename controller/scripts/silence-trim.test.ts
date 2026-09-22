@@ -57,12 +57,14 @@ test('the operator dial survives a cold load', async () => {
   assert.equal(settings.get().silenceTrim.minGapMs, 4_000);
 });
 
-test('absent settings coerce to today: nothing trimmed', async () => {
+test('absent settings coerce to the shipped default: trimmed', async () => {
+  // This fork ships silenceTrim ON — a station that never opened the setting
+  // still gets the dead air cut, so absent must read as enabled.
   await coldLoad(undefined);
-  assert.deepEqual(resolveSilenceTrim(GAPPY), { cueInSec: null, cueOutSec: null });
-  // …and a malformed block reads as absent rather than as "enabled".
+  assert.deepEqual(resolveSilenceTrim(GAPPY), { cueInSec: 5.75, cueOutSec: 191.25 });
+  // …and a malformed block reads as absent, which is the same thing.
   await coldLoad({ enabled: 'yes please', minGapMs: 'soon' } as Record<string, unknown>);
-  assert.deepEqual(resolveSilenceTrim(GAPPY), { cueInSec: null, cueOutSec: null });
+  assert.deepEqual(resolveSilenceTrim(GAPPY), { cueInSec: 5.75, cueOutSec: 191.25 });
 });
 
 test('an out-of-range cold-load threshold cannot weaken the safety floor', async () => {

@@ -29,58 +29,14 @@ test('inherit → kokoro keeps the persona voice: one id-space with piper', () =
   assert.equal(out.voice, 'bm_george');
 });
 
-test('inherit → chatterbox / pocket-tts DROPS the persona voice', () => {
-  // These read `voice` as a reference .wav filename and a built-in id, so a
-  // carried piper id fails every synth. Empty means "use your own default".
-  for (const engine of ['chatterbox', 'pocket-tts']) {
-    const out = resolvePersonaVoiceSlot(INHERIT, { defaultEngine: engine });
-    assert.equal(out.engine, engine, engine);
-    assert.equal(out.voice, '', engine);
-    // The per-persona dials are not per-engine and survive regardless.
-    assert.equal(out.gainDb, 2, engine);
-    assert.equal(out.speed, 1.1, engine);
-  }
-});
-
 test('every engine an inherit slot can resolve to accepts the voice it is handed', () => {
   // The resolver's output is never re-validated, so it must not hand an engine
   // an id that engine's own schema rule refuses.
-  for (const defaultEngine of ['piper', 'kokoro', 'chatterbox', 'pocket-tts', 'remote']) {
+  for (const defaultEngine of ['piper', 'kokoro']) {
     const out = resolvePersonaVoiceSlot(INHERIT, { defaultEngine });
     const parsed = ttsVoiceSlotSchema('tts').safeParse(out);
     assert.equal(parsed.success, true, `${defaultEngine}: ${parsed.error?.issues[0]?.message}`);
   }
-  const cloud = resolvePersonaVoiceSlot(INHERIT, {
-    defaultEngine: 'cloud',
-    cloud: { provider: 'openai', voice: 'alloy' },
-  });
-  assert.equal(ttsVoiceSlotSchema('tts').safeParse(cloud).success, true);
-});
-
-test('inherit → cloud takes the STATION provider, model voice and drops the persona voice', () => {
-  const out = resolvePersonaVoiceSlot(INHERIT, {
-    defaultEngine: 'cloud',
-    cloud: { provider: 'openai-compatible', voice: 'dj-brain-default' },
-  });
-  assert.equal(out.engine, 'cloud');
-  assert.equal(out.cloudProvider, 'openai-compatible');
-  // A Piper voice id must never reach a cloud provider.
-  assert.notEqual(out.voice, 'bm_george');
-  assert.equal(out.voice, 'dj-brain-default');
-});
-
-test('inherit → cloud with no station voice sends NO voice, never the persona one', () => {
-  const out = resolvePersonaVoiceSlot(INHERIT, {
-    defaultEngine: 'cloud',
-    cloud: { provider: 'openai-compatible' },
-  });
-  assert.equal(out.voice, '', 'empty lets the server pick its own default');
-});
-
-test('inherit → remote drops the persona voice too (server-specific id space)', () => {
-  const out = resolvePersonaVoiceSlot(INHERIT, { defaultEngine: 'remote' });
-  assert.equal(out.engine, 'remote');
-  assert.equal(out.voice, '');
 });
 
 test('a PINNED engine is returned untouched — inherit changes nothing for it', () => {
@@ -163,22 +119,6 @@ test('personasPinningOtherEngine lists only the personas that would not follow',
   const out = personasPinningOtherEngine(personas, 'cloud');
   assert.deepEqual(out.map((p) => p.name), ['Wren', 'Nix']);
   assert.deepEqual(out.map((p) => p.engine), ['piper', 'kokoro']);
-});
-
-test('a cloud pin to ANOTHER provider is still listed, and names the provider', () => {
-  // The four cloud providers share one dispatcher but are independent targets,
-  // so comparing on engine alone reports a mismatched provider as compliant.
-  const personas = [
-    { id: 'a', name: 'Marlowe', tts: { engine: 'cloud', cloudProvider: 'openai-compatible' } },
-    { id: 'b', name: 'Wren', tts: { engine: 'cloud', cloudProvider: 'openai' } },
-    { id: 'c', name: 'Hale', tts: { engine: 'inherit' } },
-  ];
-  const out = personasPinningOtherEngine(personas, 'cloud', 'openai-compatible');
-  assert.deepEqual(out.map((p) => p.name), ['Wren']);
-  assert.deepEqual(out.map((p) => p.engine), ['cloud / openai']);
-
-  // Without a provider the comparison stays engine-only.
-  assert.deepEqual(personasPinningOtherEngine(personas, 'cloud'), []);
 });
 
 test('personasPinningOtherEngine tolerates junk rather than throwing', () => {

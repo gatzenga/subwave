@@ -145,7 +145,6 @@ test('the setting round-trips through update() without touching its siblings', a
   await settings.update({ scrobble: { navidrome: { enabled: true } } });
   assert.equal(settings.get().scrobble.navidrome.enabled, true);
   assert.equal(settings.get().scrobble.lastfm.enabled, false);
-  assert.equal(settings.get().scrobble.listenbrainz.enabled, false);
 
   // settingsBoolLike: anything truthy saves, matching every other settings flag.
   await settings.update({ scrobble: { navidrome: { enabled: 0 } as never } });

@@ -61,7 +61,7 @@ test('a configured repeat penalty survives a controller restart', async () => {
 test('the fallback leg keeps its own penalty across a restart', async () => {
   const llm = await coldLoad({
     repeatPenalty: 1.15,
-    fallback: { enabled: true, provider: 'locca', model: 'gemma', repeatPenalty: 1.3 },
+    fallback: { enabled: true, provider: 'openai-compatible', model: 'gemma', repeatPenalty: 1.3 },
   });
   assert.equal(llm.fallback.repeatPenalty, 1.3);
   assert.equal(appliedRepeatPenalty(llm.fallback), 1.3);

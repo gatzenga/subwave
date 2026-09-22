@@ -30,7 +30,6 @@ const repo = join(here, '..', '..');
 
 const SOURCES = [
   { name: 'liquidsoap/radio.liq', path: join(repo, 'liquidsoap', 'radio.liq'), src: 'a_source' },
-  { name: 'scripts/fx-render-test.sh', path: join(repo, 'scripts', 'fx-render-test.sh'), src: 'a_src' },
 ];
 
 for (const { name, path, src } of SOURCES) {

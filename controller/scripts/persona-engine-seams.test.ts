@@ -1,8 +1,7 @@
-// The 'inherit' sentinel at the three seams that read a persona's engine
-// without going through djPersonaTts(): djSystem()'s chatterbox tag hint, the
-// *ForPersona entry points in cloud-speech.ts, and tts.describeRouting().
-// Each asks `engine === '<something>'`, and a raw sentinel answers no to all
-// of them, so a missed resolve reads as "pinned elsewhere".
+// The 'inherit' sentinel at the seam that reads a persona's engine without
+// going through djPersonaTts(): tts.describeRouting(). It asks
+// `engine === '<something>'`, and a raw sentinel answers no, so a missed
+// resolve reads as "pinned elsewhere".
 //
 // Driven against real settings, since the raw and resolved slots differ only
 // once the STATION is configured a particular way. STATE_DIR is redirected
@@ -18,11 +17,7 @@ const root = mkdtempSync(join(tmpdir(), 'subwave-persona-seams-'));
 process.env.STATE_DIR = root;
 
 const settings = await import('../src/settings.js');
-const { djSystem } = await import('../src/llm/internal/prompts/system.js');
 const tts = await import('../src/audio/tts.js');
-const { resolveCloudProviderForPersona, resolveCloudModelForPersona } = await import(
-  '../src/llm/internal/speech/cloud-speech.js'
-);
 
 const INHERIT_PERSONA = {
   id: 'p_seam',
@@ -31,62 +26,7 @@ const INHERIT_PERSONA = {
   tts: { engine: 'inherit', cloudProvider: 'openai', voice: 'bm_george', gainDb: 0, speed: 1 },
 };
 
-// Matched on a fragment so a reword of the hint doesn't fail this test.
-const CHATTERBOX_MARKER = '[laugh]';
-
 test.after(() => rmSync(root, { recursive: true, force: true }));
-
-test('djSystem gives an inherit persona the chatterbox hint when the STATION is on chatterbox', async () => {
-  await settings.update({ tts: { defaultEngine: 'chatterbox' } });
-  const prompt = djSystem(INHERIT_PERSONA);
-  assert.ok(
-    prompt.includes(CHATTERBOX_MARKER),
-    'a persona following a chatterbox station is voiced by chatterbox, so it must be told about the tags',
-  );
-});
-
-test('djSystem withholds the chatterbox hint when the station is on something else', async () => {
-  // Every other engine speaks "[laugh]" aloud as the word.
-  await settings.update({ tts: { defaultEngine: 'piper' } });
-  assert.ok(!djSystem(INHERIT_PERSONA).includes(CHATTERBOX_MARKER));
-
-  await settings.update({ tts: { defaultEngine: 'kokoro' } });
-  assert.ok(!djSystem(INHERIT_PERSONA).includes(CHATTERBOX_MARKER));
-});
-
-test('a PINNED chatterbox persona still gets the hint whatever the station is', async () => {
-  await settings.update({ tts: { defaultEngine: 'piper' } });
-  const pinned = { ...INHERIT_PERSONA, tts: { ...INHERIT_PERSONA.tts, engine: 'chatterbox', voice: '' } };
-  assert.ok(djSystem(pinned).includes(CHATTERBOX_MARKER));
-});
-
-test('the cloud *ForPersona entry points resolve inherit against the station', async () => {
-  await settings.update({
-    tts: {
-      defaultEngine: 'cloud',
-      cloud: {
-        enabled: true,
-        provider: 'openai-compatible',
-        baseUrl: 'https://brain.example/v1',
-        model: 'dj-brain-voice',
-        voice: 'alloy',
-        compatApiKey: 'test-token',
-      },
-    },
-  });
-
-  // Keyed off engine === 'cloud', so a raw inherit slot drops the
-  // expression-cue hints on a station whose default IS cloud.
-  assert.equal(resolveCloudProviderForPersona(INHERIT_PERSONA), 'openai-compatible');
-  assert.equal(resolveCloudModelForPersona(INHERIT_PERSONA), 'dj-brain-voice');
-});
-
-test('an inherit persona reports NO cloud voice when the station is local', async () => {
-  await settings.update({ tts: { defaultEngine: 'piper' } });
-  assert.equal(resolveCloudProviderForPersona(INHERIT_PERSONA), '');
-  assert.equal(resolveCloudModelForPersona(INHERIT_PERSONA), '');
-});
-
 
 test('describeRouting reports the RESOLVED engine and voice, and no phantom fallback', async () => {
   // piper is always usable, so an inherit persona resolving to it falls back

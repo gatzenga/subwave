@@ -72,8 +72,8 @@ writeFileSync(join(root, 'jingles.json'), JSON.stringify({
   },
 }));
 
-const CHATTERBOX_TTS = {
-  engine: 'chatterbox', cloudProvider: 'openai', voice: 'nova.wav', gainDb: 0, speed: 1,
+const NOVA_TTS = {
+  engine: 'piper', cloudProvider: 'openai', voice: 'bm_george', gainDb: 0, speed: 1,
 };
 writeFileSync(join(root, 'settings.json'), JSON.stringify({
   activePersonaId: 'p_nova',
@@ -85,7 +85,7 @@ writeFileSync(join(root, 'settings.json'), JSON.stringify({
       soul: 'Speaks slowly, never fills a silence she does not have to.',
       frequency: 'moderate',
       avatar: 'p_nova.png',
-      tts: CHATTERBOX_TTS,
+      tts: NOVA_TTS,
     },
     {
       id: 'p_quinn',
@@ -166,7 +166,7 @@ test('bundle members must sit one level inside a known folder', () => {
 
 let exported: Buffer;
 
-test('the export carries the JSON, the clone sample and only this DJ jingles', async () => {
+test('the export carries the JSON and only this DJ jingles', async () => {
   const built = await buildPersonaBundle('p_nova');
   assert.equal(built.ok, true, (built as any).error);
   exported = (built as any).zip.toBuffer();
@@ -174,23 +174,20 @@ test('the export carries the JSON, the clone sample and only this DJ jingles', a
   const zip = new AdmZip(exported);
   const names = zip.getEntries().map(e => e.entryName).sort();
   assert.deepEqual(names, [
-    'jingles/jingle_nova.wav', 'manifest.json', 'persona.json', 'voices/nova.wav',
+    'jingles/jingle_nova.wav', 'manifest.json', 'persona.json',
   ], 'Quinn jingle and the builtin ident must both stay home');
 
   const manifest = JSON.parse(zip.getEntry('manifest.json')!.getData().toString('utf8'));
   assert.equal(manifest.format, 'subwave-persona');
   assert.equal(manifest.version, 1);
-  assert.equal(manifest.voice, 'nova.wav');
+  assert.equal(manifest.voice, null);
   assert.deepEqual(manifest.jingles.map((j: any) => j.file), ['jingle_nova.wav']);
   // Listed before the manifest was added, so it never names itself.
   assert.equal(manifest.contents.includes('manifest.json'), false);
 
-  // The sample is the real bytes, not a placeholder.
-  assert.deepEqual(zip.getEntry('voices/nova.wav')!.getData(), NOVA_WAV);
-
   const persona = JSON.parse(zip.getEntry('persona.json')!.getData().toString('utf8'));
   assert.equal(persona.name, 'Nova Reyes');
-  assert.equal(persona.tts.voice, 'nova.wav');
+  assert.equal(persona.tts.voice, 'bm_george');
   // Station-local: the receiving station mints its own id, and an avatar file
   // is keyed on the id this bundle is dropping.
   assert.equal('id' in persona, false);
@@ -202,36 +199,6 @@ test('an unknown persona exports nothing rather than an empty zip', async () => 
   assert.equal(built.ok, false);
   assert.equal((built as any).status, 404);
 });
-
-test('a persona whose clone sample is GONE is refused, not shipped mute', async () => {
-  // The bundle would be well-formed — manifest.voice null beside a persona JSON
-  // still naming the file — and would import 200 into a DJ that fails its synth
-  // on every line. This is the only end of the wire that can still fix it.
-  const settingsPath = join(root, 'settings.json');
-  const before = readFileSync(settingsPath, 'utf8');
-  const cfg = JSON.parse(before);
-  cfg.personas.push({
-    id: 'p_ghost',
-    name: 'Ghost',
-    tagline: '',
-    soul: 'Clones from a sample this station lost.',
-    frequency: 'quiet',
-    tts: { engine: 'chatterbox', cloudProvider: 'openai', voice: 'not-here.wav', gainDb: 0, speed: 1 },
-  });
-  writeFileSync(settingsPath, JSON.stringify(cfg));
-  setCache(null);
-
-  const built = await buildPersonaBundle('p_ghost');
-  assert.equal(built.ok, false);
-  assert.equal((built as any).status, 409);
-  assert.match((built as any).error, /not in the voice library/);
-
-  writeFileSync(settingsPath, before);
-  setCache(null);
-  await settings.load();
-});
-
-// ── Import ───────────────────────────────────────────────────────────────────
 
 test('re-importing the same DJ is refused by the SHARED duplicate-name rule', async () => {
   const outcome = await applyPersonaBundle(exported);
@@ -251,7 +218,7 @@ test('a station backup is named as such rather than refused generically', async 
   assert.match((outcome as any).error, /station backup/);
 });
 
-test('an import suffixes the clashing audio and re-points the persona at it', async () => {
+test('an import suffixes the clashing jingle rather than overwriting it', async () => {
   // Same bundle, renamed so it clears the duplicate-name rule — which is the
   // real sharing case: the DJ lands on a station that already has a nova.wav.
   const zip = new AdmZip(exported);
@@ -264,16 +231,9 @@ test('an import suffixes the clashing audio and re-points the persona at it', as
   assert.equal(outcome.ok, true, (outcome as any).error);
   const ok = outcome as Extract<typeof outcome, { ok: true }>;
 
-  // The sample landed beside the original, and the original is untouched.
-  assert.equal(ok.voice, 'nova-2.wav');
-  assert.deepEqual(readdirSync(VOICES).sort(), ['nova-2.wav', 'nova.wav']);
-  assert.deepEqual(readFileSync(join(VOICES, 'nova.wav')), NOVA_WAV);
-  assert.deepEqual(readFileSync(join(VOICES, 'nova-2.wav')), NOVA_WAV);
-
-  // ...and the incoming persona points at the name it ACTUALLY got. Without
-  // this the suffix is just an orphan and the DJ is mute.
-  assert.equal(ok.persona.tts.voice, 'nova-2.wav');
-  assert.equal(ok.persona.tts.engine, 'chatterbox');
+  assert.equal(ok.voice, null);
+  assert.equal(ok.persona.tts.voice, 'bm_george');
+  assert.equal(ok.persona.tts.engine, 'piper');
 
   // Off air with a minted id and no avatar, like a community install.
   assert.equal(ok.persona.name, 'Nova Reyes (guest)');
@@ -387,26 +347,6 @@ test('a NEWLINE in a jingle member name is refused and writes nothing', async ()
   assert.equal(pure.JINGLE_FILENAME_RE.test('a b.wav'), false);
 });
 
-test('a voice filename the persona SCHEMA would refuse writes nothing', async () => {
-  // adoptVoice used to take any *.wav, so the name was written to disk and then
-  // put on tts.voice — where TTS_CHATTERBOX_VOICE_RE refused it and the save
-  // 400'd, leaving the sample behind. The two rules are now one rule.
-  const before = stateSnapshot();
-  const outcome = await applyPersonaBundle(bundleOf(
-    {
-      name: 'Spacey',
-      tts: { engine: 'chatterbox', cloudProvider: 'openai', voice: 'ok.wav', gainDb: 0, speed: 1 },
-    },
-    [
-      ['voices/my voice.wav', Buffer.from('wav bytes')],
-      ['jingles/spacey_ident.wav', Buffer.from('stinger bytes')],
-    ],
-  ));
-  assert.equal(outcome.ok, false);
-  assert.match((outcome as any).error, /not a usable reference-voice filename/);
-  assert.equal(stateSnapshot(), before);
-});
-
 test('a bad audio member does not strand the GOOD ones written before it', async () => {
   // The members are collected and checked in archive order, so the empty one
   // below sits behind a perfectly good stinger. Under the old write-as-you-go
@@ -436,32 +376,6 @@ test('a duplicate name refuses without writing the audio that came with it', asy
   assert.equal(outcome.ok, false);
   assert.equal((outcome as any).status, 409);
   assert.equal(stateSnapshot(), before);
-});
-
-test('a clone-voice persona with NO sample anywhere is refused, not a silent 200', async () => {
-  // buildPersonaBundle refuses to PRODUCE this, but a hand-built zip never went
-  // through it. Installing would give the operator a DJ that fails every line.
-  const before = stateSnapshot();
-  const outcome = await applyPersonaBundle(bundleOf({
-    name: 'Ghost Voice',
-    tts: { engine: 'chatterbox', cloudProvider: 'openai', voice: 'absent.wav', gainDb: 0, speed: 1 },
-  }));
-  assert.equal(outcome.ok, false);
-  assert.match((outcome as any).error, /fail its synth on every line/);
-  assert.equal(stateSnapshot(), before);
-});
-
-test('...but a sample this station ALREADY has is not a refusal', async () => {
-  // nova.wav is in the library, so the persona works exactly as its JSON asks
-  // and there is nothing to warn about. Refusing here would block the ordinary
-  // "we both already have this voice" share.
-  const outcome = await applyPersonaBundle(bundleOf({
-    name: 'Borrows Nova',
-    tts: { engine: 'chatterbox', cloudProvider: 'openai', voice: 'nova.wav', gainDb: 0, speed: 1 },
-  }));
-  assert.equal(outcome.ok, true, (outcome as any).error);
-  assert.equal((outcome as any).persona.tts.voice, 'nova.wav');
-  assert.equal((outcome as any).voice, null, 'nothing was adopted — the file was already here');
 });
 
 test('a bundle may not carry more jingles than a DJ plausibly has', async () => {

@@ -150,19 +150,16 @@ test('the other redacted secrets keep round-tripping', async () => {
   // the sentinel for anyone else reading it.
   await coldLoadThreeKeys();
   await settings.update({
-    tts: { cloud: { apiKey: 'sk-tts' } },
+    scrobble: { lastfm: { apiKey: 'sk-lastfm' } },
     search: { apiKey: 'sk-search' },
     embedding: { apiKey: 'sk-embed' },
-    scrobble: { lastfm: { apiKey: 'sk-lastfm' }, listenbrainz: { userToken: 'tok-lb' } },
     privacy: { password: 'hunter2' },
   } as never);
 
   await roundTripThroughBackup();
   const s = settings.get();
-  assert.equal(s.tts.cloud.apiKey, 'sk-tts');
   assert.equal(s.search.apiKey, 'sk-search');
   assert.equal(s.embedding.apiKey, 'sk-embed');
   assert.equal(s.scrobble.lastfm.apiKey, 'sk-lastfm');
-  assert.equal(s.scrobble.listenbrainz.userToken, 'tok-lb');
   assert.equal(s.privacy.password, 'hunter2');
 });

@@ -19,7 +19,6 @@ import { personaToneDirectives, normalizeDial, DIAL_NEUTRAL, validatePersonasStr
 import { lengthMode, lengthPhrase } from '../src/llm/internal/prompts/system.js';
 import { showMusicLean } from '../src/llm/internal/prompts/picker.js';
 import { planSchema } from '../src/llm/internal/prompts/programme.js';
-import { modelForCloudRequest, resolveCloudModel, resolveCloudProvider, sharedCloudApiKeyForRequest, speedDirective } from '../src/llm/internal/speech/cloud-speech.js';
 
 let failures = 0;
 function test(name: string, fn: () => void | Promise<void>) {
@@ -371,11 +370,6 @@ async function main() {
     // Ollama permits forced tools while thinking — forceNoThink leaves it unchanged.
     assert.equal(reasoningFor({ provider: 'ollama', model: 'qwen3', reasoning: true }, { forceNoThink: true }), undefined);
   });
-  await test('deepseek: reasoning:false (or forceNoThink) DISABLES thinking; on → default (hybrids already think)', () => {
-    assert.equal(reasoningFor({ provider: 'deepseek', model: 'deepseek-v4-flash', reasoning: false }), 'none');
-    assert.equal(reasoningFor({ provider: 'deepseek', model: 'deepseek-v4-flash', reasoning: true }), undefined);
-    assert.equal(reasoningFor({ provider: 'deepseek', model: 'deepseek-v4-flash', reasoning: true }, { forceNoThink: true }), 'none');
-  });
   await test('anthropic: medium only when reasoning on AND not forced-tool; none otherwise', () => {
     assert.equal(reasoningFor({ provider: 'anthropic', model: 'claude-haiku-4.5', reasoning: true }), 'medium');
     assert.equal(reasoningFor({ provider: 'anthropic', model: 'claude-haiku-4.5', reasoning: true }, { forceNoThink: true }), 'none');
@@ -406,52 +400,25 @@ async function main() {
     }
     assert.equal(reasoningFor({ provider: 'openai', model: 'gpt-5.6-luna', reasoning: true }), 'medium');
   });
-  await test('requesty: minimal when suppressing — same wire bytes as the old providerOptions.requesty block', () => {
-    assert.equal(reasoningFor({ provider: 'requesty', model: 'openai/gpt-4o-mini', reasoning: true }), undefined);
-    assert.equal(reasoningFor({ provider: 'requesty', model: 'openai/gpt-4o-mini', reasoning: false }), 'minimal');
-    assert.equal(reasoningFor({ provider: 'requesty', model: 'openai/gpt-4o-mini', reasoning: true }, { forceNoThink: true }), 'minimal');
-  });
-  await test('gateway: none forwarded to the downstream vendor when suppressing (replaces the dual-block hack)', () => {
-    assert.equal(reasoningFor({ provider: 'gateway', model: 'anthropic/claude-haiku-4.5', reasoning: true }), undefined);
-    assert.equal(reasoningFor({ provider: 'gateway', model: 'anthropic/claude-haiku-4.5', reasoning: false }), 'none');
-    assert.equal(reasoningFor({ provider: 'gateway', model: 'deepseek/deepseek-v4', reasoning: true }, { forceNoThink: true }), 'none');
-  });
-  await test('gateway: Gemma downstream (google/gemma-*) omits the param — no thinkingConfig to a non-thinking model (issue #1044)', () => {
-    assert.equal(reasoningFor({ provider: 'gateway', model: 'google/gemma-4-31b-it', reasoning: false }), undefined);
-    assert.equal(reasoningFor({ provider: 'gateway', model: 'google/gemma-4-31b-it', reasoning: true }, { forceNoThink: true }), undefined);
-    // Non-Gemma google downstreams still get suppressed as before.
-    assert.equal(reasoningFor({ provider: 'gateway', model: 'google/gemini-2.5-flash', reasoning: false }), 'none');
-  });
   await test('openrouter: always undefined — reasoning is fixed at model construction (extraBody in the registry)', () => {
     assert.equal(reasoningFor({ provider: 'openrouter', model: 'xiaomi/mimo-v2.5', reasoning: false }), undefined);
     assert.equal(reasoningFor({ provider: 'openrouter', model: 'xiaomi/mimo-v2.5', reasoning: true }, { forceNoThink: true }), undefined);
   });
-  await test('openai-compatible + locca: always undefined — thinking rides the body injection, not the param', () => {
+  await test('openai-compatible: always undefined — thinking rides the body injection, not the param', () => {
     assert.equal(reasoningFor({ provider: 'openai-compatible', model: 'qwen3', reasoning: false }), undefined);
-    assert.equal(reasoningFor({ provider: 'locca', model: 'qwen3', reasoning: false }), undefined);
-    assert.equal(reasoningFor({ provider: 'locca', model: 'qwen3', reasoning: true }), undefined);
   });
-  await test('capability flags: tool-object covers ollama + locca + openai-compatible; per-call repeat-penalty reaches no one', () => {
+  await test('capability flags: tool-object covers ollama + openai-compatible; per-call repeat-penalty reaches no one', () => {
     assert.equal(needsToolCallObject({ provider: 'ollama' }), true);
     assert.equal(needsToolCallObject({ provider: 'openai' }), false);
-    // locca + openai-compatible serve local GGUF models that don't explore under
-    // native Output.object (explored=false on gemma-4-12b / qwen3.5-9b) — same as ollama.
-    assert.equal(needsToolCallObject({ provider: 'locca' }), true);
     assert.equal(needsToolCallObject({ provider: 'openai-compatible' }), true);
     // ai-sdk-ollama v4 dropped the per-call providerOptions.ollama channel, so the
     // sampling record must not claim repeat_penalty applied.
     assert.equal(repeatPenaltyApplies({ provider: 'ollama' }), false);
-    assert.equal(repeatPenaltyApplies({ provider: 'deepseek' }), false);
-    assert.equal(repeatPenaltyApplies({ provider: 'locca' }), false);
     assert.equal(appliedNumCtx({ provider: 'ollama', model: 'qwen3', numCtx: 8192 }), 8192);
     assert.equal(appliedNumCtx({ provider: 'openai', model: 'gpt-4.1-mini', numCtx: 8192 }), null);
-    assert.equal(appliedNumCtx({ provider: 'locca', model: 'qwen3', numCtx: 8192 }), null);
   });
   await test('appliedRepeatPenalty: body-injection providers only, and only when > 1.0', () => {
-    // openai-compatible + locca inject via the request body (the openai
-    // provider can't carry repeat_penalty in providerOptions).
     assert.equal(appliedRepeatPenalty({ provider: 'openai-compatible', repeatPenalty: 1.15 }), 1.15);
-    assert.equal(appliedRepeatPenalty({ provider: 'locca', repeatPenalty: 1.25 }), 1.25);
     // 1.0 (or below) is a no-op — never injected.
     assert.equal(appliedRepeatPenalty({ provider: 'openai-compatible', repeatPenalty: 1.0 }), null);
     // Ollama has no per-call channel at all on ai-sdk-ollama v4 — never
@@ -534,10 +501,8 @@ async function main() {
     assert.equal(agentPlan({ provider: 'ollama' }, {}, 3), 'done-tool');
     assert.equal(agentPlan({ provider: 'openai' }, {}, 0), 'native-no-tools');
     assert.equal(agentPlan({ provider: 'openai' }, {}, 3), 'native-then-done');
-    // locca + openai-compatible serve local GGUF models, so they take the forced
+    // openai-compatible serves local GGUF models, so it takes the forced
     // tool-object / done-tool path, not the native path.
-    assert.equal(agentPlan({ provider: 'locca' }, {}, 0), 'object-via-tool');
-    assert.equal(agentPlan({ provider: 'locca' }, {}, 3), 'done-tool');
     assert.equal(agentPlan({ provider: 'openai-compatible' }, {}, 0), 'object-via-tool');
     assert.equal(agentPlan({ provider: 'openai-compatible' }, {}, 3), 'done-tool');
     assert.equal(agentPlan({ provider: 'openai' }, null, 3), 'free-text');
@@ -549,13 +514,13 @@ async function main() {
     // These three ignore toolChoice with several tools visible and emit
     // schema-valid objects without exploring — the one-call corner is what
     // holds them. Widening any of these re-opens the middle-step failure window.
-    for (const provider of ['ollama', 'openai-compatible', 'locca']) {
+    for (const provider of ['ollama', 'openai-compatible']) {
       assert.equal(discoveryStepsFor({ provider }), 1, provider);
       assert.equal(gatedMaxStepsFor({ provider }), 2, provider);
     }
   });
   await test('native-strategy providers get room to seed, refine, cross-check', () => {
-    for (const provider of ['openai', 'anthropic', 'google', 'deepseek', 'openrouter', 'requesty', 'gateway']) {
+    for (const provider of ['openai', 'anthropic', 'google', 'openrouter']) {
       assert.equal(discoveryStepsFor({ provider }), 3, provider);
       assert.equal(gatedMaxStepsFor({ provider }), 4, provider);
     }
@@ -570,7 +535,7 @@ async function main() {
     // The GLM invariant: extra `done` steps grow an "I already declined" trail
     // and make compliance worse, so however tall discovery gets, the main run
     // commits once and hands off to the recovery cascade.
-    for (const provider of ['ollama', 'openai', 'anthropic', 'locca', 'gateway', 'nonsense']) {
+    for (const provider of ['ollama', 'openai', 'anthropic', 'nonsense']) {
       assert.equal(
         gatedMaxStepsFor({ provider }) - discoveryStepsFor({ provider }), 1,
         `${provider} must leave exactly one done step`);
@@ -1043,24 +1008,6 @@ async function main() {
     assert.equal(bare.tts.speed, TTS_SPEED_DEFAULT); // absent → unity
   });
 
-  // At most one of body/atempo is non-null: send `speed` upstream or stretch locally.
-  console.log('speedDirective (send `speed` upstream vs. local ffmpeg atempo):');
-  await test('openai-compatible + sendSpeed off → stretch locally, body omitted', () => {
-    assert.deepEqual(speedDirective('openai-compatible', false, 1.4), { body: null, atempo: 1.4 });
-  });
-  await test('openai-compatible + sendSpeed on → send speed upstream, no local stretch', () => {
-    assert.deepEqual(speedDirective('openai-compatible', true, 1.4), { body: 1.4, atempo: null });
-  });
-  await test('non-compat providers always send speed upstream (sendSpeed irrelevant)', () => {
-    assert.deepEqual(speedDirective('openai', false, 1.4), { body: 1.4, atempo: null });
-    assert.deepEqual(speedDirective('elevenlabs', false, 0.9), { body: 0.9, atempo: null });
-  });
-  await test('unity speed (1.0) → nothing anywhere, for every provider/flag combo', () => {
-    assert.deepEqual(speedDirective('openai-compatible', false, 1.0), { body: null, atempo: null });
-    assert.deepEqual(speedDirective('openai-compatible', true, 1.0), { body: null, atempo: null });
-    assert.deepEqual(speedDirective('openai', false, 1.0), { body: null, atempo: null });
-  });
-
   console.log('showMusicLean (soft lean vs strict genre lock):');
   const SOFT_GENRE_LINE = '\n\nMusic steer for this show — lean toward Jazz. These are preferences, not hard filters: break them only when the flow genuinely demands it.';
   await test('no show → empty string', () => {
@@ -1186,120 +1133,6 @@ async function main() {
     assert.equal(nearestId('', ['abcdef123456789012345']), null);
     assert.equal(nearestId(undefined as any, ['abcdef123456789012345']), null);
     assert.equal(nearestId('abcdef123456789012345', []), null);
-  });
-
-  // #696: the model djSystem gates the v3 hint on must be the one speak() uses.
-  console.log('resolveCloudModel (ElevenLabs v3 hint gating, issue #696):');
-  const cloudCfg = { defaultEngine: 'piper', provider: 'elevenlabs', model: 'eleven_v3' };
-  await test('explicit cloud persona with no provider override → global model', () => {
-    assert.equal(resolveCloudModel({ engine: 'cloud' }, cloudCfg), 'eleven_v3');
-  });
-  await test('provider override away from global → new provider default, NOT the global model', () => {
-    // Persona on ElevenLabs while the global cloud provider is OpenAI is
-    // voiced by eleven_flash_v2_5 — gating on the provider alone would hint a
-    // v2 voice that reads the brackets aloud.
-    assert.equal(
-      resolveCloudModel({ engine: 'cloud', cloudProvider: 'elevenlabs' }, { defaultEngine: 'piper', provider: 'openai', model: 'gpt-4o-mini-tts' }),
-      'eleven_flash_v2_5',
-    );
-  });
-  await test('provider override matching the global provider → global model', () => {
-    assert.equal(resolveCloudModel({ engine: 'cloud', cloudProvider: 'elevenlabs' }, cloudCfg), 'eleven_v3');
-  });
-  await test('override to openai-compatible (no per-provider default) keeps the global model', () => {
-    assert.equal(
-      resolveCloudModel({ engine: 'cloud', cloudProvider: 'openai-compatible' }, cloudCfg),
-      'eleven_v3',
-    );
-  });
-  await test('persona with no engine rides the station defaultEngine: cloud', () => {
-    // The common setup: global defaultEngine cloud + untouched personas — a
-    // persona-engine check would miss this and the hint would never fire.
-    assert.equal(
-      resolveCloudModel({}, { defaultEngine: 'cloud', provider: 'elevenlabs', model: 'eleven_v3' }),
-      'eleven_v3',
-    );
-    assert.equal(
-      resolveCloudModel(null, { defaultEngine: 'cloud', provider: 'elevenlabs', model: 'eleven_v3' }),
-      'eleven_v3',
-    );
-  });
-  await test('persona on a local engine → no model, regardless of defaultEngine', () => {
-    assert.equal(resolveCloudModel({ engine: 'piper' }, { defaultEngine: 'cloud', provider: 'elevenlabs', model: 'eleven_v3' }), '');
-    assert.equal(resolveCloudModel({ engine: 'chatterbox' }, { defaultEngine: 'cloud', provider: 'elevenlabs', model: 'eleven_v3' }), '');
-  });
-  await test('no engine anywhere near cloud → no model', () => {
-    assert.equal(resolveCloudModel({}, cloudCfg), '');
-    assert.equal(resolveCloudModel({ engine: '' }, cloudCfg), '');
-  });
-  await test('unknown persona engine string fails closed (no hint beats a spoken bracket)', () => {
-    assert.equal(resolveCloudModel({ engine: 'bogus' }, { defaultEngine: 'cloud', provider: 'elevenlabs', model: 'eleven_v3' }), '');
-  });
-
-  console.log('resolveCloudProvider (provider-gated Fish cue policy):');
-  await test('explicit Fish persona resolves Fish while keeping local/unknown engines closed', () => {
-    assert.equal(
-      resolveCloudProvider(
-        { engine: 'cloud', cloudProvider: 'fish-audio' },
-        { defaultEngine: 'piper', provider: 'openai' },
-      ),
-      'fish-audio',
-    );
-    assert.equal(resolveCloudProvider({ engine: 'piper' }, { defaultEngine: 'cloud', provider: 'fish-audio' }), '');
-    assert.equal(resolveCloudProvider({ engine: 'bogus' }, { defaultEngine: 'cloud', provider: 'fish-audio' }), '');
-  });
-  await test('station-default cloud provider resolves for personas with no explicit engine', () => {
-    assert.equal(resolveCloudProvider({}, { defaultEngine: 'cloud', provider: 'fish-audio' }), 'fish-audio');
-    assert.equal(resolveCloudProvider(null, { defaultEngine: 'cloud', provider: 'fish-audio' }), 'fish-audio');
-  });
-
-  console.log('modelForCloudRequest (provider defaults + exact preview model):');
-  await test('uses a provider default when a persona changes provider without a model', () => {
-    assert.equal(
-      modelForCloudRequest('openai', 'gpt-4o-mini-tts', { provider: 'fish-audio' }),
-      's2.1-pro',
-    );
-  });
-  await test('an explicit unsaved preview model wins across provider changes', () => {
-    assert.equal(
-      modelForCloudRequest('openai', 'gpt-4o-mini-tts', {
-        provider: 'fish-audio',
-        model: 's2.1-pro-free',
-      }),
-      's2.1-pro-free',
-    );
-    assert.equal(
-      modelForCloudRequest('fish-audio', 's2.1-pro', {
-        provider: 'fish-audio',
-        model: 'custom-fish-model',
-      }),
-      'custom-fish-model',
-    );
-  });
-
-  console.log('sharedCloudApiKeyForRequest (cross-provider credential isolation):');
-  await test('keeps managed inline keys only for their globally selected provider', () => {
-    assert.equal(sharedCloudApiKeyForRequest('openai', 'openai', 'openai-key', ''), 'openai-key');
-    assert.equal(sharedCloudApiKeyForRequest('elevenlabs', 'elevenlabs', 'eleven-key', ''), 'eleven-key');
-  });
-  await test('uses a provider-scoped credential for authenticated compatibility servers', () => {
-    assert.equal(
-      sharedCloudApiKeyForRequest('openai-compatible', 'openai-compatible', 'legacy-compat-key', ''),
-      'legacy-compat-key',
-    );
-    assert.equal(
-      sharedCloudApiKeyForRequest('openai-compatible', 'fish-audio', 'managed-key', 'compat-key'),
-      'compat-key',
-    );
-    assert.equal(
-      sharedCloudApiKeyForRequest('openai-compatible', 'openai', 'openai-key', ''),
-      '',
-    );
-  });
-  await test('drops stale managed-provider inline keys and never forwards one to Fish', () => {
-    assert.equal(sharedCloudApiKeyForRequest('elevenlabs', 'openai', 'openai-key', ''), '');
-    assert.equal(sharedCloudApiKeyForRequest('openai', 'fish-audio', 'legacy-key', ''), '');
-    assert.equal(sharedCloudApiKeyForRequest('fish-audio', 'fish-audio', 'legacy-key', 'compat-key'), '');
   });
 
   console.log('isFishS21Model (Fish expression-cue family gate):');
