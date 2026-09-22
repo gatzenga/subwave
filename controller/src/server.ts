@@ -16,7 +16,6 @@ import { getFullContext } from './context.js';
 import { loadCuriosityLedger } from './skills/curiosity.js';
 import { startScheduler } from './broadcast/scheduler.js';
 import { startListenerMonitor } from './broadcast/listeners.js';
-import { startStreamIdleMonitor } from './broadcast/stream-idle.js';
 import { startAudienceMonitor } from './broadcast/audience.js';
 import * as likes from './broadcast/likes.js';
 import { cors } from './middleware/cors.js';
@@ -302,7 +301,12 @@ app.listen(config.server.port, async () => {
   // every restart (#1256). Bounded internally, so never a boot hang.
   await startListenerMonitor();
   queue.startWatcher();
-  startStreamIdleMonitor();
+  // Idle pause is gone with its admin card. Leaving the monitor running would
+  // be worse than leaving it reachable: nothing can clear a stored
+  // `stream.idleWhenEmpty: true` any more, and the count it gates on comes from
+  // Icecast sockets only — an HLS-only audience reads as an empty room, so the
+  // station would freeze mid-track for listeners who are actually there.
+  // isIdle() therefore stays false for good, which is the pre-feature answer.
   startAudienceMonitor().catch(err => console.error('[audience] init failed:', err.message));
   // Up front so the sync readers see data from the first pick.
   await likes.load().catch(err => console.error('[likes] init failed:', err.message));

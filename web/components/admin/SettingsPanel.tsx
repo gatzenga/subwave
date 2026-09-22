@@ -1156,54 +1156,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
               </div>
             </Card>
 
-            {form && (
-              <Card title="Idle pause" sub="silence the programme when nobody is listening">
-                <div className="field">
-                  <Label>Pause when the room is empty</Label>
-                  {/* Seg + "after" + minutes + "min" + Save is wider than a
-                      phone card, so the row wraps below 640px. */}
-                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                    <Seg
-                      options={[
-                        { id: 'on', label: 'On' },
-                        { id: 'off', label: 'Off' },
-                      ]}
-                      value={form.stream.idleWhenEmpty ? 'on' : 'off'}
-                      onChange={id =>
-                        setForm(f =>
-                          f ? { ...f, stream: { ...f.stream, idleWhenEmpty: id === 'on' } } : f,
-                        )
-                      }
-                    />
-                    <span className="text-[12px] text-muted">after</span>
-                    <Input
-                      className="mono-num w-24"
-                      aria-label="Pause after (minutes)"
-                      type="number"
-                      step={1}
-                      min={1}
-                      max={1440}
-                      value={form.stream.idleAfterMinutes}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setForm(f =>
-                          f
-                            ? { ...f, stream: { ...f.stream, idleAfterMinutes: e.target.value } }
-                            : f,
-                        )
-                      }
-                    />
-                    <span className="text-[12px] text-muted">min</span>
-                  </div>
-                  <div className="field-hint">
-                    After this long with zero listeners the programme pauses mid-track and the DJ
-                    goes quiet: no track pulls from Navidrome, no LLM or TTS work. The stream
-                    mounts stay up, so any player (VLC, Sonos, the web player) connects normally;
-                    playback resumes where it left off within a few seconds of the first listener
-                    tuning in. Applies live, no mixer restart.
-                  </div>
-                </div>
-              </Card>
-            )}
 
             <Advanced note="crossfade, duck depth, transitions, loudness and the extra stream mounts">
             {form && (
@@ -1948,7 +1900,7 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             </Card>
 
             <SaveBar
-              note="Crossfade, the encoder settings and the listener buffer only reach the stream after a mixer restart. Idle pause, loudness, dead-air trim and the track-length cap apply live."
+              note="Crossfade, the encoder settings and the listener buffer only reach the stream after a mixer restart. Loudness, dead-air trim and the track-length window apply live."
               busy={busy}
               onSave={saveDanger}
               saveLabel="Save danger zone"

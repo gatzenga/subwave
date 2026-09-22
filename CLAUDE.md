@@ -90,8 +90,15 @@ in step.
 **Icecast stays up alongside it and is load-bearing beyond compatibility.**
 `/stream.mp3` is the universal floor (Sonos, hardware radios, car receivers),
 *and* it is where the listener COUNT comes from — which is what
-`llm.pauseWhenEmpty`, the idle gate and the DJ gates all read. Removing the
-Icecast mounts would take those with it. Do not treat it as legacy.
+`llm.pauseWhenEmpty` and the DJ gates read. Removing the Icecast mounts would
+take those with it. Do not treat it as legacy.
+
+That count is also why the **stream idle gate is gone** — the admin card and
+the monitor both. It froze the programme mid-track after N empty minutes, and
+"empty" here means zero Icecast sockets: an HLS-only audience fetches static
+segments and is invisible to it, so the station would have gone quiet for
+listeners who were there. `radio.liq` keeps the gate and its telnet commands
+(`idle_on`/`idle_off`); nothing asks for them.
 
 The web player still requests `/stream.mp3`, not HLS. Chrome and Firefox need
 hls.js for the HLS URL; Safari and iOS can play it natively.
