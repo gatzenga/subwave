@@ -1832,6 +1832,24 @@ def make_stream_outputs() =
     if hls_enabled() then
       hls_dir = "#{state_dir}/hls"
       ignore(file.mkdir(parents=true, hls_dir))
+      # Segments are written HERE and moved into hls_dir complete. Same volume,
+      # so the move is atomic — and a listener never fetches a file that is
+      # still being written. Without it the half-written segments land in the
+      # directory the edge serves, under names ending in "tmp".
+      hls_tmp_dir = "#{state_dir}/tmp/hls"
+      ignore(file.mkdir(parents=true, hls_tmp_dir))
+      # Segment filenames that are unique FOREVER, not just within one run.
+      #
+      # The default name is <stream>_<position>.ts, and position restarts from
+      # scratch whenever hls.config is lost — so yesterday's URL comes back
+      # pointing at different audio. Anything caching between the station and
+      # the listener (the operator's proxy, a CDN, the client itself) then
+      # answers a new segment with old sound, and no amount of Cache-Control on
+      # our side reliably undoes that. Stamping the name is what makes the
+      # question moot. Byte-for-byte AzuraCast's scheme, on the same Liquidsoap.
+      def hls_segment_name(m) =
+        "#{m.stream_name}_#{hls_segment_duration()}_#{int_of_float(time())}_#{m.position}.#{m.extname}"
+      end
       # Four AAC variants. Liquidsoap writes one sub-playlist per stream plus a
       # master playlist that lists them, which is what makes the client switch:
       # the player measures its own download rate per segment and steps down a
@@ -1848,7 +1866,9 @@ def make_stream_outputs() =
         # Keep a couple of expired segments on disk past the playlist window so a
         # client that is a beat behind still resolves the URL it already holds.
         segments_overhead=2,
+        segment_name=hls_segment_name,
         persist_at="#{state_dir}/hls.config",
+        temp_dir=hls_tmp_dir,
         hls_dir,
         [
           ("aac_320", %ffmpeg(format="mpegts", %audio(codec="aac", b="320k", channels=2, samplerate=44100))),

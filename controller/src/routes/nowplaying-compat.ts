@@ -16,6 +16,9 @@
 // rather than absent: a client that reads `song.isrc` should get '' and move
 // on, not crash on undefined.
 import express from 'express';
+import { rename, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { config } from '../config.js';
 import { queue } from '../broadcast/queue.js';
 import * as settings from '../settings.js';
 import * as library from '../music/library.js';
@@ -74,10 +77,28 @@ const secs = (iso?: string | null): number => {
   return Number.isFinite(t) ? Math.floor(t / 1000) : 0;
 };
 
-router.get('/nowplaying/:station', async (req, res) => {
-  try {
-    const origin = publicOrigin(req);
-    const shortcode = String(req.params.station || 'subwave');
+// One built payload, reused for a second.
+//
+// This is the endpoint a radio client polls, and it polls HARD: Shelv asks
+// every 3s PER DEVICE, so three rooms listening is roughly one request a
+// second, every second, all day. Building the payload costs a now-playing read
+// and a SYNCHRONOUS SQLite lookup, and this controller is one event loop shared
+// with the DJ, the tagger and TTS — a blocked loop is a timed-out client, which
+// surfaces in the app as "connecting" with no title and no cover while the
+// audio (static HLS files, served by the edge) plays on untouched.
+//
+// A one-second TTL is invisible to a listener sitting ~20s behind the live edge
+// and cuts the cost to at most one build per second no matter how many devices
+// are tuned in. Single-entry, keyed by origin+shortcode: the key comes from the
+// request, so a map would grow with whatever a caller invents.
+const NOWPLAYING_CACHE_TTL_MS = 1000;
+let npCache: { key: string; at: number; payload: unknown } | null = null;
+
+// The payload, built once and shared by the route and the static writer below.
+// One builder on purpose: a second one is how the file and the endpoint start
+// describing different songs.
+export async function buildNowPlayingPayload(origin: string, shortcode: string): Promise<any> {
+  {
     const s = settings.get();
     const np = await queue.getNowPlaying();
     const snap = queue.snapshot();
@@ -104,7 +125,7 @@ router.get('/nowplaying/:station', async (req, res) => {
 
     const next = snap.upcoming?.[0] || null;
 
-    res.json({
+    const payload = {
       station: {
         id: 1,
         name: s.station || 'SUB/WAVE',
@@ -129,7 +150,7 @@ router.get('/nowplaying/:station', async (req, res) => {
             url: `${origin}/stream.mp3`,
             bitrate: stream.bitrate ?? 0,
             format: 'mp3',
-            listeners: { total: stream.listeners.current, unique: stream.listeners.current, current: stream.listeners.current },
+            listeners: { total: stream.listeners.icecast, unique: stream.listeners.icecast, current: stream.listeners.icecast },
             path: '/stream.mp3',
             is_default: true,
           },
@@ -138,11 +159,12 @@ router.get('/nowplaying/:station', async (req, res) => {
         hls_enabled: s.stream?.hlsEnabled !== false,
         hls_is_default: s.stream?.hlsEnabled !== false,
         hls_url: `${origin}/hls/live.m3u8`,
-        hls_listeners: 0,
+        hls_listeners: stream.listeners.hls ?? 0,
       },
-      // Icecast counts sockets on its own mounts; an HLS listener fetches
-      // static files and never reaches it, so this figure covers the MP3 mount
-      // alone. Reported honestly rather than guessed.
+      // Both transports, like every other listener figure the station reports:
+      // Icecast sockets plus the HLS leg counted from the edge's playlist log
+      // (broadcast/hls-listeners.ts). The per-mount figure above stays
+      // Icecast-only, because that mount is what it describes.
       listeners: {
         total: stream.listeners.current,
         unique: stream.listeners.current,
@@ -181,11 +203,82 @@ router.get('/nowplaying/:station', async (req, res) => {
       })),
       is_online: stream.online,
       cache: null,
-    });
+    };
+    return payload;
+  }
+}
+
+router.get('/nowplaying/:station', async (req, res) => {
+  try {
+    const origin = publicOrigin(req);
+    const shortcode = String(req.params.station || 'subwave');
+    const cacheKey = `${origin}|${shortcode}`;
+    if (npCache && npCache.key === cacheKey && Date.now() - npCache.at < NOWPLAYING_CACHE_TTL_MS) {
+      res.json(npCache.payload);
+      return;
+    }
+    const payload = await buildNowPlayingPayload(origin, shortcode);
+    npCache = { key: cacheKey, at: Date.now(), payload };
+    res.json(payload);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// --- The static payload the edge serves ------------------------------------
+//
+// A radio client polls this endpoint HARD — Shelv every 3s PER DEVICE — and
+// this controller is ONE event loop shared with the DJ, the tagger and TTS.
+// Whenever that loop is busy, every poll waits behind it, the client hits its
+// 8s timeout and shows "connecting" with no title and no cover, while the audio
+// (static HLS files, served by the edge) plays on untouched.
+//
+// So the hot path stops going through this process at all: the payload is
+// rendered to a file and docker/aio/Caddyfile serves THAT for
+// `/api/nowplaying/<anything>`. This is AzuraCast's own answer, in their words
+// — "Write JSON file to disk so nginx can serve it without calling the PHP
+// stack at all" — and it buys the same resilience: a busy, or even a dead,
+// controller still answers instantly with the last known song.
+//
+// The cost is that `elapsed`/`remaining` are as old as the last write (one
+// second). Every client that matters computes elapsed from `played_at` anyway,
+// and a listener sits ~20s behind the live edge regardless.
+//
+// SITE_URL is required, because a file has no request to read a Host from. No
+// SITE_URL, no file — and the Caddyfile then falls through to the route above,
+// which is the pre-existing behaviour.
+const STATIC_FILE = join(config.stateDir, 'nowplaying-static.json');
+const STATIC_WRITE_MS = 1000;
+let lastStaticJson = '';
+
+async function writeNowPlayingStatic(): Promise<void> {
+  const origin = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
+  if (!origin) return;
+  const payload = await buildNowPlayingPayload(origin, 'subwave');
+  const json = JSON.stringify(payload);
+  if (json === lastStaticJson) return;
+  lastStaticJson = json;
+  // Atomic: the edge reads this file constantly, and a half-written one is a
+  // parse error in every client at once.
+  const tmp = `${STATIC_FILE}.${process.pid}.tmp`;
+  await writeFile(tmp, json, 'utf8');
+  await rename(tmp, STATIC_FILE);
+}
+
+// Starts the writer. One write up front so the file exists before the first
+// client asks; failures only log, since a missing file degrades to the route.
+export async function startNowPlayingStaticWriter(): Promise<void> {
+  if (!(process.env.SITE_URL || '').trim()) {
+    console.log('[nowplaying] static file off: SITE_URL not set');
+    return;
+  }
+  await writeNowPlayingStatic().catch(err =>
+    console.warn('[nowplaying] static write failed:', err?.message || err),
+  );
+  setInterval(() => {
+    void writeNowPlayingStatic().catch(() => {});
+  }, STATIC_WRITE_MS);
+}
 
 // --- AzuraCast-shaped artwork paths ----------------------------------------
 //

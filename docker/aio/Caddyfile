@@ -43,6 +43,14 @@
 		# they are 4x the volume and say nothing the playlist poll doesn't.
 		@hls_playlist path *.m3u8
 		log_name @hls_playlist hls_access
+		# Same class of bug as the `.ts` line above, one extension over, and this
+		# one reached listeners: Caddy guessed the playlist type from the Debian
+		# image's system table and served `audio/x-mpegurl` — the legacy type for
+		# an M3U FILE LIST. AVFoundation decides from the Content-Type whether a
+		# URL is a live HLS stream or a plain playlist, so Apple clients were
+		# left guessing: sometimes playback, sometimes "connecting" forever, on
+		# the same device minutes apart. This is the type Apple specifies.
+		header @hls_playlist Content-Type application/vnd.apple.mpegurl
 		root * /var/sub-wave
 		file_server
 	}
@@ -52,6 +60,42 @@
 	# Kept in lockstep with docker/Caddyfile.
 	handle /api/listener-auth {
 		respond 404
+	}
+
+	# The AzuraCast-shaped now-playing payload, served from a FILE.
+	#
+	# This is the one endpoint radio clients hammer — Shelv polls it every 3s per
+	# device — and the controller is a single Node event loop shared with the DJ,
+	# the tagger and TTS. Routed through that loop, a poll waits behind whatever
+	# it is doing, the client times out and shows "connecting" with no title and
+	# no cover while the audio plays on. The controller therefore renders the
+	# payload to nowplaying-static.json once a second and this serves that,
+	# exactly as AzuraCast's nginx does ("so nginx can serve it without calling
+	# the PHP stack at all"). A busy — or dead — controller still answers.
+	#
+	# Only the bare endpoint: /api/nowplaying/<x>/art and everything else stay on
+	# the controller. No SITE_URL means no file, and then this falls through to
+	# the route, which is the pre-existing behaviour.
+	@nowplaying path_regexp nowplaying ^/api/nowplaying/[^/]+/?$
+	handle @nowplaying {
+		root * /var/sub-wave
+		@nowplaying_file file /nowplaying-static.json
+		handle @nowplaying_file {
+			header {
+				Access-Control-Allow-Origin *
+				# One second, stated explicitly. A proxy in front with caching of
+				# its own (the operator's nginx, a CDN) otherwise invents its own
+				# freshness rule, and a stale now-playing reads to a client as a
+				# frozen title or no metadata at all.
+				Cache-Control "max-age=1, must-revalidate"
+			}
+			rewrite * /nowplaying-static.json
+			file_server
+		}
+		handle {
+			uri strip_prefix /api
+			reverse_proxy 127.0.0.1:7701
+		}
 	}
 
 	# Controller REST API (prefix stripped so its routes stay at root).

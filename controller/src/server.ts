@@ -22,7 +22,10 @@ import { cors } from './middleware/cors.js';
 import { createStartupGate } from './middleware/startup.js';
 import { assertAdminConfigured } from './middleware/auth.js';
 import { router as publicRoutes } from './routes/public.js';
-import { router as nowPlayingCompatRoutes } from './routes/nowplaying-compat.js';
+import {
+  router as nowPlayingCompatRoutes,
+  startNowPlayingStaticWriter,
+} from './routes/nowplaying-compat.js';
 import { router as settingsRoutes } from './routes/settings.js';
 import { router as jingleRoutes } from './routes/jingles.js';
 import { router as sfxRoutes } from './routes/sfx.js';
@@ -300,6 +303,11 @@ app.listen(config.server.port, async () => {
   // fails open, so a watcher beating the first poll buys a free agent pick on
   // every restart (#1256). Bounded internally, so never a boot hang.
   await startListenerMonitor();
+  // The now-playing payload radio clients poll, rendered to a file the edge
+  // serves without touching this process. See routes/nowplaying-compat.ts.
+  startNowPlayingStaticWriter().catch(err =>
+    console.error('[nowplaying] static writer init failed:', err.message),
+  );
   queue.startWatcher();
   // Idle pause is gone with its admin card. Leaving the monitor running would
   // be worse than leaving it reachable: nothing can clear a stored
