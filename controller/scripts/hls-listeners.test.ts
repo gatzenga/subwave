@@ -249,3 +249,30 @@ test('the window follows the configured segment duration', async () => {
     store.setCache(null);
   }
 });
+
+test('playlist freshness ignores the master, which the mixer writes once', async () => {
+  // The bug this pins: live.m3u8 only lists the rungs, so Liquidsoap writes it
+  // at startup and never again. Reading ITS mtime reported a healthy stream as
+  // "no source" a few seconds after boot. The variants are the heartbeat.
+  const { hlsPlaylistAgeSec } = await import('../src/broadcast/hls-listeners.js');
+  const { mkdirSync, utimesSync } = await import('node:fs');
+  const hlsDir = join(STATE, 'hls');
+  mkdirSync(hlsDir, { recursive: true });
+  const nowSec = Date.now() / 1000;
+
+  assert.equal(await hlsPlaylistAgeSec(), null, 'an empty hls dir reads as no playlist at all');
+
+  writeFileSync(join(hlsDir, 'live.m3u8'), '#EXTM3U\n');
+  utimesSync(join(hlsDir, 'live.m3u8'), nowSec - 3600, nowSec - 3600); // written at boot
+  writeFileSync(join(hlsDir, 'aac_320.m3u8'), '#EXTM3U\n');
+  utimesSync(join(hlsDir, 'aac_320.m3u8'), nowSec - 2, nowSec - 2);    // rewritten every segment
+
+  const age = await hlsPlaylistAgeSec();
+  assert.ok(age !== null && age <= 5, `hour-old master must not win, got ${age}`);
+
+  // A mixer that stopped writing goes stale on the variants, which is the
+  // reading the debug console turns into "no source".
+  utimesSync(join(hlsDir, 'aac_320.m3u8'), nowSec - 300, nowSec - 300);
+  const stale = await hlsPlaylistAgeSec();
+  assert.ok(stale !== null && stale >= 290, `a stopped mixer must read stale, got ${stale}`);
+});

@@ -20,7 +20,7 @@
 // socket to hold — so the refresh runs every REFRESH_MS and a listener appears
 // within one tick and drops out WINDOW_MS after their last playlist fetch.
 
-import { open, readdir } from 'node:fs/promises';
+import { open, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from '../config.js';
 import * as settings from '../settings.js';
@@ -397,6 +397,39 @@ export function hlsConnections(nowMs = Date.now()): ListenerConnection[] {
     connectedSeconds: Math.max(0, Math.round((nowMs - (firstSeen.get(r.key) ?? r.firstHitMs)) / 1000)),
     connections: 1,
   }));
+}
+
+// How long ago the mixer last wrote an HLS playlist, in seconds, or null when
+// there is no HLS directory at all (switched off, or never written).
+//
+// Read off the VARIANT playlists, NEVER `live.m3u8`: Liquidsoap writes the
+// master once at startup and never touches it again — it only lists the rungs,
+// which never change — so its mtime is the mixer's start time, and a perfectly
+// healthy stream looked dead within seconds of booting. The variants are
+// rewritten once per segment, which is the actual heartbeat.
+//
+// Station dir first, then the root: the mixer writes under its own state dir
+// while the edge serves the root's hls/, and on a single-station install those
+// are the same path. Reporting a live stream as dead is the expensive mistake,
+// so both are tried.
+export async function hlsPlaylistAgeSec(nowMs = Date.now()): Promise<number | null> {
+  const newest = await newestVariantMtimeMs(join(config.stateDir, 'hls'))
+    .catch(() => newestVariantMtimeMs(join(config.stateRoot, 'hls')))
+    .catch(() => 0);
+  if (newest <= 0) return null;
+  return Math.max(0, Math.round((nowMs - newest) / 1000));
+}
+
+// Throws when the directory cannot be read, so the caller can fall through to
+// the other one; a directory with no variant playlists yet returns 0.
+async function newestVariantMtimeMs(dir: string): Promise<number> {
+  const variants = (await readdir(dir)).filter(
+    n => n.endsWith('.m3u8') && n !== `${MASTER_PLAYLIST}.m3u8`,
+  );
+  const times = await Promise.all(
+    variants.map(n => stat(join(dir, n)).then(s => s.mtimeMs, () => 0)),
+  );
+  return Math.max(0, ...times);
 }
 
 // Starts the read loop. Resolves once the first reading has landed, so boot can
