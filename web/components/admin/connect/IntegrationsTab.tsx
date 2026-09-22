@@ -75,10 +75,7 @@ export default function IntegrationsTab({ catalog }: Props) {
         </div>
       </Card>
 
-      <Card
-        title="Icecast mounts"
-        sub="The compatibility floor. MP3 is always live — Sonos, hardware radios and car receivers speak it and nothing else. Opus, FLAC and AAC turn on in Settings → Danger zone and appear here once they do."
-      >
+      <Card title="Icecast mounts">
         <div className="grid gap-2.5">
           {icecastMounts.map(m => <MountRow key={m.mount} m={m} origin={origin} />)}
         </div>
