@@ -340,12 +340,8 @@ export function RowActionsMenu({
                 </button>
               )}
               {track.artist && (
-                <button type="button" className={cn(MENU_ITEM, 'items-start')} disabled={disabled} onClick={() => run(() => onBlock(track, 'artist'))}>
-                  <Ban size={13} className="mt-px flex-none" />
-                  <span>
-                    Never play this artist
-                    <span className="block text-[10px] text-muted">also blocks tracks they're only featured on — acts joined by & or , stay separate</span>
-                  </span>
+                <button type="button" className={MENU_ITEM} disabled={disabled} onClick={() => run(() => onBlock(track, 'artist'))}>
+                  <Ban size={13} /> Never play this artist
                 </button>
               )}
             </>
