@@ -1188,6 +1188,69 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             )}
 
             {form && (
+              <Card title="Track length" sub="the window a track has to fall in to get picked">
+                <div className="field">
+                  <Label>Minimum track length</Label>
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                    <Input
+                      className="mono-num w-28"
+                      aria-label="Minimum track length (seconds)"
+                      type="number"
+                      step={1}
+                      min={0}
+                      max={PICKER_MIN_TRACK_LENGTH_BOUNDS.max}
+                      value={form.picker.minTrackLengthSeconds}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setForm(f => (f ? { ...f, picker: { ...f.picker, minTrackLengthSeconds: e.target.value } } : f))
+                      }
+                    />
+                    <span className="text-[12px] text-muted">
+                      sec · 0 = no floor · min {data?.values?.minTrackSeconds ?? 30}s
+                    </span>
+                  </div>
+                  <SettingsFieldError path="picker.minTrackLengthSeconds" errors={fieldErrors} />
+                  <div className="field-hint">
+                    The shortest a track can be to get picked, on both pickers and the
+                    offline fallback playlist &mdash; the way to keep 40-second skits,
+                    interludes and album intros off air. A show can set its own, and a track
+                    you queue yourself from the studio plays whatever its length.
+                  </div>
+                </div>
+                <div className="field mt-4">
+                  <Label>Maximum track length</Label>
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                    <Input
+                      className="mono-num w-28"
+                      aria-label="Maximum track length (seconds)"
+                      type="number"
+                      step={1}
+                      min={0}
+                      max={36000}
+                      value={form.maxTrackSeconds}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setForm(f => (f ? { ...f, maxTrackSeconds: e.target.value } : f))
+                      }
+                    />
+                    <span className="text-[12px] text-muted">
+                      sec · 0 = no limit · min {data?.values?.minTrackSeconds ?? 30}s
+                    </span>
+                  </div>
+                  <SettingsFieldError path="maxTrackSeconds" errors={fieldErrors} />
+                  <div className="field-hint">
+                    The longest a track can be to get picked &mdash; hour-long album mixes and
+                    DJ sets never enter the rotation. Together with the floor above this is a
+                    window: set 150 and 300 and only 2&frac12;&ndash;5 minute tracks are
+                    chosen. Anything that slips through anyway is still faded out at this
+                    figure rather than airing in full, which is what keeps an unmeasured
+                    file from taking the hour. A track you queue yourself from the studio is
+                    exempt and plays in full, and a show can override this with its own limit
+                    (0 there means unlimited). Applies on the next pick; no restart needed.
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {form && (
               <Card title="Duck depth" sub="how far the music drops under the DJ">
                 <div className="grid gap-3">
                   <div className="field">
@@ -1413,69 +1476,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                       </div>
                     );
                   })}
-                </div>
-              </Card>
-            )}
-
-            {form && (
-              <Card title="Track length" sub="the window a track has to fall in to get picked">
-                <div className="field">
-                  <Label>Minimum track length</Label>
-                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                    <Input
-                      className="mono-num w-28"
-                      aria-label="Minimum track length (seconds)"
-                      type="number"
-                      step={1}
-                      min={0}
-                      max={PICKER_MIN_TRACK_LENGTH_BOUNDS.max}
-                      value={form.picker.minTrackLengthSeconds}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setForm(f => (f ? { ...f, picker: { ...f.picker, minTrackLengthSeconds: e.target.value } } : f))
-                      }
-                    />
-                    <span className="text-[12px] text-muted">
-                      sec · 0 = no floor · min {data?.values?.minTrackSeconds ?? 30}s
-                    </span>
-                  </div>
-                  <SettingsFieldError path="picker.minTrackLengthSeconds" errors={fieldErrors} />
-                  <div className="field-hint">
-                    The shortest a track can be to get picked, on both pickers and the
-                    offline fallback playlist &mdash; the way to keep 40-second skits,
-                    interludes and album intros off air. A show can set its own, and a track
-                    you queue yourself from the studio plays whatever its length.
-                  </div>
-                </div>
-                <div className="field mt-4">
-                  <Label>Maximum track length</Label>
-                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                    <Input
-                      className="mono-num w-28"
-                      aria-label="Maximum track length (seconds)"
-                      type="number"
-                      step={1}
-                      min={0}
-                      max={36000}
-                      value={form.maxTrackSeconds}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setForm(f => (f ? { ...f, maxTrackSeconds: e.target.value } : f))
-                      }
-                    />
-                    <span className="text-[12px] text-muted">
-                      sec · 0 = no limit · min {data?.values?.minTrackSeconds ?? 30}s
-                    </span>
-                  </div>
-                  <SettingsFieldError path="maxTrackSeconds" errors={fieldErrors} />
-                  <div className="field-hint">
-                    The longest a track can be to get picked &mdash; hour-long album mixes and
-                    DJ sets never enter the rotation. Together with the floor above this is a
-                    window: set 150 and 300 and only 2&frac12;&ndash;5 minute tracks are
-                    chosen. Anything that slips through anyway is still faded out at this
-                    figure rather than airing in full, which is what keeps an unmeasured
-                    file from taking the hour. A track you queue yourself from the studio is
-                    exempt and plays in full, and a show can override this with its own limit
-                    (0 there means unlimited). Applies on the next pick; no restart needed.
-                  </div>
                 </div>
               </Card>
             )}
