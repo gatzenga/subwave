@@ -1,12 +1,36 @@
 # Running as a non-root user (PUID / PGID)
 
-**Status: plan, not implemented.** This is the working paper for that change —
-what is true today, what has to move, in which order, and how we know it worked.
+**Status: implemented.** This paper stays as the record of why the change looks
+the way it does; the sections below describe the shipped shape, not a proposal.
+What is left is the operator's half — rebuild, then hand the folder to the user
+and set the two variables.
 
 The operator's goal, in their words: create a `subwave` user on the NAS, hand
 that user the folder (ACL, not chmod), pass its ids into the container, done.
 
-## Where we are today
+## What shipped
+
+| File | What changed |
+| --- | --- |
+| `docker/aio/entrypoint.sh` | New PID 1. Decides the uid, then execs the supervisor. Without `PUID`/`PGID` it is a no-op. |
+| `docker/Dockerfile.aio` | The `subwave` account, ownership of the runtime-written image dirs, `TORCH_HOME` + `HOME` + XDG under the state dir, `EXPOSE 8080`, the new entrypoint. |
+| `docker/aio/Caddyfile` | Listens on `:8080`. |
+| `docker/aio/supervisor.sh` | Icecast without `sudo` when we already are the user; the 777 sweep skipped under `SUBWAVE_SINGLE_UID`. |
+| `docker-compose.yml` | `7700:8080`, and `PUID`/`PGID` documented but commented out. |
+| `controller/scripts/aio-entrypoint.test.ts` | Pins the decision, the no-variables case first. |
+
+Operator steps, in order:
+
+1. Rebuild and start **without** `PUID`/`PGID`. It must behave exactly as before
+   — that is the branch every existing station takes, and it is worth seeing
+   once. The only visible change is the published port (`7700:8080`).
+2. In the NAS file manager: the state folder's owner becomes `subwave`, with
+   read and write, applied recursively. Once.
+3. Uncomment `PUID`/`PGID` in the compose file, matching that account's ids, and
+   restart. `docker exec sub-wave ps -o user,comm` should now show one user and
+   no root.
+
+## Where we started
 
 | Process | Runs as | Writes outside the state dir |
 | --- | --- | --- |

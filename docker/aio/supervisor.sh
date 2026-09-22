@@ -70,6 +70,14 @@ state_prepare_dir() {
 		state_warn "state dir $p could not be created — a read-only or unwritable mount; the station boots, but anything writing there will fail"
 		return 0
 	fi
+	# One uid owns everything (the entrypoint dropped privileges), so there is
+	# nobody else to widen these for — and on a NAS a blanket 777 overwrites
+	# the ACL the operator just set, which is the whole thing PUID exists to
+	# stop. Report what we cannot write; never rewrite modes.
+	if [ "${SUBWAVE_SINGLE_UID:-}" = "1" ]; then
+		[ -w "$p" ] || state_warn "state dir $p is not writable by uid $(id -u) — give it to this user on the host (owner + write), the station runs on what it can reach"
+		return 0
+	fi
 	chmod 777 "$p" 2>/dev/null || true
 	if [ ! -w "$p" ] || ! state_writable_by_others "$p"; then
 		state_warn "state dir $p is mode $(stat -c %a "$p" 2>/dev/null || echo '?') and chmod could not change it — the controller and analyzer write there as other uids; chown/chmod it on the host"
@@ -681,7 +689,14 @@ run_broadcast() {
 
 	render_icecast
 	log "starting icecast2"
-	sudo -E -u icecast2 icecast2 -n -c "$RENDERED" &
+	# As root, icecast drops to its own account like it always has. Under
+	# PUID/PGID we ARE the account everything runs as, and sudo would be both
+	# pointless and a way back to a second uid in the state dir.
+	if [ "$(id -u)" = "0" ]; then
+		sudo -E -u icecast2 icecast2 -n -c "$RENDERED" &
+	else
+		icecast2 -n -c "$RENDERED" &
+	fi
 	local ic=$!
 
 	# Give icecast a moment to accept HTTP so liquidsoap's first source

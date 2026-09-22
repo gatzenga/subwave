@@ -169,8 +169,14 @@ RUN TORCH_INDEX="https://download.pytorch.org/whl/cpu" && \
 # ANALYZE_PYTHON flips on the controller's local analyze backend; HF_HOME puts
 # CLAP/Demucs weights under the persisted state dir so they survive recreates.
 # ANALYZE_WORKER defaults to /app/scripts/analyze_worker.py (copied below).
+# TORCH_HOME joins it for the same reason and fixes a wart on the way: Demucs
+# pulls htdemucs through torch.hub, which without this writes to $HOME/.cache
+# — a path inside the container, so the weights were re-downloaded after every
+# recreate. Both now live on the persisted volume, and both are readable by
+# whatever uid the station runs as.
 ENV ANALYZE_PYTHON=/opt/analyzer/venv/bin/python \
-    HF_HOME=/var/sub-wave/hf-cache
+    HF_HOME=/var/sub-wave/hf-cache \
+    TORCH_HOME=/var/sub-wave/torch-cache
 
 # --- Controller app ---------------------------------------------------------
 WORKDIR /app
@@ -195,23 +201,49 @@ COPY liquidsoap/radio.liq /etc/liquidsoap/radio.liq
 COPY sounds /sounds
 COPY docker/aio/Caddyfile /etc/caddy/Caddyfile
 COPY docker/aio/supervisor.sh /usr/local/bin/subwave-supervisor
-RUN chmod +x /usr/local/bin/subwave-supervisor
+COPY docker/aio/entrypoint.sh /usr/local/bin/subwave-entrypoint
+RUN chmod +x /usr/local/bin/subwave-supervisor /usr/local/bin/subwave-entrypoint
 
 # Shared state dir (the supervisor re-asserts perms on every boot).
 RUN mkdir -p /var/sub-wave && chmod 777 /var/sub-wave
 
+# The account the station can run as when the operator passes PUID/PGID
+# (docker/aio/entrypoint.sh rewrites these ids at boot; 1000 is only a
+# placeholder). Without those variables nothing below is used and the image
+# runs as root exactly as before.
+#
+# The directories are the ones written at RUNTIME from inside the image: the
+# supervisor renders icecast.xml into /etc/icecast2 on every boot, icecast and
+# liquidsoap write their logs, and Next.js standalone writes its cache. They
+# are created here so the entrypoint has something to hand over — /var/run is
+# a tmpfs on some hosts, so the entrypoint recreates them too.
+RUN groupadd -g 1000 subwave && \
+    useradd -u 1000 -g 1000 -d /var/sub-wave -s /bin/bash subwave && \
+    mkdir -p /var/log/icecast2 /var/run/icecast2 /var/log/liquidsoap /web/.next/cache && \
+    chown -R subwave:subwave /etc/icecast2 /var/log/icecast2 /var/run/icecast2 \
+                             /var/log/liquidsoap /web/.next
+
 # Re-declared for the final stage (ARGs don't cross stage boundaries) so the
 # controller reports the same version as the web build above.
 ARG SUBWAVE_BUILD_VERSION
-ENV NODE_ENV=production \
+# HOME and the XDG paths point at the state dir so every process has somewhere
+# to write whatever uid it runs as — Caddy keeps its data dir under
+# XDG_DATA_HOME, and $HOME/.cache would otherwise be /root's, unreadable to a
+# dropped user and lost on every recreate.
+ENV HOME=/var/sub-wave \
+    XDG_DATA_HOME=/var/sub-wave/xdg \
+    XDG_CONFIG_HOME=/var/sub-wave/xdg \
+    XDG_CACHE_HOME=/var/sub-wave/xdg/cache \
+    NODE_ENV=production \
     STATE_DIR=/var/sub-wave \
     SOUNDS_DIR=/sounds \
     SUBWAVE_BUILD_VERSION=${SUBWAVE_BUILD_VERSION}
 
-# Single public port: Caddy on :80. Health = controller liveness via the edge,
-# which only answers once web + controller are both up.
-EXPOSE 80
+# Single public port: Caddy on :8080. Above 1024 on purpose — binding :80
+# requires root, and the whole point of PUID/PGID is not needing it. Publish it
+# wherever you like: `-p 7700:8080`.
+EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=6 \
-    CMD curl -fsS http://localhost:80/api/health > /dev/null || exit 1
+    CMD curl -fsS http://localhost:8080/api/health > /dev/null || exit 1
 
-ENTRYPOINT ["/usr/local/bin/subwave-supervisor"]
+ENTRYPOINT ["/usr/local/bin/subwave-entrypoint"]

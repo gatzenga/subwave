@@ -6,7 +6,9 @@
 	auto_https off
 }
 
-:80 {
+# :8080, not :80 — a port below 1024 needs root, and the station can run as an
+# ordinary user (PUID/PGID, see PUID.md). The compose file publishes it.
+:8080 {
 	# Icecast mounts. Opus/FLAC/AAC are off by default but must be listed or
 	# they fall through to the catch-all and 404. flush_interval -1 keeps the
 	# never-ending audio body live.
