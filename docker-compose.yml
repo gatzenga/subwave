@@ -2,7 +2,7 @@ services:
   subwave:
     image: subwave:latest
     pull_policy: never
-    container_name: sub-wave
+    container_name: subwave
     restart: unless-stopped
     mem_limit: 16g
     environment:
