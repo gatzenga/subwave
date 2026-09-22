@@ -63,7 +63,7 @@ test('every field has a no-constraint default, so a caller states only what it c
   // The locks must default to null/empty rather than undefined: `undefined`
   // reads the same at a call site but means "field absent" to anything that
   // enumerates the scope, which is how a dropped lock hid before.
-  for (const k of ['genreLock', 'eraLock', 'moodLock', 'energyLock', 'vocalLock', 'minTrackSec', 'playlistLock', 'playlistTracks', 'excludedIds', 'audioWaypoint'] as const) {
+  for (const k of ['genreLock', 'eraLock', 'moodLock', 'energyLock', 'vocalLock', 'minTrackSec', 'maxTrackSec', 'playlistLock', 'playlistTracks', 'excludedIds', 'audioWaypoint'] as const) {
     assert.equal(s[k], null, `${k} must default to null`);
   }
   assert.equal(s.resolveReferences, false);
@@ -97,12 +97,11 @@ test('vocalLock drops the other side (instrumental = empty vocalRanges)', () => 
   assert.deepEqual(idsFor({ vocalLock: 'instrumental' as any }), ['b']);
 });
 
-test('minTrackSec drops short candidates, and is NOT gated on filtersStrict', () => {
-  // The minimum-track-length floor (#1573) travels in the scope like the five
-  // locks above, but unlike them it is the twin of the max-track-length cap and
-  // applies whether or not the show opted into strict filters. HARD here
+test('the track-length window drops both ends, and is NOT gated on filtersStrict', () => {
+  // The window travels in the scope like the five locks above, but unlike them
+  // it applies whether or not the show opted into strict filters. HARD here
   // (starve:true), same as every other filter in collect(): the pool picker
-  // never-starves on the same floor and is the dead-air scope behind this one.
+  // never-starves on the same window and is the dead-air scope behind this one.
   const LENGTHS = [
     { id: 'skit', title: 'Skit', artist: 'X', duration: 38 },
     { id: 'song', title: 'Song', artist: 'Y', durationSec: 300 },
@@ -117,6 +116,16 @@ test('minTrackSec drops short candidates, and is NOT gated on filtersStrict', ()
   // Both field names, since a Subsonic child and a library row spell it
   // differently and the tools see both.
   assert.deepEqual(idsOf({ minTrackSec: 400 }), ['unwalked']);
+
+  // The ceiling half. It used to be an on-air cue_out cut only, so an
+  // over-long track reached the model, got picked, and faded mid-song.
+  assert.deepEqual(idsOf({ maxTrackSec: 100 }), ['skit', 'unwalked']);
+  // Both ends together — the "only 2.5 to 5 minute tracks" ask.
+  assert.deepEqual(idsOf({ minTrackSec: 150, maxTrackSec: 400 }), ['song', 'unwalked']);
+  // An unmeasured track survives BOTH ends, for the one reason: dropping
+  // unknowns would make the window mean "only play what we happen to have
+  // walked". queue.drain's cue_out stamp is what catches the hour-long one.
+  assert.deepEqual(idsOf({ minTrackSec: 150, maxTrackSec: 200 }), ['unwalked']);
 });
 
 test('playlistLock hard-intersects — no never-starve to off-playlist', () => {

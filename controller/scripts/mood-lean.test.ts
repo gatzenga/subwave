@@ -82,3 +82,52 @@ test('the clause opens with a space — it is concatenated, not joined', () => {
   assert.equal(moodLeanClause('energetic', ENERGETIC, false, true).startsWith(' '), true);
   assert.equal(moodLeanClause('energetic', ENERGETIC, false, false).startsWith(' '), true);
 });
+
+// ---------------------------------------------------------------------------
+// Wiring. The clause only reaches a model if dj-agent puts it on the event turn
+// AND session.windowMessages re-joins the suffix onto the text — and the whole
+// point of this change is that a mood which validates, saves and reads back
+// everywhere was reaching the model as nothing at all. A source-shape pin,
+// because the alternative is a live agent run.
+
+test('the pick event turn carries the mood clause into promptSuffix', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/broadcast/dj-agent.ts', import.meta.url), 'utf8');
+
+  // Built from the resolved context, not from settings: a look-ahead pick near
+  // a show boundary must follow the mood that will be on air when it plays.
+  assert.match(src, /moodLeanClause\(\s*\n?\s*moodName,/);
+  assert.match(src, /const moodName = ctx\?\.dominantMood;/);
+
+  // In the suffix, not in `text`: the booth log is the operator's, and prompt
+  // engineering in it is what the text/suffix split exists to keep out.
+  assert.match(src, /const promptSuffix = `\$\{favClause\}\$\{moodClause\}/);
+
+  // The library has to be open before stats() can answer, and the first pick of
+  // a boot can reach here before the pool path opened it.
+  const loadAt = src.indexOf('await library.load();\n    const moodName');
+  const statsAt = src.indexOf('library.stats()?.withAudioEmbedding');
+  assert.ok(loadAt > 0 && statsAt > loadAt, 'library.load() must precede the stats read');
+});
+
+test('the tool the clause names is gated on the same two conditions the tool is', async () => {
+  const { readFileSync } = await import('node:fs');
+  const agent = readFileSync(new URL('../src/broadcast/dj-agent.ts', import.meta.url), 'utf8');
+  const tool = readFileSync(
+    new URL('../src/llm/internal/tools/picker/tools/search-by-sound.ts', import.meta.url),
+    'utf8',
+  );
+  // searchBySound is conditionally registered. Naming it on a run that does not
+  // carry it spends the single discovery round on a call that cannot resolve,
+  // so the clause asks the same question the registry does.
+  assert.match(tool, /hasAudioEmbeddings && analyzer\.textEmbeddingAvailable\(\) !== false/);
+  assert.match(agent, /withAudioEmbedding \?\? 0\) > 0\s*\n?\s*&& analyzer\.textEmbeddingAvailable\(\) !== false/);
+});
+
+test('session.windowMessages re-joins the suffix onto the event text', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/broadcast/session.ts', import.meta.url), 'utf8');
+  // Without this the clause is stored and never sent — the exact failure mode
+  // the mood already had.
+  assert.match(src, /m\.meta\?\.promptSuffix \? `\$\{m\.text\}\$\{m\.meta\.promptSuffix\}` : m\.text/);
+});
