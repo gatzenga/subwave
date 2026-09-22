@@ -23,18 +23,18 @@ function CopyUrl({ url }: { url: string }) {
   );
 }
 
+// Only ever rendered for a mount that is on, so there is no off state to draw:
+// the caller filters, and a row here always ends in a URL you can copy.
 function MountRow({ m, origin }: { m: StreamMountDoc; origin: string }) {
   return (
     <div className="border border-separator-strong bg-bg px-3 py-2.5">
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <code className="text-[12px] font-semibold">{m.mount}</code>
         <span className="caption text-muted">{m.format}</span>
-        {m.enabled ? <Pill tone="accent">live</Pill> : <Pill>off</Pill>}
+        <Pill tone="accent">live</Pill>
       </div>
       <div className="mb-2 text-[11px] leading-[1.5] text-muted">{m.description}</div>
-      {m.enabled
-        ? <CopyUrl url={`${origin}${m.mount}`} />
-        : <div className="text-[11px] text-muted italic">Enable in Settings → Danger zone to get a URL.</div>}
+      <CopyUrl url={`${origin}${m.mount}`} />
     </div>
   );
 }
@@ -45,8 +45,14 @@ export default function IntegrationsTab({ catalog }: Props) {
 
   // `kind` is absent on a controller predating the split; those are all
   // icecast mounts, so default there rather than dropping them from the page.
-  const hlsMounts = catalog.streamMounts.filter(m => m.kind === 'hls');
-  const icecastMounts = catalog.streamMounts.filter(m => m.kind !== 'hls');
+  //
+  // Switched-off mounts are left out rather than listed with "enable it to get
+  // a URL". This page answers "what can I point a player at", and a row for
+  // something the operator turned off is an answer to a question nobody asked —
+  // the same rule the debug console's mount table follows. Turn one on and it
+  // reappears here by itself.
+  const hlsMounts = catalog.streamMounts.filter(m => m.kind === 'hls' && m.enabled);
+  const icecastMounts = catalog.streamMounts.filter(m => m.kind !== 'hls' && m.enabled);
 
   return (
     <div className="grid gap-4">
@@ -71,7 +77,7 @@ export default function IntegrationsTab({ catalog }: Props) {
 
       <Card
         title="Icecast mounts"
-        sub="The compatibility floor. MP3 is always live — Sonos, hardware radios and car receivers speak it and nothing else. The rest turn on in Settings → Danger zone."
+        sub="The compatibility floor. MP3 is always live — Sonos, hardware radios and car receivers speak it and nothing else. Opus, FLAC and AAC turn on in Settings → Danger zone and appear here once they do."
       >
         <div className="grid gap-2.5">
           {icecastMounts.map(m => <MountRow key={m.mount} m={m} origin={origin} />)}
