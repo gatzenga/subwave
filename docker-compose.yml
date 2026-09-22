@@ -11,18 +11,11 @@ services:
       - ADMIN_PASS=7D76mmHNJkFKDnhR
       - SITE_URL=https://subwave.vkugler.ch
       - ANALYZE_REQUEST_TIMEOUT_MS=600000
-      # Run the station as this NAS's own `subwave` account instead of root
-      # (uid 1035, group `users`). Set both or neither — either missing and the
-      # container runs as root exactly as it always did. The state folder is
-      # handed to that user once in the NAS file manager (owner + write); the
-      # container never changes ownership or modes itself. See PUID.md.
       - PUID=1035
       - PGID=100
     volumes:
       - /volume2/docker/subwave/state:/var/sub-wave
     ports:
-      # Caddy listens on 8080 inside: a port below 1024 needs root, and the
-      # station can run as an ordinary user.
       - "127.0.0.1:7700:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
