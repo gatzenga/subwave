@@ -58,6 +58,8 @@ import { advanceRun, runActive } from './dj-agent/runs.js';
 import { pickSchemaBase, pickSystem } from './dj-agent/schemas.js';
 import * as likes from './likes.js';
 import { classifyPickFailure, type PickFailure } from '../util/pick-seed.js';
+import * as analyzer from '../music/analyzer.js';
+import { moodLeanClause } from './mood-lean.js';
 
 // Re-exported so every existing `from './dj-agent.js'` import keeps working —
 // including scripts/llm-bench, which sits outside tsconfig's include and so
@@ -734,6 +736,27 @@ export async function runTrackEvent(queue, ctx, { wantLink, showAt = null, pickA
     // multiplies across the window. Mirrored by the pool picker's listener-liked
     // source so both paths lean the same way — a lean, never a lock.
     const favClause = likes.favouritesClause(settings.get()?.likes);
+    // The hour's mood, for the same reason and in the same place — see
+    // broadcast/mood-lean.ts for why it cannot ride the system prompt, why it
+    // carries the CLAP sound description rather than the mood word, and why it
+    // is a lean rather than the lock a strict show already gets. load() is
+    // idempotent; the first pick after a boot can reach here before the pool
+    // path has opened the library, and a clause silently missing on the first
+    // pick of every restart is the kind of gap nobody notices.
+    await library.load();
+    const moodName = ctx?.dominantMood;
+    // The same two conditions searchBySound's own `available` gate applies
+    // (llm/internal/tools/picker/tools/search-by-sound.ts). Asked for out here
+    // as well because the clause NAMES the tool: a run that does not carry it
+    // would spend its single discovery round on a call that cannot resolve.
+    const canSearchBySound = (library.stats()?.withAudioEmbedding ?? 0) > 0
+      && analyzer.textEmbeddingAvailable() !== false;
+    const moodClause = moodLeanClause(
+      moodName,
+      moodName ? settings.moodPromptFor(moodName) : null,
+      !!ctx?.activeShow?.moods?.length,
+      canSearchBySound,
+    );
     // Exploration nudge (ε-greedy seed break, music/airing.ts): every pick
     // seeding discovery from the expected predecessor is a random walk that never
     // leaves its similarity cluster, so a fraction of picks steer the round
@@ -756,7 +779,7 @@ export async function runTrackEvent(queue, ctx, { wantLink, showAt = null, pickA
         + (pickAnchor?.id ? ` [id: ${pickAnchor.id}]` : '')
         + (anchorPriorTrack ? ` (after "${anchorPriorTrack.title}" by ${anchorPriorTrack.artist})` : '')
         + '. Pick the track to play next.';
-    const promptSuffix = `${favClause}${effectClause}${runClause}${journeyClause}${exploreClause}`;
+    const promptSuffix = `${favClause}${moodClause}${effectClause}${runClause}${journeyClause}${exploreClause}`;
     session.appendTurn({
       role: 'event', kind: 'pick', text: eventText,
       meta: promptSuffix ? { promptSuffix } : {},
