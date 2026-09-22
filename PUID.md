@@ -40,9 +40,13 @@ megabytes, or the analyzer simply fails.
 - **A failure warns and continues.** A station that refuses to boot over an
   ownership convenience is worse than one on a degraded mount — the same posture
   `bootstrap_state_dirs` already takes.
-- **The container does not chown the state volume.** The operator owns that
-  through ACLs; we only make sure we run under the id they gave us. A best-effort
-  chown of the top level only, skipped silently when it fails.
+- **With `PUID` set the container performs no `chmod` and no `chown` at all.**
+  Not on boot, not ever. This is the actual requirement, stated by the operator:
+  they set owner and rights once in the NAS interface and never touch it again.
+  A container that rewrites modes on every start is precisely the Nextcloud
+  misery being escaped — and worse on a NAS, because a blanket `chmod 777`
+  overwrites the ACL the operator just set. We read and write as the id we were
+  given; anything we cannot write, we report.
 
 ## What has to move
 
@@ -87,14 +91,15 @@ megabytes, or the analyzer simply fails.
 
 ## Migration for the existing station
 
-The state dir is full of root-owned files. Once, on the host:
+The state dir is full of root-owned files from the root era. That is cleared up
+**once, in the NAS interface** — set the folder's owner to `subwave` with read
+and write, let it apply recursively — not with a shell command, and never again
+afterwards. Everything the container creates from then on belongs to that id by
+construction, and a default ACL on the folder carries the rights to new files
+without anyone intervening.
 
-```bash
-chown -R subwave:subwave /volume2/docker/subwave/state
-```
-
-Without it the new user boots into a tree it cannot write. The entrypoint will
-say so rather than fail quietly.
+If the container does boot into a tree it cannot write, it says so in the log
+and keeps running on what it can reach. It will not try to fix it.
 
 ## How we know it worked
 
@@ -108,9 +113,12 @@ say so rather than fail quietly.
 - Unset `PUID`/`PGID`, restart: everything still works, as root, exactly as
   before.
 
-## Open question for the operator
+## Settled
 
-Should the container chown the state tree itself when it finds files it cannot
-write (convenient, but a container rewriting ownership on a NAS volume is a
-surprise), or only report it and let the ACL handle it? The plan above assumes
-**report, don't touch**.
+Whether the container should repair ownership itself: **no.** Report, never
+touch. The operator manages this in the NAS interface, and the point of the
+whole change is that it stays managed there — the container's job is to run
+under the id it is given and stop having opinions about permissions.
+
+The 777 sweep is therefore not just skipped when `PUID` is set; skipping it is
+half the value of the change.
