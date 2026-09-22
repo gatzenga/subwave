@@ -189,7 +189,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Station name', section: 'station', card: 'Station identity', keywords: 'call sign title dj prompt' },
   { label: 'Share description', section: 'station', card: 'Station identity', keywords: 'blurb og meta social' },
   { label: 'Location', section: 'station', card: 'Station location', keywords: 'weather forecast open-meteo latitude longitude' },
-  { label: 'Station locale', section: 'station', card: 'Localization', keywords: 'language 24h am pm date format' },
   { label: 'Private player', section: 'station', card: 'Privacy', keywords: 'password gate hide lock' },
   { label: 'Stream password', section: 'station', card: 'Privacy', keywords: 'listener auth icecast lock restart' },
   { label: 'Station password', section: 'station', card: 'Privacy', keywords: 'secret shared passphrase' },

@@ -1,12 +1,8 @@
 'use client';
 
 import type { ChangeEvent } from 'react';
-import { normalizeStationLocale } from '../../../lib/format';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
-import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup,
-} from '../../ui/select';
 import { Card, Pill, Seg } from '../ui';
 import { Advanced } from './section-chrome';
 import { LocationPicker } from '../../LocationPicker';
@@ -30,9 +26,9 @@ export function StationSection({ data, form, setForm, busy, saveSettings, fieldE
     // Pinned rather than read off the form: their cards are gone, so a value
     // stored before this would be one nothing could change again. '' is the
     // AUTO timezone, i.e. the container's TZ — docker-compose sets
-    // Europe/Zurich, which is the point.
+    // Europe/Zurich, which is the point, and en-GB is the 24-hour clock.
     timezone: '',
-    locale: form.locale,
+    locale: 'en-GB',
     weather: {
       lat: parseFloat(form.weather.lat),
       lng: parseFloat(form.weather.lng),
@@ -120,29 +116,6 @@ export function StationSection({ data, form, setForm, busy, saveSettings, fieldE
           </div>
         </div>
 
-      </Card>
-
-      <Card title="Localization" sub="Language variant and clock display">
-        <div className="field">
-          <Label>Station locale</Label>
-          <Select
-            value={form.locale}
-            onValueChange={val =>
-              setForm(f => ({ ...f, locale: normalizeStationLocale(val) }))
-            }
-          >
-            <SelectTrigger className="w-[260px] max-w-full" aria-label="Station locale"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="en-GB">English (UK), 24-hour</SelectItem>
-                <SelectItem value="en-US">English (US), AM/PM</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <div className="field-hint">
-            Sets station-facing display language and clock style. US English uses AM/PM for visible clock times. Applies live.
-          </div>
-        </div>
       </Card>
 
       <Card title="Privacy" sub="Keep the station off the open web — one password, two locks">
