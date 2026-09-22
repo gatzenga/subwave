@@ -1518,10 +1518,12 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                   </div>
                   <SettingsFieldError path="maxTrackSeconds" errors={fieldErrors} />
                   <div className="field-hint">
-                    The DJ won&rsquo;t auto-pick tracks longer than this, handy for hour-long
-                    album mixes or DJ sets that keep landing in rotation. Listener requests still
-                    play any length, and a show can override this with its own limit (0 there means
-                    unlimited). Applies on the next pick; no restart needed.
+                    Where an over-long track gets faded out &mdash; hour-long album mixes and
+                    DJ sets stop eating a whole hour of the schedule. Note this is <em>not</em>
+                    the mirror of the floor above: a long track is still picked and still airs,
+                    it simply ends at the cap, where a short one is never chosen at all.
+                    Listener requests play any length, and a show can override this with its own
+                    limit (0 there means unlimited). Applies on the next pick; no restart needed.
                   </div>
                 </div>
               </Card>
