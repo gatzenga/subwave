@@ -14,7 +14,7 @@ import { PAGE_SIZE } from '../types';
 // filing it under rows.
 export default function HistoryTabContainer() {
   const {
-    queuing, queueTrack, likeIndex, liking, toggleLike, blocking, blockTrack,
+    queuing, queueTrack, blocking, blockTrack,
   } = useLibrary();
   const [page, setPage] = useState(0);
 
@@ -42,9 +42,6 @@ export default function HistoryTabContainer() {
       onRefresh={() => { void q.refetch(); }}
       // Heart and never-play come straight off the provider, so a history row
       // shares the Browse rows' optimistic updates and their one like index.
-      likeIndex={likeIndex}
-      liking={liking}
-      onToggleLike={toggleLike}
       blocking={blocking}
       onBlock={blockTrack}
     />

@@ -2,25 +2,21 @@
 // segment-tools.js). There is no standalone "web-search skill" object — the
 // segment-director agent (skills/_agent.js) decides when artist news airs.
 //
-// Four backends, chosen via settings.search.provider:
-//   - duckduckgo (default) — DuckDuckGo's Instant Answer API. Free, no key,
-//     officially documented. Returns useful results only for entity / definition
-//     queries; for most artist queries it returns nothing, which the segment
-//     director already treats as a valid (silent) outcome.
-//   - tavily — paid API for richer web results. Reads its key from
-//     settings.search.apiKey, falling back to config.search.apiKey
-//     (SEARCH_API_KEY env var) for back-compat with earlier installs.
-//   - brave — Brave Search API. Real web results for artist-name queries
-//     (issue #623). Same key resolution as Tavily; metered billing with $5/mo
-//     of free credits (~1,000 queries), so the 30-min memo matters here too.
-//   - searxng — self-hosted meta-search, keyless, needs settings.search.baseUrl.
-//     settings.search.searxngEngines optionally pins the engine set for these
-//     calls only (#1353), leaving the instance's browser traffic on its defaults.
+// This fork serves ONE backend: DuckDuckGo's Instant Answer API. Free, no key,
+// officially documented. It returns useful results only for entity /
+// definition queries; for most artist queries it returns nothing, which the
+// segment director already treats as a valid (silent) outcome.
+//
+// The keyed and self-hosted backends (Tavily, Brave, SearXNG) are still here
+// and still exported — the fixture tests drive them directly, and they are the
+// shape a station that wants richer artist news would reach for. Nothing
+// ROUTES to them: searchWeb ignores settings.search.provider outright, because
+// the admin card that chose between the four is gone and a stored provider
+// naming a keyed one would be one nothing could point away from again.
 //
 // All backends return the same shape — { answer, results: [{ title, content }] }
 // — so callers don't have to branch. searchWeb() wraps every call in a 30-min
-// memo to keep the homelab polite under DDG's unofficial fair-use limits and
-// to avoid burning Tavily/Brave credits on duplicate ticks.
+// memo to keep the homelab polite under DDG's unofficial fair-use limits.
 
 import { config } from '../config.js';
 import * as settings from '../settings.js';
@@ -320,26 +316,21 @@ export async function searchWeb(
   query: string,
   opts?: { recency?: 'day' | 'week' | 'month' },
 ): Promise<SearchResponse> {
-  const provider = settings.get().search?.provider || 'duckduckgo';
+  // This fork serves one backend. The admin card that chose between the four
+  // is gone, so a stored `search.provider` naming a keyed one would be a
+  // provider nothing can point away from again — searchReady() would answer
+  // false for a key no form can set, and web search would be off with no
+  // surface saying why. Reading the setting at all is what would make that
+  // reachable, so it is not read.
   const recency = opts?.recency;
-  const key = `${provider}:${recency || ''}:${query.toLowerCase()}`;
-  return memo(key, CACHE_TTL_MS, () => {
-    if (provider === 'searxng') return searxngSearch(query, recency);
-    if (provider === 'tavily') return tavilySearch(query);
-    if (provider === 'brave') return braveSearch(query, recency);
-    return duckduckgoSearch(query);
-  });
+  const key = `duckduckgo:${recency || ''}:${query.toLowerCase()}`;
+  return memo(key, CACHE_TTL_MS, () => duckduckgoSearch(query));
 }
 
-// True when the active search provider is usable right now.
-//   duckduckgo:   always ready (no key, no URL)
-//   tavily/brave: needs settings.search.apiKey, or SEARCH_API_KEY env
-//   searxng:      needs settings.search.baseUrl (no env fallback by design)
+// True when the active search provider is usable right now. DuckDuckGo needs
+// no key and no URL, so on this fork the answer is always yes — kept as a
+// function because every caller gates on it and a station that later regains a
+// keyed backend would gate here again.
 export function searchReady(): boolean {
-  const s = settings.get().search;
-  const provider = s?.provider || 'duckduckgo';
-  if (provider === 'duckduckgo') return true;
-  if (provider === 'searxng') return !!(s?.baseUrl && s.baseUrl.trim());
-  // tavily / brave (and any future keyed provider)
-  return !!(s?.apiKey || process.env.SEARCH_API_KEY || config.search.apiKey);
+  return true;
 }

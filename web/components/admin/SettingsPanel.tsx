@@ -24,9 +24,9 @@ import { fieldAria } from '../../lib/form';
 import ArchivesPanel from './ArchivesPanel';
 import BackupPanel from './BackupPanel';
 import {
+  PICKER_MIN_TRACK_LENGTH_BOUNDS,
   SETTINGS_AAC_BITRATES,
   SETTINGS_MP3_BITRATES,
-  SETTINGS_OPUS_BITRATES,
   TRANSITION_EFFECTS,
 } from '@/lib/schemas.generated';
 import { AlertTriangle } from 'lucide-react';
@@ -45,7 +45,6 @@ import { TtsSection } from './settings/TtsSection';
 import { DjBehaviourSection } from './settings/DjBehaviourSection';
 import { LlmSection } from './settings/LlmSection';
 import { BrainSection } from './settings/BrainSection';
-import { SearchSection } from './settings/SearchSection';
 import { LibrarySection } from './settings/LibrarySection';
 import { StationSection } from './settings/StationSection';
 import { ThemeSection } from './settings/ThemeSection';
@@ -151,7 +150,6 @@ function dirtyPaths(
 // it drifts silently the one time a value IS added, offering the operator a
 // bitrate the schema then refuses (or hiding one it would have accepted).
 const MP3_BITRATES = SETTINGS_MP3_BITRATES;
-const OPUS_BITRATES = SETTINGS_OPUS_BITRATES;
 const AAC_BITRATES = SETTINGS_AAC_BITRATES;
 
 /**
@@ -732,6 +730,14 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
         intro: n.float('ducking.intro', form.ducking.intro),
       },
       maxTrackSeconds: n.int('maxTrackSeconds', form.maxTrackSeconds),
+      // Its own top-level key rather than part of the cap: the floor is a
+      // SELECTION filter both pickers read, where maxTrackSeconds is an
+      // on-air cut. They are edited as one pair, so they save as one PATCH.
+      // The controller merges `picker` field by field, so albumHours (still
+      // on the LLM card) is untouched by this write.
+      picker: {
+        minTrackLengthSeconds: n.int('picker.minTrackLengthSeconds', form.picker.minTrackLengthSeconds),
+      },
       fadeAtShowEnd: form.fadeAtShowEnd,
       silenceTrim: {
         enabled: form.silenceTrim.enabled,
@@ -975,12 +981,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
               <LlmSection
                 data={data} form={form} setForm={updateForm} busy={busy}
                 saveSettings={saveSettings} fieldErrors={fieldErrors} adminFetch={adminFetch} refresh={refresh}
-              />
-            )}
-            {activeSection === 'search' && (
-              <SearchSection
-                data={data} form={form} setForm={updateForm} busy={busy}
-                saveSettings={saveSettings} fieldErrors={fieldErrors} adminFetch={adminFetch}
               />
             )}
             {activeSection === 'library' && (
@@ -1467,8 +1467,37 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             )}
 
             {form && (
-              <Card title="Max track length" sub="cut over-length tracks on air">
+              <Card title="Track length" sub="the window a track has to fall in to get picked">
                 <div className="field">
+                  <Label>Minimum track length</Label>
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                    <Input
+                      className="mono-num w-28"
+                      aria-label="Minimum track length (seconds)"
+                      type="number"
+                      step={1}
+                      min={0}
+                      max={PICKER_MIN_TRACK_LENGTH_BOUNDS.max}
+                      value={form.picker.minTrackLengthSeconds}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setForm(f => (f ? { ...f, picker: { ...f.picker, minTrackLengthSeconds: e.target.value } } : f))
+                      }
+                    />
+                    <span className="text-[12px] text-muted">
+                      sec · 0 = no floor · min {data?.values?.minTrackSeconds ?? 30}s
+                    </span>
+                  </div>
+                  <SettingsFieldError path="picker.minTrackLengthSeconds" errors={fieldErrors} />
+                  <div className="field-hint">
+                    The shortest a track can be to get picked, on both pickers and the
+                    offline fallback playlist &mdash; the way to keep 40-second skits,
+                    interludes and album intros off air. Unlike the maximum below this is a
+                    <em> selection</em> filter: a short track is never chosen, where a long
+                    one is simply faded out at the cap. A show can set its own; listener
+                    requests are always exempt.
+                  </div>
+                </div>
+                <div className="field mt-4">
                   <Label>Maximum track length</Label>
                   <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                     <Input
@@ -1697,154 +1726,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             )}
 
             {form && (
-              <Card title="Opus stream" sub="/stream.opus (Ogg-Opus)">
-                <div className="grid gap-3">
-                  <div className="field">
-                    <div className="flex items-center gap-2">
-                      <Label>Serve the secondary Opus mount</Label>
-                      <Pill tone="ink">restart required</Pill>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Seg
-                        options={[
-                          { id: 'on', label: 'On' },
-                          { id: 'off', label: 'Off' },
-                        ]}
-                        value={form.stream.opusEnabled ? 'on' : 'off'}
-                        onChange={id =>
-                          setForm(f =>
-                            f ? { ...f, stream: { ...f.stream, opusEnabled: id === 'on' } } : f,
-                          )
-                        }
-                      />
-                    </div>
-                    <SettingsFieldError path="stream.opusEnabled" errors={fieldErrors} />
-                    <div className="field-hint">
-                      Off by default. Only Chrome/Edge listeners ever pick Opus (Safari, iOS and
-                      Firefox stay on the universal MP3 mount); for them it&apos;s equal-or-better
-                      quality at ~half the bandwidth, but it adds a continuous second encoder + a
-                      44.1→48 kHz resample. Turn it on if you have Chrome/Edge listeners and want
-                      the bandwidth saving. The mandatory <code>/stream.mp3</code> mount serves
-                      everyone either way.
-                    </div>
-                  </div>
-                  <div className="field">
-                    <div className="flex items-center gap-2">
-                      <Label>Bitrate</Label>
-                      <Pill tone="ink">restart required</Pill>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Select
-                        value={form.stream.opusBitrate}
-                        onValueChange={v =>
-                          setForm(f => (f ? { ...f, stream: { ...f.stream, opusBitrate: v } } : f))
-                        }
-                      >
-                        <SelectTrigger className="w-32" aria-label="Opus bitrate">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {OPUS_BITRATES.map(br => (
-                            <SelectItem key={br} value={String(br)}>
-                              {br} kbps
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <SettingsFieldError path="stream.opusBitrate" errors={fieldErrors} />
-                    <div className="field-hint">
-                      96 kbps is transparent for most music; 256/320 suits hifi listeners
-                      (current: {data?.values?.stream?.opusBitrate ?? '—'} kbps). Raising it
-                      increases bandwidth for <em>every</em> Chrome/Edge listener, since the web
-                      player auto-selects this mount.
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {form && (
-              <Card title="FLAC stream" sub="/stream.flac (Ogg FLAC, lossless)">
-                <div className="field">
-                  <div className="flex items-center gap-2">
-                    <Label>Serve the lossless FLAC mount</Label>
-                    <Pill tone="ink">restart required</Pill>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Seg
-                      options={[
-                        { id: 'on', label: 'On' },
-                        { id: 'off', label: 'Off' },
-                      ]}
-                      value={form.stream.flacEnabled ? 'on' : 'off'}
-                      onChange={id =>
-                        setForm(f =>
-                          f ? { ...f, stream: { ...f.stream, flacEnabled: id === 'on' } } : f,
-                        )
-                      }
-                    />
-                  </div>
-                  <SettingsFieldError path="stream.flacEnabled" errors={fieldErrors} />
-                  {form.stream.flacEnabled && (
-                    <div className="field-hint">
-                      Point a player at{' '}
-                      <code>
-                        {typeof window !== 'undefined' ? window.location.origin : ''}
-                        /stream.flac
-                      </code>
-                    </div>
-                  )}
-                  <div className="field-hint">
-                    Off by default. A continuous third encoder that losslessly captures the
-                    broadcast bus at ~800–900 kbps (≈4× the MP3 mount). It&apos;s a true lossless
-                    tier <strong>only when your source files are themselves lossless</strong>{' '}
-                    (FLAC/ALAC/WAV); for a lossy-source library (e.g. AAC/MP3) it faithfully
-                    carries lossy audio and adds no fidelity over MP3/Opus. Meant for external
-                    players (VLC, foobar2000, a network streamer); the web and mobile players
-                    stay on MP3/Opus and won&apos;t auto-select it. The mandatory{' '}
-                    <code>/stream.mp3</code> mount always serves everyone.
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {form && (
-              <Card title="Ogg metadata" sub="ICY titles on /stream.opus + /stream.flac">
-                <div className="field">
-                  <div className="flex items-center gap-2">
-                    <Label>Push ICY track titles on the Ogg mounts</Label>
-                    <Pill tone="ink">restart required</Pill>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Seg
-                      options={[
-                        { id: 'on', label: 'On' },
-                        { id: 'off', label: 'Off' },
-                      ]}
-                      value={form.stream.oggIcyMetadata ? 'on' : 'off'}
-                      onChange={id =>
-                        setForm(f =>
-                          f ? { ...f, stream: { ...f.stream, oggIcyMetadata: id === 'on' } } : f,
-                        )
-                      }
-                    />
-                  </div>
-                  <SettingsFieldError path="stream.oggIcyMetadata" errors={fieldErrors} />
-                  <div className="field-hint">
-                    On by default. Sends each track&apos;s title out-of-band (ICY) on the Opus and
-                    FLAC mounts, which most internet-radio players and Cast receivers need: they
-                    read the in-band Ogg tags only once, at connect, and otherwise stay stuck on
-                    the first title. Turn it <strong>off</strong> if your listeners use
-                    foobar2000: it reads the in-band tags correctly, and the extra ICY channel
-                    breaks its FLAC metadata display. The MP3 and AAC mounts always use ICY and
-                    are unaffected either way.
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {form && (
               <Card title="AAC stream" sub="/stream.aac (AAC-LC, ADTS)">
                 <div className="grid gap-3">
                   <div className="field">
@@ -1992,53 +1873,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             )}
 
             {form && (
-              <Card title="Max listeners" sub="Icecast concurrent-connection ceiling">
-                <div className="field">
-                  <div className="flex items-center gap-2">
-                    <Label>Max listeners</Label>
-                    <Pill tone="ink">restart required</Pill>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      className="mono-num w-28"
-                      aria-label="Max concurrent listeners"
-                      type="number"
-                      min={1}
-                      max={10000}
-                      step={1}
-                      value={form.stream.maxListeners}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setForm(f =>
-                          f
-                            ? { ...f, stream: { ...f.stream, maxListeners: e.target.value } }
-                            : f,
-                        )
-                      }
-                    />
-                    <span className="text-[12px] text-muted">connections</span>
-                  </div>
-                  <SettingsFieldError path="stream.maxListeners" errors={fieldErrors} />
-                  <div className="field-hint">
-                    How many people can be tuned in at once, across all mounts. Icecast
-                    refuses connections past this; each one costs bandwidth at the mount&apos;s
-                    bitrate, so size it against your upstream. Some countries calculate
-                    licensing fees on simultaneous listener capacity, which is the usual
-                    reason to set it deliberately rather than leave it at 100. Applies on the
-                    next broadcast restart. Current:{' '}
-                    {data?.values?.stream?.maxListeners ?? '—'}.
-                  </div>
-                  <div className="field-hint">
-                    <strong>ICECAST_MAX_CLIENTS</strong>{' '}in the environment overrides this —
-                    it predates the setting and stays authoritative where it&apos;s set. The
-                    broadcast log names the source it used on every boot
-                    (<code>max listeners N (from …)</code>), so check there if this field
-                    saves but nothing changes.
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {form && (
               <Card title="Listener country" sub="where the Stats rollup gets geography from">
                 <div className="field">
                   <Label>Country header</Label>
@@ -2117,7 +1951,7 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
               onSave={saveDanger}
               saveLabel="Save danger zone"
               errors={fieldErrors}
-              ownedKeys={['crossfadeDuration', 'ducking', 'maxTrackSeconds', 'fadeAtShowEnd', 'silenceTrim', 'transitions', 'audio', 'loudness', 'stream']}
+              ownedKeys={['crossfadeDuration', 'ducking', 'maxTrackSeconds', 'picker.minTrackLengthSeconds', 'fadeAtShowEnd', 'silenceTrim', 'transitions', 'audio', 'loudness', 'stream']}
             />
           </>
         )}

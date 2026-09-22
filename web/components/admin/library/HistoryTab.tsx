@@ -8,9 +8,9 @@ import { num } from '../LibraryTaggingPanel';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PAGE_SIZE } from './types';
-import type { BlockType, LikeIndex, PlayEntry, Track } from './types';
+import type { BlockType, PlayEntry, Track } from './types';
 import { Thumb } from './bits';
-import { BlockMenu, HeartButton, likeStateFor } from './row-actions';
+import { BlockMenu } from './row-actions';
 
 function playDayLabel(iso: string): string {
   const d = new Date(iso);
@@ -46,7 +46,7 @@ function playSourceLabel(p: PlayEntry): string {
 
 export function HistoryTab({
   rows, total, page, setPage, loading, queuing, onQueue, onRefresh,
-  likeIndex, liking, onToggleLike, blocking, onBlock,
+  blocking, onBlock,
 }: {
   rows: PlayEntry[] | null;
   total: number;
@@ -56,12 +56,6 @@ export function HistoryTab({
   queuing: string | null;
   onQueue: (t: Track) => void;
   onRefresh: () => void;
-  // Same actions, same handlers and same optimistic cache as the Browse rows —
-  // the heart state comes from the shared index, so a heart set on either tab
-  // shows on the other with no refetch (#1600).
-  likeIndex: LikeIndex;
-  liking: string | null;
-  onToggleLike: (t: Track, liked: boolean) => void;
   blocking: string | null;
   onBlock: (t: Track, type: BlockType) => void;
 }) {
@@ -127,12 +121,6 @@ export function HistoryTab({
                          below sm: — the row still has to leave the title readable on a
                          phone. */
                       <span className="flex shrink-0 items-center gap-1.5">
-                        <HeartButton
-                          track={track}
-                          like={likeStateFor(track, likeIndex)}
-                          busy={liking === track.id}
-                          onToggle={onToggleLike}
-                        />
                         <BlockMenu
                           track={track}
                           busy={blocking === track.id}

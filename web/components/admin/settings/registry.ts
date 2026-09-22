@@ -9,7 +9,7 @@
 // section components; this file never renders anything.
 
 import {
-  Radio, Palette, Cpu, Mic, Library, Search,
+  Radio, Palette, Cpu, Mic, Library,
   Activity, Archive, Save, AlertTriangle, Music2, BrainCircuit,
   MessageCircle,
 } from 'lucide-react';
@@ -82,11 +82,13 @@ export const SECTIONS = [
   {
     id: 'llm', group: 'the dj', label: 'LLM provider',
     hint: 'model routing', icon: Cpu,
-    // `picker` rides this section because its two controls (album cooldown,
-    // minimum track length) are edited on this card and saved by the same
-    // PATCH — without it here the section's dirty dot and save bar are blind
-    // to a change the operator just made.
-    formKeys: ['llm', 'picker'],
+    // `picker.albumHours` rides this section because that control is edited on
+    // this card and saved by the same PATCH — without it here the section's
+    // dirty dot and save bar are blind to a change the operator just made. The
+    // path is dotted rather than the whole block: the minimum track length is
+    // the Danger zone's now, and a bare `picker` would light BOTH sections for
+    // either edit.
+    formKeys: ['llm', 'picker.albumHours'],
   },
   {
     id: 'tts', group: 'the dj', label: 'TTS voice',
@@ -97,11 +99,6 @@ export const SECTIONS = [
     id: 'library', group: 'the dj', label: 'Library tagger',
     hint: 'embedding · propagation', icon: Library,
     formKeys: ['embedding'],
-  },
-  {
-    id: 'search', group: 'the dj', label: 'Web search',
-    hint: 'live-facts backend', icon: Search,
-    formKeys: ['search'],
   },
   {
     id: 'scrobble', group: 'listeners', label: 'Scrobbling',
@@ -121,7 +118,7 @@ export const SECTIONS = [
   {
     id: 'danger', group: 'operations', label: 'Danger zone',
     hint: 'mixer · broadcast', icon: AlertTriangle,
-    formKeys: ['crossfadeDuration', 'ducking', 'maxTrackSeconds', 'silenceTrim', 'transitions', 'stream', 'loudness'],
+    formKeys: ['crossfadeDuration', 'ducking', 'maxTrackSeconds', 'picker.minTrackLengthSeconds', 'silenceTrim', 'transitions', 'stream', 'loudness'],
   },
 ] as const satisfies readonly SectionSpec[];
 
@@ -146,15 +143,11 @@ export const RESTART_PATHS: readonly string[] = [
   'ducking.intro',
   'archive.enabled',
   'archive.bitrate',
-  'stream.opusEnabled',
   'stream.opusBitrate',
-  'stream.flacEnabled',
-  'stream.oggIcyMetadata',
   'stream.aacEnabled',
   'stream.aacBitrate',
   'stream.bitrate',
   'stream.bufferSeconds',
-  'stream.maxListeners',
 ];
 
 /**
@@ -281,10 +274,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Lyrics', section: 'library', card: 'Enrichment', keywords: 'lyrics embed text' },
 
   // ── web search ─────────────────────────────────────────────────────────────
-  { label: 'Provider', section: 'search', card: 'Provider', keywords: 'duckduckgo tavily brave searxng live facts' },
-  { label: 'API key', section: 'search', card: 'Provider', keywords: 'tavily brave token search_api_key' },
-  { label: 'SearXNG URL', section: 'search', card: 'Provider', keywords: 'self hosted meta search json' },
-  { label: 'Engines', section: 'search', card: 'Provider', keywords: 'searxng engines pin restrict google duckduckgo wikipedia' },
 
   // ── likes ──────────────────────────────────────────────────────────────────
 
@@ -317,21 +306,17 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Dissolve', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect reverb wash ambient cpu latency catchup stutter dj mode' },
   { label: 'Chop', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect crossfader cut beat stabs dj mode' },
   { label: 'Exit loop', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect final bar repeat groove tempo dj mode' },
-  { label: 'Maximum track length', section: 'danger', card: 'Max track length', keywords: 'cap cut long tracks seconds' },
+  { label: 'Minimum track length', section: 'danger', card: 'Track length', keywords: 'floor short skits interludes intros selection filter seconds' },
+  { label: 'Maximum track length', section: 'danger', card: 'Track length', keywords: 'cap cut long tracks seconds' },
   { label: 'Trim silent edges', section: 'danger', card: 'Dead-air trim', keywords: 'silence cue in cue out dead air' },
   { label: 'Shortest gap worth cutting', section: 'danger', card: 'Dead-air trim', keywords: 'min gap ms silence' },
   { label: 'Loudness source', section: 'danger', card: 'Loudness levelling', keywords: 'replaygain measured lufs' },
   { label: 'Target loudness', section: 'danger', card: 'Loudness levelling', keywords: 'lufs normalisation level' },
   { label: 'Max boost', section: 'danger', card: 'Loudness levelling', keywords: 'db cap gain ceiling' },
-  { label: 'Serve the secondary Opus mount', section: 'danger', card: 'Opus stream', keywords: 'opus ogg mount restart' },
-  { label: 'Bitrate', section: 'danger', card: 'Opus stream', keywords: 'opus kbps restart' },
-  { label: 'Serve the lossless FLAC mount', section: 'danger', card: 'FLAC stream', keywords: 'flac lossless ogg mount restart' },
-  { label: 'Push ICY track titles on the Ogg mounts', section: 'danger', card: 'Ogg metadata', keywords: 'icy metadata ogg titles' },
   { label: 'Serve the AAC mount', section: 'danger', card: 'AAC stream', keywords: 'aac adts mount restart' },
   { label: 'Bitrate', section: 'danger', card: 'AAC stream', keywords: 'aac kbps restart' },
   { label: 'Bitrate', section: 'danger', card: 'Stream MP3 bitrate', keywords: 'mp3 kbps stream restart' },
   { label: 'Listener buffer', section: 'danger', card: 'Listener buffer', keywords: 'burst size seconds behind live edge restart' },
-  { label: 'Max listeners', section: 'danger', card: 'Max listeners', keywords: 'icecast max clients concurrent connections capacity limit licensing fees restart' },
   { label: 'Country header', section: 'danger', card: 'Listener country', keywords: 'geoip cf-ipcountry cloudflare proxy header stats audience country rollup' },
   { label: 'GeoIP database', section: 'danger', card: 'Listener country', keywords: 'mmdb maxmind geolite2 db-ip ip2location offline lookup stats audience country' },
   { label: 'Restart mixer', section: 'danger', card: 'Mixer', keywords: 'restart liquidsoap apply pending' },

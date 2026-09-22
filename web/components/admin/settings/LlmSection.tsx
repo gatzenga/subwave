@@ -8,9 +8,6 @@ import { useModelDiscovery } from '@/hooks/useModelDiscovery';
 import { V3AlertDialog } from '../../ui/alert-dialog';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
-import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup,
-} from '../../ui/select';
 import { Card, Btn, Pill, Seg } from '../ui';
 import { ProviderSelector } from '../llm/ProviderSelector';
 import { ModelCombobox } from '../llm/ModelCombobox';
@@ -25,7 +22,6 @@ import {
 // module the server bounds-checks against — a hardcoded copy here is a client
 // hint that can disagree with the save it is meant to pre-empt.
 import {
-  PICKER_MIN_TRACK_LENGTH_BOUNDS,
   LLM_HEADER_NAME_RE,
   LLM_HEADER_VALUE_RE,
   LLM_HEADER_VALUE_MAX,
@@ -121,25 +117,16 @@ interface LlmSectionProps extends SectionProps {
 }
 export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch, refresh, fieldErrors }: LlmSectionProps) {
   const [primaryKeyInput, setPrimaryKeyInput] = useState('');
-  const [fallbackKeyInput, setFallbackKeyInput] = useState('');
   const [primaryKeyTest, setPrimaryKeyTest] = useState<{ ok: boolean; message: string; latencyMs: number } | null>(null);
   const [primaryKeyTesting, setPrimaryKeyTesting] = useState(false);
-  const [fallbackKeyTest, setFallbackKeyTest] = useState<{ ok: boolean; message: string; latencyMs: number } | null>(null);
-  const [fallbackKeyTesting, setFallbackKeyTesting] = useState(false);
 
   useEffect(() => { setPrimaryKeyInput(''); }, [form.llm.provider]);
-  useEffect(() => { setFallbackKeyInput(''); }, [form.llm.fallback.provider]);
   useEffect(() => { setPrimaryKeyTest(null); }, [form.llm.provider]);
-  useEffect(() => { setFallbackKeyTest(null); }, [form.llm.fallback.provider]);
 
   const [compatKeyInput, setCompatKeyInput] = useState('');
-  const [compatFallbackKeyInput, setCompatFallbackKeyInput] = useState('');
   const [compatKeyTest, setCompatKeyTest] = useState<{ ok: boolean; message: string; latencyMs: number } | null>(null);
-  const [compatFallbackKeyTest, setCompatFallbackKeyTest] = useState<{ ok: boolean; message: string; latencyMs: number } | null>(null);
   const [compatKeyTesting, setCompatKeyTesting] = useState(false);
-  const [compatFallbackKeyTesting, setCompatFallbackKeyTesting] = useState(false);
   useEffect(() => { setCompatKeyInput(''); setCompatKeyTest(null); }, [form.llm.provider]);
-  useEffect(() => { setCompatFallbackKeyInput(''); setCompatFallbackKeyTest(null); }, [form.llm.fallback.provider]);
 
   // Embeddings inherit settings.llm when embedding.provider === '', so switching the
   // CHAT provider would silently change the EMBEDDING model, invalidating an
@@ -189,29 +176,8 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
     adminFetch,
   });
 
-  const fallbackKeyVar = LLM_ENV_VARS[form.llm.fallback.provider];
-  const fallbackKeySet = !!(fallbackKeyVar && data.env?.[fallbackKeyVar]);
 
-  const fallbackBaseUrl = form.llm.fallback.providerBaseUrls[form.llm.fallback.provider] ?? '';
-  const fallbackTestBaseUrl =
-    fallbackBaseUrl || (form.llm.fallback.provider === 'locca' ? LOCCA_DEFAULT_BASE_URL : '');
 
-  const fallbackDiscoveryEnabled =
-    form.llm.fallback.enabled && (
-      form.llm.fallback.provider === 'ollama'
-      || form.llm.fallback.provider === 'locca'
-      || (form.llm.fallback.provider === 'openai-compatible' && !!fallbackBaseUrl.trim())
-      || (form.llm.fallback.provider === 'openrouter')
-      || (!!fallbackKeyVar && fallbackKeySet)
-    );
-
-  const fallbackDiscovery = useModelDiscovery({
-    provider: form.llm.fallback.provider,
-    baseUrl: fallbackBaseUrl,
-    ollamaUrl: form.llm.fallback.ollamaUrl,
-    enabled: fallbackDiscoveryEnabled,
-    adminFetch,
-  });
 
   const saveKey = async (envVar: string, value: string): Promise<boolean> => {
     if (!value.trim()) return true;
@@ -339,9 +305,6 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
           providerBaseUrls: form.llm.fallback.providerBaseUrls,
           headers: headerMap(form.llm.fallback.headers),
           reasoning: form.llm.fallback.reasoning,
-          ...(INLINE_KEY_PROVIDERS.includes(activeFallbackProvider) && compatFallbackKeyInput.trim()
-            ? { apiKey: compatFallbackKeyInput.trim() }
-            : {}),
         },
       },
       // Its own top-level key, not part of `llm`: the album cooldown is read by
@@ -349,7 +312,6 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
       // config. It rides in the same PATCH because it is edited on this card.
       picker: {
         albumHours: Math.max(0, parseFloat(form.picker.albumHours) || 0),
-        minTrackLengthSeconds: Math.max(0, parseInt(form.picker.minTrackLengthSeconds, 10) || 0),
       },
     });
     // Save API keys if typed — these go to secrets.env, not settings.json
@@ -358,16 +320,8 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
       const ok = await saveKey(primaryKeyVar, primaryKeyInput);
       if (ok) { notify.ok('API key saved'); setPrimaryKeyInput(''); refresh(); }
     }
-    const fallbackKeyVar = LLM_ENV_VARS[activeFallbackProvider];
-    if (fallbackKeyVar && fallbackKeyInput.trim()) {
-      const ok = await saveKey(fallbackKeyVar, fallbackKeyInput);
-      if (ok) { notify.ok('API key saved'); setFallbackKeyInput(''); refresh(); }
-    }
     if (INLINE_KEY_PROVIDERS.includes(activeProvider) && compatKeyInput.trim()) {
       setCompatKeyInput('');
-    }
-    if (INLINE_KEY_PROVIDERS.includes(activeFallbackProvider) && compatFallbackKeyInput.trim()) {
-      setCompatFallbackKeyInput('');
     }
   };
 
@@ -725,351 +679,7 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
         </div>
       </Card>
 
-      <Advanced note="tuning, the fallback chain, the picker and the daily budget">
-      <Card title="Fallback" sub="backup when the primary is offline">
-        <div className="grid gap-[18px]">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
-            <div>
-              <div className="text-[13px] font-bold">Use a backup LLM</div>
-              <div className="mt-0.5 max-w-[480px] text-[14px] leading-[1.5] text-muted">
-                When the primary host can&apos;t be reached (connection refused,
-                DNS failure, timeout, e.g. a GPU box that&apos;s powered off), the
-                call is retried once against this backup, then routes straight back
-                to the primary on the next call. A primary that&apos;s up but busy
-                (rate-limited or erroring) is <em>not</em> failed over. Heavy work
-                like library tagging stays on the primary, so a smaller backup
-                model is fine here.
-              </div>
-            </div>
-            <Seg
-              accent
-              value={form.llm.fallback.enabled ? 'on' : 'off'}
-              options={[
-                { id: 'off', label: 'Off' },
-                { id: 'on', label: 'On' },
-              ]}
-              onChange={v =>
-                setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, enabled: v === 'on' } } }))
-              }
-            />
-          </div>
-
-          {form.llm.fallback.enabled && (
-            <>
-              <div className="field">
-                <Label>Backup provider</Label>
-                <Select
-                  value={form.llm.fallback.provider}
-                  onValueChange={v =>
-                    setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, provider: v } } }))
-                  }
-                >
-                  <SelectTrigger className="max-w-[360px]" aria-label="Backup provider"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {(data.llm?.providers || ['ollama']).map(p => (
-                        <SelectItem key={p} value={p}>{llmProviderLabel(p)}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <div className="field-hint">
-                  The provider to fall back to. Can differ from the primary, e.g.
-                  primary on a self-hosted box, backup on always-on Ollama.
-                </div>
-              </div>
-
-              {form.llm.fallback.provider === 'ollama' && (
-                <div className="field">
-                  <Label>Backup Ollama server URL</Label>
-                  <Input
-                    value={form.llm.fallback.ollamaUrl}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, ollamaUrl: e.target.value } } }))
-                    }
-                    placeholder="http://localhost:11434"
-                    className="max-w-[360px]"
-                  />
-                  <div className="field-hint">
-                    Where the backup Ollama server runs. Leave blank for the
-                    default (<code>http://localhost:11434</code>).
-                  </div>
-                </div>
-              )}
-
-              {form.llm.fallback.provider === 'ollama' && (
-                <div className="field">
-                  <Label>Backup context window (num_ctx)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1024}
-                    value={form.llm.fallback.numCtx}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, numCtx: Number(e.target.value) } } }))
-                    }
-                    placeholder="16384"
-                    className="max-w-[200px]"
-                  />
-                  <div className="field-hint">
-                    Tokens of context for a <strong>local</strong> backup Ollama
-                    model. Set 0 for Ollama&apos;s default. Ignored for
-                    <code>:cloud</code> models.
-                  </div>
-                </div>
-              )}
-
-              {form.llm.fallback.provider === 'openai-compatible' && (
-                <div className="field">
-                  <Label>Backup server base URL</Label>
-                  <Input
-                    value={form.llm.fallback.providerBaseUrls['openai-compatible'] ?? ''}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, providerBaseUrls: { ...f.llm.fallback.providerBaseUrls, 'openai-compatible': e.target.value } } } }))
-                    }
-                    placeholder="http://192.168.1.101:8080/v1"
-                    className="max-w-[360px]"
-                  />
-                  <div className="field-hint">
-                    OpenAI-compatible server URL including the <code>/v1</code>
-                    suffix, required for this provider.
-                  </div>
-                </div>
-              )}
-
-              {form.llm.fallback.provider === 'locca' && (
-                <div className="field">
-                  <Label>Backup locca server base URL</Label>
-                  <Input
-                    value={form.llm.fallback.providerBaseUrls['locca'] ?? ''}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, providerBaseUrls: { ...f.llm.fallback.providerBaseUrls, locca: e.target.value } } } }))
-                    }
-                    placeholder="http://host.docker.internal:8080/v1"
-                    className="max-w-[360px]"
-                  />
-                  <div className="field-hint">
-                    Leave blank to use the locca server on the host
-                    (<code>http://host.docker.internal:8080/v1</code>). Override only
-                    for a non-default port or a remote host.
-                  </div>
-                </div>
-              )}
-
-              {INLINE_KEY_PROVIDERS.includes(form.llm.fallback.provider) && (
-                <>
-                  <div className="field">
-                    <Label>Bearer token</Label>
-                    <div className="flex flex-wrap items-stretch gap-2 sm:flex-nowrap">
-                      <Input
-                        type="password"
-                        autoComplete="off"
-                        value={compatFallbackKeyInput}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setCompatFallbackKeyInput(e.target.value)}
-                        placeholder={(data.values?.llm as { keys?: Record<string, unknown> })?.keys?.[form.llm.fallback.provider] === 'set' ? '•••••• (on file)' : 'Bearer token (optional)'}
-                        className="max-w-[360px]"
-                      />
-                      <Btn
-                        onClick={() =>
-                          testCompatKey(
-                            compatFallbackKeyInput || '',
-                            fallbackTestBaseUrl,
-                            form.llm.fallback.model,
-                            setCompatFallbackKeyTesting,
-                            setCompatFallbackKeyTest,
-                            form.llm.fallback.headers,
-                          )
-                        }
-                        disabled={compatFallbackKeyTesting || !fallbackTestBaseUrl.trim()}
-                      >
-                        {compatFallbackKeyTesting ? 'Testing…' : 'Test connection'}
-                      </Btn>
-                    </div>
-                    <div className="field-hint">
-                      Optional: only needed when the backup server requires bearer
-                      authentication. Saved to <code>settings.json</code>, takes effect on
-                      next save.
-                    </div>
-                  </div>
-                  {compatFallbackKeyTest && <KeyTestResult result={compatFallbackKeyTest} />}
-                  <div className="field">
-                    <Label>Custom request headers</Label>
-                    <HeaderRowsEditor
-                      idPrefix="llm-fallback-header"
-                      rows={form.llm.fallback.headers}
-                      onChange={rows => setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, headers: rows } } }))}
-                    />
-                    <div className="field-hint">
-                      Per-leg, like the base URL: the backup may be a different
-                      gateway with its own routing header. Same rules as the
-                      primary leg above.
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {(form.llm.fallback.provider === 'openai-compatible' || form.llm.fallback.provider === 'locca') && (
-                <div className="field">
-                  <Label>Repetition penalty (repeat_penalty)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={2}
-                    step={0.05}
-                    value={form.llm.fallback.repeatPenalty}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, repeatPenalty: Number(e.target.value) } } }))
-                    }
-                    placeholder="1.15"
-                    className="max-w-[200px]"
-                  />
-                  <div className="field-hint">
-                    Repetition penalty for the backup local server. <strong>1.15</strong>{' '}
-                    is a sane floor (llama.cpp&apos;s own default is <code>1.0</code> =
-                    off); set <code>1.0</code> to disable.
-                  </div>
-                </div>
-              )}
-
-              {form.llm.pickerAgent && (
-                <div className="field">
-                  <Label>Discovery rounds per pick</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={5}
-                    step={1}
-                    value={form.llm.fallback.discoverySteps}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, discoverySteps: Number(e.target.value) } } }))
-                    }
-                    placeholder="0"
-                    className="max-w-[200px]"
-                  />
-                  <div className="field-hint">
-                    The backup resolves its own budget, since it may be a different
-                    provider running a different model. <strong>0 = auto</strong>.
-                    Note the DJ is told how many rounds it has before a pick starts,
-                    and that promise has to hold on whichever leg ends up running &mdash;
-                    so the station uses the <em>lower</em> of the two numbers whenever
-                    the backup is enabled. 0&ndash;5.
-                  </div>
-                </div>
-              )}
-
-              {LLM_ENV_VARS[form.llm.fallback.provider] && (() => {
-                const keyVar = LLM_ENV_VARS[form.llm.fallback.provider]!;
-                return (
-                  <>
-                    <div className="field">
-                      <Label>{llmProviderLabel(form.llm.fallback.provider)} API key</Label>
-                      <div className="flex flex-wrap items-stretch gap-2 sm:flex-nowrap">
-                        <Input
-                          type="password"
-                          autoComplete="off"
-                          value={fallbackKeyInput}
-                          placeholder={data.env?.[keyVar] ? '•••••• (on file)' : (KEY_HINTS[keyVar] ?? '')}
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => setFallbackKeyInput(e.target.value)}
-                          className="max-w-[360px]"
-                        />
-                        <Btn
-                          onClick={() => testKey(keyVar, fallbackKeyInput, setFallbackKeyTesting, setFallbackKeyTest, () => setFallbackKeyInput(''))}
-                          disabled={fallbackKeyTesting || (!fallbackKeyInput.trim() && !data.env?.[keyVar])}
-                        >
-                          {fallbackKeyTesting ? 'Testing…' : 'Test key'}
-                        </Btn>
-                      </div>
-                      <div className="field-hint">
-                        Stored in <code>state/secrets.env</code>, takes effect immediately. Leave blank to keep the existing key.
-                      </div>
-                    </div>
-                    {fallbackKeyTest && <KeyTestResult result={fallbackKeyTest} />}
-                  </>
-                );
-              })()}
-
-              <div className="field">
-                <Label>Backup model</Label>
-                <div className="flex flex-wrap items-stretch gap-2 sm:flex-nowrap">
-                  {fallbackDiscovery.models.length > 0 ? (
-                    <ModelCombobox
-                      models={fallbackDiscovery.models}
-                      value={form.llm.fallback.model}
-                      onChange={v => setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, model: v } } }))}
-                      placeholder="Select a model"
-                    />
-                  ) : (
-                    <Input
-                      value={form.llm.fallback.model}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, model: e.target.value } } }))
-                      }
-                      disabled={!fallbackDiscoveryEnabled && form.llm.fallback.provider !== 'ollama'}
-                      placeholder={
-                        !fallbackDiscoveryEnabled
-                          ? (form.llm.fallback.provider === 'openai-compatible' ? 'Set a base URL first' : 'Set an API key above to discover and select a model')
-                          : form.llm.fallback.provider === 'ollama'
-                            ? 'llama3.2:3b'
-                            : form.llm.fallback.provider === 'deepseek'
-                              ? 'deepseek-chat'
-                              : form.llm.fallback.provider === 'openai-compatible' || form.llm.fallback.provider === 'locca'
-                                ? 'Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf'
-                                : 'model id'
-                      }
-                      className="max-w-[360px]"
-                    />
-                  )}
-                  {fallbackDiscovery.loading
-                    ? <span className="animate-pulse text-[11px] whitespace-nowrap text-muted">discovering…</span>
-                    : fallbackDiscoveryEnabled && (
-                      <Btn onClick={fallbackDiscovery.refresh} title="Refresh model list">↻</Btn>
-                    )
-                  }
-                </div>
-                <div className="field-hint">
-                  {fallbackDiscovery.models.length > 0
-                    ? `${fallbackDiscovery.models.length} model${fallbackDiscovery.models.length !== 1 ? 's' : ''} discovered. Pick one from the list.`
-                    : !fallbackDiscoveryEnabled
-                      ? (form.llm.fallback.provider === 'openai-compatible'
-                          ? 'Set a base URL above to discover available models.'
-                          : 'Set an API key above to discover and select a model.')
-                      : fallbackDiscovery.error
-                        ? `Discovery failed: ${fallbackDiscovery.error}. Type a model ID manually.`
-                        : fallbackDiscovery.loading
-                          ? 'Discovering models…'
-                          : 'No models discovered. Type a model ID manually.'}
-                </div>
-              </div>
-
-              {fallbackKeyVar && (
-                <KeyStatus envVar={fallbackKeyVar} present={!!data.env?.[fallbackKeyVar]} />
-              )}
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
-                <div>
-                  <div className="text-[13px] font-bold">Backup chain-of-thought</div>
-                  <div className="mt-0.5 max-w-[480px] text-[14px] leading-[1.5] text-muted">
-                    Whether the backup model may emit a reasoning step. Off by
-                    default, like the primary.
-                  </div>
-                </div>
-                <Seg
-                  accent
-                  value={form.llm.fallback.reasoning ? 'on' : 'off'}
-                  options={[
-                    { id: 'off', label: 'Off' },
-                    { id: 'on', label: 'On' },
-                  ]}
-                  onChange={v =>
-                    setForm(f => ({ ...f, llm: { ...f.llm, fallback: { ...f.llm.fallback, reasoning: v === 'on' } } }))
-                  }
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </Card>
-
+      <Advanced note="tuning, the picker and the daily budget">
       <Card title="Reasoning" sub="thinking models">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
           <div>
@@ -1266,32 +876,6 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
           </div>
         </div>
 
-        <div className="field mt-4">
-          <Label>Minimum track length (seconds)</Label>
-          <Input
-            type="number"
-            min={0}
-            max={PICKER_MIN_TRACK_LENGTH_BOUNDS.max}
-            step={1}
-            value={form.picker.minTrackLengthSeconds}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setForm(f => ({ ...f, picker: { ...f.picker, minTrackLengthSeconds: e.target.value } }))
-            }
-            placeholder="0"
-            className="max-w-[200px]"
-          />
-          <div className="field-hint">
-            The shortest a track can be to get picked, on both pickers and the
-            offline fallback playlist &mdash; the way to keep 40-second skits,
-            interludes and album intros off air. The mirror of the max track
-            length in Broadcast, but a <em>selection</em> filter: a short track is
-            never chosen, where a long one is simply faded out at the cap. A show
-            can set its own; listener requests are always exempt.
-            {' '}<strong>0 = off</strong> (the default). A non-zero value has to
-            be at least {data?.values?.minTrackSeconds ?? 30}s &mdash; the same
-            crossfade-derived minimum the track-length cap clears.
-          </div>
-        </div>
       </Card>
 
       <Card title="Idle behaviour" sub="when no one's listening">
@@ -1374,14 +958,11 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
         saveLabel="Save LLM provider"
         errors={fieldErrors}
         ownedKeys={['llm']}
-        // All four key boxes are component-local — the panel diffs FormState
-        // and cannot see them, so a pasted key alone would leave the section
-        // "clean" and unmount the very button that saves it. The managed pair
-        // has a Test-and-save path too; the compat pair only has this button.
-        dirty={!!(
-          primaryKeyInput.trim() || fallbackKeyInput.trim()
-          || compatKeyInput.trim() || compatFallbackKeyInput.trim()
-        )}
+        // Both key boxes are component-local — the panel diffs FormState and
+        // cannot see them, so a pasted key alone would leave the section
+        // "clean" and unmount the very button that saves it. The managed one
+        // has a Test-and-save path too; the compat one only has this button.
+        dirty={!!(primaryKeyInput.trim() || compatKeyInput.trim())}
       />
 
       {/* The SAFE outcome (keep the embedding pin) is the default; only the explicit
