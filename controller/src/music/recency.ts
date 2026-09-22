@@ -1,4 +1,4 @@
-import { trackLengthSeconds } from './track-floor.js';
+import { trackLengthSeconds } from './track-window.js';
 
 export const DEFAULT_TRACK_RECENCY_HOURS = 12;
 export const DEFAULT_ARTIST_RECENCY_HOURS = 2;
@@ -74,7 +74,7 @@ interface CandidateFilterState {
 
 // Track length in seconds from whichever field the source carries, or null when
 // unknown (zero/negative/non-finite all read as unknown). Delegates to
-// music/track-floor.ts so the length CAP and the length FLOOR can't disagree
+// music/track-window.ts so the length CAP and the length FLOOR can't disagree
 // about how long a track is (#1573).
 export function durationSeconds(song: CandidateLike): number | null {
   return trackLengthSeconds(song);
@@ -353,7 +353,7 @@ export function filterPickerCandidates<T extends CandidateLike>(
   // Neither track-length bound is applied here. The CAP (#447) is an on-air
   // cue_out cut, so an over-length track stays eligible; filtering it here
   // would only starve the pool. The FLOOR (#1573) does remove candidates, but
-  // its posture differs per pick path, so it lives in music/track-floor.ts and
+  // its posture differs per pick path, so it lives in music/track-window.ts and
   // each call site applies it just before this one.
   const pool = list || [];
 

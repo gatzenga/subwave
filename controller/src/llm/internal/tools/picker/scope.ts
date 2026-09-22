@@ -12,7 +12,7 @@ import * as library from '../../../../music/library.js';
 import * as embeddings from '../../../../music/embeddings.js';
 import { filterPickerCandidates } from '../../../../music/recency.js';
 import { applyStrictLocks, type VocalMode } from '../../../../music/show-filter.js';
-import { applyTrackFloor } from '../../../../music/track-floor.js';
+import { applyTrackWindow } from '../../../../music/track-window.js';
 import { freshnessBiasedOrder } from '../../../../music/airing.js';
 import { SEED_NOT_A_PICK_CLAUSE } from '../../../../util/pick-seed.js';
 import { slim } from './slim.js';
@@ -39,12 +39,13 @@ export interface PickerScope {
   // Analysed bands; unknowns drop.
   energyLock: string[] | null;
   vocalLock: VocalMode | null;
-  // Minimum track length in seconds (#1573), show floor else station default,
-  // resolved by settings.effectiveMinTrackSec. NOT gated on filtersStrict — it
-  // is the twin of the max-track-length cap, which no show opts into either.
-  // HARD here; the pool picker never-starves on the same floor behind it.
-  // null = no floor, and not set on the request path.
+  // The track-length WINDOW in seconds, show override else station default,
+  // resolved by settings.effectiveMinTrackSec / effectiveMaxTrackSec. Neither
+  // end is gated on filtersStrict — no show opts into the pair. HARD here; the
+  // pool picker never-starves on the same window behind it. null at either end
+  // = open there, and neither is set on the request path.
   minTrackSec: number | null;
+  maxTrackSec: number | null;
   // Union of a strict playlist-anchored show's pinned Navidrome playlists; every
   // tool's candidates are intersected with it, HARD with no never-starve to
   // off-playlist, because a playlist is an exact set and showPlaylistTracks is
@@ -78,6 +79,7 @@ const NO_SCOPE: PickerScope = {
   energyLock: null,
   vocalLock: null,
   minTrackSec: null,
+  maxTrackSec: null,
   playlistLock: null,
   playlistTracks: null,
   excludedIds: null,
@@ -118,7 +120,7 @@ export function buildPickerContext(scope: PickerScope): PickerContext {
   const {
     recentIds, recentKeys, hardRecentIds, hardRecentKeys,
     genreLock, eraLock, moodLock, energyLock, vocalLock,
-    minTrackSec, playlistLock, excludedIds,
+    minTrackSec, maxTrackSec, playlistLock, excludedIds,
   } = scope;
 
   const seen = new Map<string, any>();
@@ -156,10 +158,11 @@ export function buildPickerContext(scope: PickerScope): PickerContext {
     let pool = applyStrictLocks(freshnessBiasedOrder((list || []) as any[], library.lastAiredInfo(), Date.now()), {
       genres: genreLock, eras: eraLock, moods: moodLock, energies: energyLock, vocals: vocalLock,
     }, { starve: true });
-    // Minimum track length (#1573): hard, and BEFORE the playlist lock, so a
-    // pinned playlist's own 40-second interlude drops too — the floor is about
-    // what the station will AIR, not which source a track came from.
-    pool = applyTrackFloor(pool, minTrackSec, { starve: true });
+    // Track-length window: hard, and BEFORE the playlist lock, so a pinned
+    // playlist's own 40-second interlude and its 20-minute closer both drop —
+    // the window is about what the station will AIR, not which source a track
+    // came from.
+    pool = applyTrackWindow(pool, { min: minTrackSec, max: maxTrackSec }, { starve: true });
     if (playlistLock) pool = pool.filter((s: any) => s?.id && playlistLock.has(s.id));
     // Blocklisted playlists drop AFTER the playlist lock, so exclusion overrides
     // the anchor. No never-starve: a show that excludes its whole pool leaves
@@ -188,7 +191,7 @@ export function buildPickerContext(scope: PickerScope): PickerContext {
   // distinguish "nothing matches" from "matches exist but were all filtered" —
   // opposite next moves. A strict lock is anything that can drop a candidate the
   // source DID return, so all of them count here, not just recency.
-  const hasStrictLock = !!(genreLock?.length || eraLock?.length || moodLock?.length || energyLock?.length || vocalLock || playlistLock || excludedIds || minTrackSec);
+  const hasStrictLock = !!(genreLock?.length || eraLock?.length || moodLock?.length || energyLock?.length || vocalLock || playlistLock || excludedIds || minTrackSec || maxTrackSec);
   // The seed clause rides here as well as on the schema field (#1247): this is
   // the message in context at the moment the model fails, and "never invent a
   // song id" is satisfied by echoing the on-air seed. Wording from

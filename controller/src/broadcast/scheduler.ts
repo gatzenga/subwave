@@ -20,7 +20,7 @@ import { resolveShowPlaylistPool, resolveExcludedPlaylistIds } from '../music/sh
 import { getFullContext } from '../context.js';
 import { queue } from './queue.js';
 import { createPoolBuilder } from './auto-pool.js';
-import { applyTrackFloor } from '../music/track-floor.js';
+import { applyTrackWindow } from '../music/track-window.js';
 import { autoPlaylistShowLabel, createShowBuildTracker } from './auto-playlist-show.js';
 import { reloadAutoPlaylist } from './liquidsoap-control.js';
 import * as session from './session.js';
@@ -178,8 +178,9 @@ async function refreshAutoPlaylistInner() {
 
   // Length cap in seconds, show override or station default (#447). null = no cap.
   const maxDurationSec = settings.effectiveMaxTrackSec(show);
-  // Minimum track length (#1573) is a SELECTION filter, not a cue_out cut like
-  // the cap: applied to the assembled pool below, never-starve.
+  // Both ends are SELECTION filters, applied to the assembled pool below,
+  // never-starve. The cap ALSO rides out as a cue_out stamp on each entry,
+  // which is now only the backstop for what never-starve let through.
   const minDurationSec = settings.effectiveMinTrackSec(show);
 
   // Balanced pool builder — recency/dedup/artist-cap guards on every candidate,
@@ -393,9 +394,14 @@ async function refreshAutoPlaylistInner() {
     replacePool(filtered);
   }
 
-  // Minimum track length, never-starve: this coast is the last dead-air guard,
-  // so a floor that would empty the pool is skipped. 0/null leaves it untouched.
-  if (minDurationSec) replacePool(applyTrackFloor(pool, minDurationSec, { starve: false }));
+  // The track-length window, never-starve: this coast is the last dead-air
+  // guard, so a window that would empty the pool is skipped. 0/null at either
+  // end leaves that end open. The cap still rides out as a liq_cue_out stamp
+  // below — that is the backstop for what never-starve lets through, not the
+  // mechanism any more.
+  if (minDurationSec || maxDurationSec) {
+    replacePool(applyTrackWindow(pool, { min: minDurationSec, max: maxDurationSec }, { starve: false }));
+  }
 
   // Excluded playlists (blocklist). The pick paths apply this as a hard filter;
   // here it never-starves, since this coast is the last dead-air guard.

@@ -271,18 +271,22 @@ test('the same show with the switch off repeats inside those 40', () => {
 // ---------------------------------------------------------------------------
 // Wiring. The policy only reaches the air if both paths ask it, and the pool
 
-test('both pick paths resolve the floor before they size the window', () => {
-  // The floor thins the rotation the window is counted against, so a call site
-  // that passed the guard a pre-floor pool would size it too wide.
+test('both pick paths resolve the track-length window before they size the no-repeat one', () => {
+  // The window thins the rotation the no-repeat count is measured against, so a
+  // call site that passed the guard an unfiltered pool would size it too wide.
+  // Both ends count: the cap is a selection filter too, so an hour-long set is
+  // no more part of the rotation than a 40-second skit.
   for (const file of ['../src/music/picker.ts', '../src/broadcast/dj-agent.ts']) {
     const source = readFileSync(new URL(file, import.meta.url), 'utf8');
     const guardAt = source.indexOf('showNoRepeatGuard(');
-    const floorAt = source.indexOf('effectiveMinTrackSec(');
     assert.ok(guardAt > 0, `${file} must go through the shared show policy`);
-    assert.ok(floorAt > 0 && floorAt < guardAt,
-      `${file} must resolve effectiveMinTrackSec before sizing the no-repeat window`);
-    assert.match(source, /minTrackSec,?\s*\n?\s*\}/,
-      `${file} must hand the floor to the guard`);
+    for (const resolver of ['effectiveMinTrackSec(', 'effectiveMaxTrackSec(']) {
+      const at = source.indexOf(resolver);
+      assert.ok(at > 0 && at < guardAt,
+        `${file} must resolve ${resolver} before sizing the no-repeat window`);
+    }
+    assert.match(source, /minTrackSec,\s*\n\s*maxTrackSec,\s*\n\s*\}/,
+      `${file} must hand BOTH ends of the window to the guard`);
   }
 });
 

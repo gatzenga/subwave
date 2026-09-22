@@ -199,7 +199,7 @@ export function blockLabel(input: { kind: QueueBlockKind; name?: string | null; 
  * Spans are injected (in production `music/silence-trim.playableSpanSec`, which
  * is the span that will really air after the trim's cue points) rather than
  * read off `duration` here, because "how long is this track" is answered in
- * ONE place and this module is not it — see `music/track-floor.ts`.
+ * ONE place and this module is not it — see `music/track-window.ts`.
  *
  * Returns null when ANY track's span is unknown, which is the honest answer for
  * a forecast: a partly-walked library would otherwise produce a total that is

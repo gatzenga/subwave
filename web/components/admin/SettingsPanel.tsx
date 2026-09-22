@@ -1491,9 +1491,7 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                   <div className="field-hint">
                     The shortest a track can be to get picked, on both pickers and the
                     offline fallback playlist &mdash; the way to keep 40-second skits,
-                    interludes and album intros off air. Unlike the maximum below this is a
-                    <em> selection</em> filter: a short track is never chosen, where a long
-                    one is simply faded out at the cap. A show can set its own; listener
+                    interludes and album intros off air. A show can set its own; listener
                     requests are always exempt.
                   </div>
                 </div>
@@ -1518,12 +1516,14 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                   </div>
                   <SettingsFieldError path="maxTrackSeconds" errors={fieldErrors} />
                   <div className="field-hint">
-                    Where an over-long track gets faded out &mdash; hour-long album mixes and
-                    DJ sets stop eating a whole hour of the schedule. Note this is <em>not</em>
-                    the mirror of the floor above: a long track is still picked and still airs,
-                    it simply ends at the cap, where a short one is never chosen at all.
-                    Listener requests play any length, and a show can override this with its own
-                    limit (0 there means unlimited). Applies on the next pick; no restart needed.
+                    The longest a track can be to get picked &mdash; hour-long album mixes and
+                    DJ sets never enter the rotation. Together with the floor above this is a
+                    window: set 150 and 300 and only 2&frac12;&ndash;5 minute tracks are
+                    chosen. Anything that slips through anyway is still faded out at this
+                    figure rather than airing in full, which is what keeps a listener request
+                    or an unmeasured file from taking the hour. Requests themselves play any
+                    length, and a show can override this with its own limit (0 there means
+                    unlimited). Applies on the next pick; no restart needed.
                   </div>
                 </div>
               </Card>

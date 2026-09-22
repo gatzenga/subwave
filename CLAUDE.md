@@ -185,9 +185,14 @@ All of `radio.liq`'s rules, with the measured numbers, are in
   for. Forget it and Re-decide re-tags nothing.
 - **CLAP cosines are not comparable across moods** — calibrate per mood.
 - **Enforce variety at the point of choice, not in the discovery tools.**
-- **The track-length CAP and the FLOOR are not symmetric.** `maxTrackSeconds` is
-  an on-air cut; `picker.minTrackLengthSeconds` is a SELECTION filter. A
-  never-starve filter must never return its input array.
+- **The track-length CAP and the FLOOR are both SELECTION filters**, applied as
+  one window by `music/track-window.ts` on every pick path and on `auto.m3u`.
+  They were asymmetric once — the cap only stamped `liq_cue_out` and a long
+  track aired and faded mid-song — and that asymmetry is what the single
+  admin card made indefensible. The cue-out stamp survives as the BACKSTOP for
+  the two paths a filter cannot reach: a listener request, exempt from every
+  length rule by design, and the never-starve fallback. A never-starve filter
+  must never return its input array, and it relaxes BOTH ends together.
 - **Tempo-derived mix timing must be octave-safe.** Fold high BPM readings down
   before deriving bars; reach the audible window by halving, never clamping.
 - **The blocklist is absolute** — no never-starve anywhere. Every name tier keys

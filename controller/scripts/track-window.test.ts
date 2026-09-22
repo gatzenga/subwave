@@ -1,4 +1,4 @@
-// Minimum track length (#1573) — the pure policy in music/track-floor.ts, the
+// The track-length window — the pure policy in music/track-window.ts, the
 // resolver's precedence, and the operator dial's cold-load round trip.
 //
 // THE DEFECT THIS GUARDS. The floor is the mirror image of the max-track-length
@@ -14,7 +14,7 @@
 // DEFAULTS, so a field missing from load() still validates, still saves, and
 // still works for the rest of the process — then vanishes on the next restart.
 //
-// Run: npm test -- track-floor
+// Run: npm test -- track-window
 
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -24,11 +24,11 @@ import test from 'node:test';
 
 // STATE_DIR is redirected at a throwaway dir BEFORE the first import of
 // anything config-derived.
-const stateRoot = mkdtempSync(path.join(tmpdir(), 'subwave-track-floor-'));
+const stateRoot = mkdtempSync(path.join(tmpdir(), 'subwave-track-window-'));
 process.env.STATE_DIR = stateRoot;
 
-const { applyTrackFloor, belowTrackFloor, trackLengthSeconds } =
-  await import('../src/music/track-floor.js');
+const { applyTrackWindow, belowTrackFloor, aboveTrackCeiling, trackLengthSeconds } =
+  await import('../src/music/track-window.js');
 const { setCache } = await import('../src/settings/store.js');
 const settings = await import('../src/settings.js');
 const { buildShowCandidateDiagnostic } = await import('../src/music/show-candidates.js');
@@ -74,7 +74,7 @@ test('an unknown length passes the floor', () => {
 test('a floor of 0/null/undefined is a no-op, and that is the shipped default', () => {
   const pool = [{ durationSec: 5 }, { durationSec: 400 }];
   for (const min of [0, null, undefined, -10]) {
-    assert.deepEqual(applyTrackFloor(pool, min, { starve: true }), pool);
+    assert.deepEqual(applyTrackWindow(pool, { min }, { starve: true }), pool);
     assert.equal(belowTrackFloor({ durationSec: 5 }, min), false);
   }
 });
@@ -86,7 +86,7 @@ test('a positive floor drops the short tracks and keeps the rest', () => {
     { id: 'unwalked' },
   ];
   assert.deepEqual(
-    applyTrackFloor(pool, 60, { starve: true }).map(t => t.id),
+    applyTrackWindow(pool, { min: 60 }, { starve: true }).map(t => t.id),
     ['song', 'unwalked'],
   );
 });
@@ -104,13 +104,13 @@ test('starve:true empties, starve:false never-starves — the two postures', () 
   // in the auto.m3u coast, which ARE the dead-air scope. Unifying them is the
   // bug in one direction or the other.
   const allShort = [{ id: 'a', durationSec: 20 }, { id: 'b', durationSec: 30 }];
-  assert.deepEqual(applyTrackFloor(allShort, 60, { starve: true }), []);
-  assert.deepEqual(applyTrackFloor(allShort, 60, { starve: false }), allShort);
+  assert.deepEqual(applyTrackWindow(allShort, { min: 60 }, { starve: true }), []);
+  assert.deepEqual(applyTrackWindow(allShort, { min: 60 }, { starve: false }), allShort);
 });
 
 test('never-starve does NOT fire while anything survives', () => {
   const pool = [{ id: 'a', durationSec: 20 }, { id: 'b', durationSec: 300 }];
-  assert.deepEqual(applyTrackFloor(pool, 60, { starve: false }).map(t => t.id), ['b']);
+  assert.deepEqual(applyTrackWindow(pool, { min: 60 }, { starve: false }).map(t => t.id), ['b']);
 });
 
 // ── the resolver's precedence ──────────────────────────────────────────────
@@ -268,25 +268,25 @@ test('the floor applies to a pinned playlist too, and is NOT gated on strict', (
 // silent, is precisely where that fires. The result was an empty auto.m3u: a
 // dead-air guard that produced dead air.
 
-test('applyTrackFloor NEVER returns its input array, on any branch', () => {
+test('applyTrackWindow NEVER returns its input array, on any branch', () => {
   const pool = [{ id: 'a', duration: 30 }, { id: 'b', duration: 40 }];
   // no floor
-  assert.notEqual(applyTrackFloor(pool, 0, { starve: false }), pool);
-  assert.notEqual(applyTrackFloor(pool, null, { starve: true }), pool);
+  assert.notEqual(applyTrackWindow(pool, { min: 0 }, { starve: false }), pool);
+  assert.notEqual(applyTrackWindow(pool, { min: null }, { starve: true }), pool);
   // never-starve rescue: everything is below the floor, so everything is kept
-  assert.notEqual(applyTrackFloor(pool, 90, { starve: false }), pool);
+  assert.notEqual(applyTrackWindow(pool, { min: 90 }, { starve: false }), pool);
   // ordinary filtering already allocated
-  assert.notEqual(applyTrackFloor(pool, 35, { starve: false }), pool);
+  assert.notEqual(applyTrackWindow(pool, { min: 35 }, { starve: false }), pool);
   // and the contents are still right on every one of them
-  assert.deepEqual(applyTrackFloor(pool, 0, { starve: false }).map(t => t.id), ['a', 'b']);
-  assert.deepEqual(applyTrackFloor(pool, 90, { starve: false }).map(t => t.id), ['a', 'b']);
+  assert.deepEqual(applyTrackWindow(pool, { min: 0 }, { starve: false }).map(t => t.id), ['a', 'b']);
+  assert.deepEqual(applyTrackWindow(pool, { min: 90 }, { starve: false }).map(t => t.id), ['a', 'b']);
 });
 
 test('the coast\'s in-place pool rebuild survives the never-starve rescue', () => {
   // The scheduler idiom, verbatim. Before the fix this left `pool` empty and
   // auto.m3u was written with nothing but its #EXTM3U header.
   const pool = [{ id: 'skit', duration: 30 }, { id: 'interlude', duration: 40 }];
-  const longEnough = applyTrackFloor(pool, 90, { starve: false });
+  const longEnough = applyTrackWindow(pool, { min: 90 }, { starve: false });
   pool.length = 0;
   pool.push(...longEnough);
   assert.deepEqual(pool.map(t => t.id), ['skit', 'interlude'],
@@ -328,4 +328,79 @@ test('the two 3600 ceilings that "must move together" actually match', () => {
   // value the next cold load silently clamps away.
   assert.equal(PICKER_MIN_TRACK_LENGTH_BOUNDS.max, SHOW_MIN_TRACK_LENGTH_MAX);
   assert.equal(PICKER_MIN_TRACK_LENGTH_BOUNDS.min, 0);
+});
+
+// ---------------------------------------------------------------------------
+// The ceiling half. maxTrackSeconds used to be an on-air cut ONLY — a long
+// track stayed eligible and was faded at the cap — while the floor removed
+// short tracks from the pool. Read side by side in one admin card that reads
+// as a matched pair, and an operator asking for "2.5 to 5 minutes" got the
+// 8-minute track picked and cut mid-song. Both ends filter now.
+
+test('the ceiling drops what the floor would keep, and vice versa', () => {
+  const pool = [
+    { id: 'skit', durationSec: 40 },
+    { id: 'song', durationSec: 210 },
+    { id: 'set', durationSec: 1800 },
+  ];
+  assert.deepEqual(
+    applyTrackWindow(pool, { min: 150, max: 300 }, { starve: true }).map(t => t.id),
+    ['song'],
+  );
+});
+
+test('either end alone leaves the other open', () => {
+  const pool = [
+    { id: 'skit', durationSec: 40 },
+    { id: 'song', durationSec: 210 },
+    { id: 'set', durationSec: 1800 },
+  ];
+  assert.deepEqual(
+    applyTrackWindow(pool, { min: 150 }, { starve: true }).map(t => t.id),
+    ['song', 'set'],
+  );
+  assert.deepEqual(
+    applyTrackWindow(pool, { max: 300 }, { starve: true }).map(t => t.id),
+    ['skit', 'song'],
+  );
+});
+
+test('the ceiling is inclusive, like the floor', () => {
+  // A 300s cap admits the 300s track: the bound is the longest allowed, not the
+  // first refused. The floor already reads this way (60 passes a 60s floor).
+  assert.equal(aboveTrackCeiling({ durationSec: 300 }, 300), false);
+  assert.equal(aboveTrackCeiling({ durationSec: 301 }, 300), true);
+});
+
+test('0 / null / absent means no ceiling', () => {
+  for (const max of [0, null, undefined, -1]) {
+    assert.equal(aboveTrackCeiling({ durationSec: 99999 }, max as number), false, String(max));
+  }
+});
+
+test('unknown length passes the ceiling, and the cue-out stamp is why that is safe', () => {
+  // Same reasoning as the floor: a partly-walked library has rows with no
+  // duration, and dropping those turns a cap into "play only what we measured".
+  // The one that turns out to be an hour long is what queue.drain's liq_cue_out
+  // stamp still catches on air.
+  assert.equal(aboveTrackCeiling({}, 300), false);
+  assert.equal(aboveTrackCeiling({ durationSec: 0 }, 300), false);
+  assert.equal(aboveTrackCeiling(null, 300), false);
+});
+
+test('never-starve drops BOTH ends rather than relaxing one', () => {
+  // Guessing which end the operator meant less is how a never-starve turns into
+  // a rule that quietly stops applying. An empty result returns the input.
+  const onlyLong = [{ id: 'set', durationSec: 1800 }];
+  assert.deepEqual(
+    applyTrackWindow(onlyLong, { min: 150, max: 300 }, { starve: false }).map(t => t.id),
+    ['set'],
+  );
+  assert.deepEqual(applyTrackWindow(onlyLong, { min: 150, max: 300 }, { starve: true }), []);
+});
+
+test('a ceiling-only window still never returns its input array', () => {
+  const pool = [{ id: 'a', durationSec: 60 }];
+  assert.notEqual(applyTrackWindow(pool, { max: 0 }, { starve: false }), pool);
+  assert.notEqual(applyTrackWindow(pool, { max: 300 }, { starve: false }), pool);
 });
