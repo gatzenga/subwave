@@ -24,7 +24,10 @@ function CopyUrl({ url }: { url: string }) {
 }
 
 // Only ever rendered for a mount that is on, so there is no off state to draw:
-// the caller filters, and a row here always ends in a URL you can copy.
+// the caller filters, and a row here always ends in a URL you can copy. The
+// catalog's prose description is deliberately not shown — the mount path and
+// format say it, and this page is a place to grab a URL, not to read. The field
+// stays in the catalog and the OpenAPI render, where a stranger does need it.
 function MountRow({ m, origin }: { m: StreamMountDoc; origin: string }) {
   return (
     <div className="border border-separator-strong bg-bg px-3 py-2.5">
@@ -33,7 +36,6 @@ function MountRow({ m, origin }: { m: StreamMountDoc; origin: string }) {
         <span className="caption text-muted">{m.format}</span>
         <Pill tone="accent">live</Pill>
       </div>
-      <div className="mb-2 text-[11px] leading-[1.5] text-muted">{m.description}</div>
       <CopyUrl url={`${origin}${m.mount}`} />
     </div>
   );
