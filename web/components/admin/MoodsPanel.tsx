@@ -1,25 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Trash2, Palette, Clock, CalendarDays, Volume2 } from 'lucide-react';
 import {
-  useController, useFieldArray, useWatch, type Control,
+  useFieldArray, useWatch, type Control,
 } from 'react-hook-form';
 import { z } from 'zod';
 import { useAdminAuth } from '../../lib/adminAuth';
 import { AdminResponseError } from '../../lib/admin-query';
 import { notify, errorMessage } from '../../lib/notify';
-import { useZodForm, applyServerFieldErrors, fieldAria } from '@/lib/form';
+import { useZodForm, applyServerFieldErrors } from '@/lib/form';
 import { TextField, SelectField, type Option } from '@/lib/form-fields';
 import { Card, Btn, Eyebrow } from './ui';
 import { SectionTabs } from './SectionTabs';
 import { ScrollArea } from '../ui/scroll-area';
-import { Field, FieldLabel, FieldError } from '@/components/ui/field';
-import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-} from '../ui/select';
 import { Input } from '@/components/ui/input';
 import { SkeletonCards } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
@@ -27,7 +23,6 @@ import FestivalsSection from './FestivalsSection';
 import {
   moodsSchema,
   moodScheduleSchema,
-  weatherMoodsSchema,
   SETTINGS_MOODS_LIMIT,
   SETTINGS_MOOD_NAME_MAX,
   SETTINGS_MOOD_PROMPT_MAX,
@@ -52,7 +47,6 @@ interface Correction {
 interface MoodsFormValues {
   moods: MoodEntry[];
   schedule: Record<string, string>;
-  weather: Record<string, string>;
   corrections: Correction[];
 }
 interface TestVoiceDefaults {
@@ -70,7 +64,6 @@ interface MoodSettingsData {
   values?: {
     moods?: unknown;
     moodSchedule?: unknown;
-    weatherMoods?: unknown;
     tts?: {
       corrections?: unknown;
       defaultEngine?: string;
@@ -96,20 +89,6 @@ const PERIODS: Array<{ id: string; label: string; hours: string }> = [
   { id: 'after-hours', label: 'After hours', hours: '01–05' },
 ];
 
-// The 6 fixed weather conditions (controller context.ts mapWeatherCode).
-const CONDITIONS: Array<{ id: string; label: string }> = [
-  { id: 'clear', label: 'Clear' },
-  { id: 'cloudy', label: 'Cloudy' },
-  { id: 'foggy', label: 'Foggy' },
-  { id: 'rainy', label: 'Rainy' },
-  { id: 'snowy', label: 'Snowy' },
-  { id: 'stormy', label: 'Stormy' },
-];
-
-// Radix Select forbids an empty-string item value, so the weather "no steer"
-// option rides a sentinel that maps back to '' on save.
-const NONE = '__none__';
-
 const MOODS_LIMIT = SETTINGS_MOODS_LIMIT;
 
 // A LOCAL shape guard, not a mirror of a server rule: `tts` is one of the
@@ -129,46 +108,6 @@ const correctionsSchema = z
 type TabId = 'vocab' | 'moments' | 'festivals' | 'speech';
 const TAB_IDS: TabId[] = ['vocab', 'moments', 'festivals', 'speech'];
 
-// The one row control that can't be a plain TextField/SelectField.
-function WeatherMoodSelect({
-  control,
-  condition,
-  label,
-  moodOptions,
-  fieldId,
-}: {
-  control: Control<MoodsFormValues>;
-  condition: string;
-  label: string;
-  moodOptions: Option[];
-  fieldId: string;
-}) {
-  // Remapping the NONE sentinel in and out of field.onChange is onChange logic
-  // SelectField doesn't expose.
-  const { field, fieldState } = useController({ control, name: `weather.${condition}` });
-  const aria = fieldAria(`${fieldId}-weather-${condition}`, fieldState.error);
-  return (
-    <Field data-invalid={aria.invalid || undefined}>
-      <FieldLabel {...aria.labelProps}>{label}</FieldLabel>
-      <Select
-        value={field.value ? field.value : NONE}
-        onValueChange={v => field.onChange(v === NONE ? '' : v)}
-      >
-        <SelectTrigger {...aria.controlProps} onBlur={field.onBlur} ref={field.ref}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>— none —</SelectItem>
-          {moodOptions.map(o => (
-            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <FieldError {...aria.errorProps} errors={fieldState.error ? [fieldState.error] : undefined} />
-    </Field>
-  );
-}
-
 export default function MoodsPanel() {
   const { adminFetch, needsAuth, hydrated } = useAdminAuth();
   const queryClient = useQueryClient();
@@ -179,7 +118,6 @@ export default function MoodsPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null); // which card is saving
-  const fieldId = useId();
 
   // Active tab lives in the URL (?tab=...) so SectionTabs and the sidebar
   // submenu share one source of truth.
@@ -211,12 +149,11 @@ export default function MoodsPanel() {
       z.object({
         moods: moodsSchema,
         schedule: moodScheduleSchema({ moodNames: savedMoodNames }),
-        weather: weatherMoodsSchema({ moodNames: savedMoodNames }),
         corrections: correctionsSchema,
       }),
     [savedMoodNames],
   );
-  const form = useZodForm(schema, { moods: [], schedule: {}, weather: {}, corrections: [] });
+  const form = useZodForm(schema, { moods: [], schedule: {}, corrections: [] });
   // The three mirrored schemas are z.unknown().superRefine().transform(), so the
   // form's declared field-values type collapses to `unknown`. These casts widen
   // it back to the real output shape at the type level only.
@@ -252,8 +189,6 @@ export default function MoodsPanel() {
     const loadedMoods = Array.isArray(v.moods) ? (v.moods as MoodEntry[]) : [];
     const rawSchedule = (v.moodSchedule && typeof v.moodSchedule === 'object'
       ? v.moodSchedule : {}) as Record<string, string>;
-    const rawWeather = (v.weatherMoods && typeof v.weatherMoods === 'object'
-      ? v.weatherMoods : {}) as Record<string, string>;
     const loadedCorr = Array.isArray(v.tts?.corrections)
       ? (v.tts!.corrections as Correction[]) : [];
     // A period with no stored value falls back to the first vocab entry.
@@ -261,14 +196,9 @@ export default function MoodsPanel() {
     const loadedSchedule = Object.fromEntries(
       PERIODS.map(p => [p.id, rawSchedule[p.id] || firstMood]),
     );
-    // Weather gets no such fallback — '' means "no mood steer".
-    const loadedWeather = Object.fromEntries(
-      CONDITIONS.map(c => [c.id, rawWeather[c.id] || '']),
-    );
     const next: MoodsFormValues = {
       moods: loadedMoods,
       schedule: loadedSchedule,
-      weather: loadedWeather,
       corrections: loadedCorr,
     };
     form.reset(next);
@@ -386,13 +316,6 @@ export default function MoodsPanel() {
     await persistPatch('schedule', 'schedule', { moodSchedule: value }, value, 'Time-of-day moods saved');
   };
 
-  const saveWeather = async () => {
-    const ok = await form.trigger('weather');
-    if (!ok) return;
-    const value = getFormValue('weather');
-    await persistPatch('weather', 'weather', { weatherMoods: value }, value, 'Weather moods saved');
-  };
-
   const saveCorrections = async () => {
     const ok = await form.trigger('corrections');
     if (!ok) return;
@@ -423,7 +346,6 @@ export default function MoodsPanel() {
 
   const moodsCard = cardState('moods');
   const scheduleCard = cardState('schedule');
-  const weatherCard = cardState('weather');
   const correctionsCard = cardState('corrections');
   const effectiveCorr = liveCorrections
     .map(c => ({ from: (c.from ?? '').trim(), to: (c.to ?? '').trim() }))
@@ -548,30 +470,6 @@ export default function MoodsPanel() {
             </div>
           </Card>
 
-          <Card title="Weather → mood" sub="how live weather colours the mood — this wins over time of day">
-            <div className="grid gap-3">
-              {CONDITIONS.map(c => (
-                <WeatherMoodSelect
-                  key={c.id}
-                  control={arrayControl}
-                  condition={c.id}
-                  label={c.label}
-                  moodOptions={moodOptions}
-                  fieldId={fieldId}
-                />
-              ))}
-              <div className="mt-1">
-                <Btn
-                  tone="accent"
-                  className="min-h-9 sm:min-h-0"
-                  disabled={busy !== null || !weatherCard.dirty || weatherCard.invalid}
-                  onClick={() => void saveWeather()}
-                >
-                  {busy === 'weather' ? 'Saving…' : 'Save weather moods'}
-                </Btn>
-              </div>
-            </div>
-          </Card>
         </>
       )}
 

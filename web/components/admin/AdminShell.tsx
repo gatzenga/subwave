@@ -18,7 +18,6 @@ import {
   Users,
   Headphones,
   Plug,
-  Coffee,
   MessageCircle,
   Palette,
   LogOut,
@@ -457,24 +456,6 @@ function AdminSidebar({
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
-        <SidebarMenu className="gap-1.5">
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              tooltip="Buy me a coffee"
-              className="border-[color-mix(in_oklab,var(--accent)_55%,var(--line))] text-[var(--accent)] hover:border-[var(--accent)]"
-            >
-              <Link href="https://ko-fi.com/pklair" target="_blank" rel="noopener noreferrer">
-                <Coffee className="shrink-0 opacity-80" strokeWidth={2} aria-hidden="true" />
-                <span className="flex-1 truncate">Buy me a coffee</span>
-              </Link>
-            </SidebarMenuButton>
-            <SidebarMenuBadge className="border-[var(--accent)] text-[var(--accent)]">
-              ♥
-            </SidebarMenuBadge>
           </SidebarMenuItem>
         </SidebarMenu>
 
