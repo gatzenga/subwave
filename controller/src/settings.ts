@@ -431,10 +431,9 @@ export async function load() {
         typeof stored.stream?.flacEnabled === 'boolean'
           ? stored.stream.flacEnabled
           : DEFAULTS.stream.flacEnabled,
-      aacEnabled:
-        typeof stored.stream?.aacEnabled === 'boolean'
-          ? stored.stream.aacEnabled
-          : DEFAULTS.stream.aacEnabled,
+      // Always served, like /stream.mp3: the AAC mount has no off switch any
+      // more, so a stored false from before is overridden rather than obeyed.
+      aacEnabled: true,
       aacBitrate:
         typeof stored.stream?.aacBitrate === 'number' &&
         AAC_BITRATE_SET.has(stored.stream.aacBitrate)
@@ -1121,7 +1120,6 @@ export async function update(patch) {
       'opusBitrate',
       'flacEnabled',
       'oggIcyMetadata',
-      'aacEnabled',
       'aacBitrate',
       'bitrate',
     ] as const) {

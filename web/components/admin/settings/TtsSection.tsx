@@ -6,9 +6,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup,
 } from '../../ui/select';
 import { Card, Pill, Seg } from '../ui';
-import { Advanced } from './section-chrome';
 import { EngineSelector } from '../tts/EngineSelector';
-import { EngineVoiceFields, ENGINE_UNAVAILABLE } from '../tts/EngineVoiceFields';
 import { VoicePreviewButton } from '../tts/VoicePreviewButton';
 import { defaultEngineVoice } from '../tts/defaultVoice';
 import { ENGINE_META } from '../tts/engineMeta';
@@ -16,7 +14,6 @@ import { cn } from '../../../lib/cn';
 import {
   SectionHeader, SaveBar,
   type SectionProps, type FormState, type FormUpdater,
-  type TtsFallbackForm,
 } from './shared';
 
 const TTS_GAIN_ENGINES = ['piper', 'kokoro'] as const;
@@ -425,63 +422,6 @@ export function TtsSection({ data, form, setForm, busy, saveSettings, adminFetch
           })()}
         </div>
       </Card>
-
-      {/* The operator's explicit rescue, ahead of the hardcoded
-          default-engine → Piper → Kokoro floor. */}
-      <Advanced note="the rescue voice for a persona whose own engine fails">
-      <Card
-        title="Fallback voice"
-        sub="what speaks when a persona's engine fails"
-      >
-        <div className="field">
-          <Label>Fallback</Label>
-          <Seg
-            value={form.tts.fallback.enabled ? 'on' : 'off'}
-            options={[{ id: 'off', label: 'Off' }, { id: 'on', label: 'On' }]}
-            onChange={v => setForm(f => ({
-              ...f,
-              tts: { ...f.tts, fallback: { ...f.tts.fallback, enabled: v === 'on' } },
-            }))}
-          />
-          <div className="field-hint max-w-[70ch]">
-            When a persona’s engine can’t speak — a sidecar that’s down, a cloud
-            provider with no key, or a call that fails mid-render — the station
-            rescues the segment so the DJ never goes silent. Off, it rescues onto
-            the default engine above and whatever voice that engine happens to
-            carry. On, it uses the engine <em>and voice</em> you pick here first,
-            and only falls through to Piper if that can’t speak either.
-          </div>
-        </div>
-
-        {form.tts.fallback.enabled && (
-          <div className="mt-4 max-w-[560px]">
-            <EngineVoiceFields
-              value={form.tts.fallback}
-              onChange={(patch: Partial<TtsFallbackForm>) => setForm(f => ({
-                ...f,
-                tts: { ...f.tts, fallback: { ...f.tts.fallback, ...patch } },
-              }))}
-              data={data}
-              adminFetch={adminFetch}
-              engineHint={<>
-                Pick something that’s reliably up — a local engine is the safest
-                rescue, since the usual reason to need one is a sidecar or cloud
-                provider being unreachable.
-              </>}
-              unavailableNote={(engine: string) => (
-                <>{ENGINE_UNAVAILABLE[engine]} A fallback that can’t speak is
-                  skipped, so the station would drop to <strong>Piper</strong> instead.</>
-              )}
-              previewHint={<>
-                Plays a short sample in the fallback voice. Worth auditioning —
-                you’ll normally only hear it when something has already gone
-                wrong.
-              </>}
-            />
-          </div>
-        )}
-      </Card>
-      </Advanced>
 
       <SaveBar
         note={ttsDirty

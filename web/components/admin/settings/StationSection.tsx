@@ -4,7 +4,6 @@ import type { ChangeEvent } from 'react';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Card, Pill, Seg } from '../ui';
-import { Advanced } from './section-chrome';
 import { LocationPicker } from '../../LocationPicker';
 import {
   SectionHeader, SaveBar, SettingsFieldError,
@@ -188,33 +187,8 @@ export function StationSection({ data, form, setForm, busy, saveSettings, fieldE
         </div>
       </Card>
 
-      <Advanced note="the public-API switch">
-      <Card title="Public API" sub="What the unauthenticated reads hand out">
-        <div className="field">
-          <Label>Publish persona souls</Label>
-          <Seg
-            options={[...ON_OFF]}
-            value={form.privacy.publishPersonaSouls ? 'on' : 'off'}
-            onChange={id =>
-              setForm(f => ({ ...f, privacy: { ...f.privacy, publishPersonaSouls: id === 'on' } }))
-            }
-          />
-          <div className="field-hint">
-            On: <code>/schedule</code> and <code>/personas</code> include every
-            persona&apos;s soul, so an external site can render the whole roster with
-            bios in one request. Off (the default) publishes names, taglines and
-            avatars only. A soul is the persona&apos;s system prompt rather than a
-            written bio, so leave this off if yours carry private direction — the
-            tagline is the field meant for public display. Either way{' '}
-            <code>/dj</code> keeps publishing the on-air persona&apos;s soul, as it
-            always has. Applies live.
-          </div>
-        </div>
-      </Card>
-      </Advanced>
-
       <SaveBar
-        note="Station name, location, timezone, locale, the private player, listener-request limits, and the public-API toggle apply live. Turning the stream password on or off needs a mixer restart."
+        note="Station name, location, timezone, locale and the private player apply live. Turning the stream password on or off needs a mixer restart."
         busy={busy}
         onSave={save}
         saveLabel="Save station settings"

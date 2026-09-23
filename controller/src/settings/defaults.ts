@@ -80,7 +80,8 @@ export const DEFAULTS = {
     opusEnabled: false,
     opusBitrate: 96,
     flacEnabled: false,
-    aacEnabled: false,
+    // Always on (no switch); see load().
+    aacEnabled: true,
     aacBitrate: 192,
     // HLS (/hls/live.m3u8) — the DEFAULT listener transport. A directory of
     // segments plus a rolling playlist, served as static files by the edge, so

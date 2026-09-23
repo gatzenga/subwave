@@ -134,7 +134,6 @@ export const RESTART_PATHS: readonly string[] = [
   'archive.enabled',
   'archive.bitrate',
   'stream.opusBitrate',
-  'stream.aacEnabled',
   'stream.aacBitrate',
   'stream.bitrate',
   'stream.bufferSeconds',
@@ -148,16 +147,8 @@ export const RESTART_PATHS: readonly string[] = [
  * index can say "adv" on a result and open the disclosure when it jumps there.
  */
 export const ADVANCED_CARDS: Partial<Record<SectionId, readonly string[]>> = {
-  station: ['public-api'],
   llm: ['fallback', 'reasoning', 'next-track-picker', 'idle-behaviour', 'daily-token-budget'],
-  tts: ['fallback-voice'],
   library: ['seed-phase', 'propagation', 'enrichment'],
-  danger: [
-    'duck-depth', 'max-track-length',
-    'opus-stream', 'flac-stream', 'ogg-metadata',
-    'aac-stream', 'stream-mp3-bitrate', 'listener-buffer', 'max-listeners',
-    'listener-country',
-  ],
 };
 
 export const isAdvancedCard = (section: SectionId, anchor: string) =>
@@ -182,7 +173,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Private player', section: 'station', card: 'Privacy', keywords: 'password gate hide lock' },
   { label: 'Stream password', section: 'station', card: 'Privacy', keywords: 'listener auth icecast lock restart' },
   { label: 'Station password', section: 'station', card: 'Privacy', keywords: 'secret shared passphrase' },
-  { label: 'Publish persona souls', section: 'station', card: 'Public API', keywords: 'system prompt schedule personas public json' },
 
   // ── music source ───────────────────────────────────────────────────────────
   { label: 'Server URL', section: 'music', card: 'Navidrome server', keywords: 'navidrome subsonic host url' },
@@ -221,7 +211,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Voice', section: 'tts', card: 'Voice engine', keywords: 'speaker accent alba amy' },
   { label: 'Voice level (dB)', section: 'tts', card: 'Voice engine', keywords: 'gain trim loudness decibel' },
   { label: 'Speech speed', section: 'tts', card: 'Voice engine', keywords: 'rate tempo faster slower' },
-  { label: 'Fallback engine', section: 'tts', card: 'Fallback voice', keywords: 'rescue voice slot backup' },
 
   // ── dj behaviour ───────────────────────────────────────────────────────────
   { label: 'Talk placement', section: 'behaviour', card: 'Talk placement', keywords: 'between tracks boundary interrupt over song duck mid-song' },
@@ -269,11 +258,8 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'DJ over a track duck depth', section: 'danger', card: 'Duck depth', keywords: 'ducking intro talk over link light smooth_add restart' },
   { label: 'Minimum track length', section: 'danger', card: 'Track length', keywords: 'floor short skits interludes intros selection filter seconds' },
   { label: 'Maximum track length', section: 'danger', card: 'Track length', keywords: 'cap long tracks selection filter seconds' },
-  { label: 'Serve the AAC mount', section: 'danger', card: 'AAC stream', keywords: 'aac adts mount restart' },
-  { label: 'Bitrate', section: 'danger', card: 'AAC stream', keywords: 'aac kbps restart' },
+    { label: 'Bitrate', section: 'danger', card: 'Stream AAC bitrate', keywords: 'aac adts kbps restart' },
   { label: 'Bitrate', section: 'danger', card: 'Stream MP3 bitrate', keywords: 'mp3 kbps stream restart' },
   { label: 'Listener buffer', section: 'danger', card: 'Listener buffer', keywords: 'burst size seconds behind live edge restart' },
-  { label: 'Country header', section: 'danger', card: 'Listener country', keywords: 'geoip cf-ipcountry cloudflare proxy header stats audience country rollup' },
-  { label: 'GeoIP database', section: 'danger', card: 'Listener country', keywords: 'mmdb maxmind geolite2 db-ip ip2location offline lookup stats audience country' },
   { label: 'Restart mixer', section: 'danger', card: 'Mixer', keywords: 'restart liquidsoap apply pending' },
 ];

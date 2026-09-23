@@ -339,7 +339,6 @@ export function LlmSection({ data, form, setForm, busy, saveSettings, adminFetch
         eyebrow="llm provider"
         title="The model that writes scripts and picks tracks."
         metrics={[{ n: String((data.llm?.providers || []).length), l: 'providers' }]}
-        manualHref="/manual/llm"
       />
 
       <Card title="Provider" sub="active routing">

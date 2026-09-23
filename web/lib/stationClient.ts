@@ -82,8 +82,6 @@ export interface StationClient {
   likeStatus(): Promise<LikeStatus | null>;
   /** Best-effort: never throws, never blocks. */
   beacon(payload: BeaconPayload): void;
-  /** null on any failure; callers treat that as "configured" and stay put. */
-  onboardingStatus(): Promise<{ needsSetup?: boolean } | null>;
 }
 
 export function createStationClient(origin: StationOrigin): StationClient {
@@ -135,14 +133,6 @@ export function createStationClient(origin: StationOrigin): StationClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }).catch(() => {});
-    },
-    onboardingStatus: async () => {
-      try {
-        const r = await fetch(`${api}/onboarding/status`);
-        return r.ok ? ((await r.json()) as { needsSetup?: boolean }) : null;
-      } catch {
-        return null;
-      }
     },
   };
 }

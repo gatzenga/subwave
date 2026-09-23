@@ -254,7 +254,6 @@ export interface StreamForm {
   opusEnabled: boolean;
   opusBitrate: string;
   flacEnabled: boolean;
-  aacEnabled: boolean;
   aacBitrate: string;
   bitrate: string;
   bufferSeconds: string;
@@ -592,14 +591,12 @@ interface SectionHeaderProps {
   eyebrow: ReactNode;
   title: ReactNode;
   metrics?: MetricSpec[];
-  manualHref?: string;
-  manualLabel?: ReactNode;
   actions?: ReactNode;
 }
 
-export function SectionHeader({ eyebrow, title, metrics, manualHref, manualLabel, actions }: SectionHeaderProps) {
+export function SectionHeader({ eyebrow, title, metrics, actions }: SectionHeaderProps) {
   const hasMetrics = !!(metrics && metrics.length > 0);
-  const hasBar = hasMetrics || !!manualHref || !!actions;
+  const hasBar = hasMetrics || !!actions;
   return (
     <section className="card">
       <div className={cn('p-4', hasBar && 'border-b border-ink')}>
@@ -607,32 +604,12 @@ export function SectionHeader({ eyebrow, title, metrics, manualHref, manualLabel
         <div className="mt-1.5 text-[22px] font-extrabold tracking-[-0.02em]">
           {title}
         </div>
-        {manualHref && !hasBar && (
-          <a
-            href={manualHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-block text-[12px] font-bold text-vermilion underline decoration-[1.5px] underline-offset-2"
-          >
-            {manualLabel || 'Read this in the manual'} ↗
-          </a>
-        )}
       </div>
       {hasBar && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 bg-[var(--ink-softer)] p-3.5">
           {metrics?.map((met, i) => <Metric key={i} n={met.n} l={met.l} accent={met.accent} />)}
-          {(manualHref || actions) && (
+          {actions && (
             <div className="ml-auto flex items-center gap-3">
-              {manualHref && (
-                <a
-                  href={manualHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[12px] font-bold text-vermilion underline decoration-[1.5px] underline-offset-2"
-                >
-                  {manualLabel || 'Read this in the manual'} ↗
-                </a>
-              )}
               {actions}
             </div>
           )}

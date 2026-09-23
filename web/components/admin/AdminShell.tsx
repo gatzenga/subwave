@@ -14,7 +14,6 @@ import {
   Sparkles,
   SlidersHorizontal,
   Terminal,
-  BookOpen,
   Users,
   Headphones,
   Plug,
@@ -178,7 +177,6 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 const FOOTER_LINKS: { href: string; label: string; icon: NavIcon; pill: string }[] = [
-  { href: '/manual', label: 'Manual', icon: BookOpen, pill: '↗' },
   { href: 'https://discord.gg/vjVbVKnMBa', label: 'Discord', icon: MessageCircle, pill: '↗' },
 ];
 
@@ -219,20 +217,6 @@ export default function AdminShell({ children, defaultOpen = true }: AdminShellP
     },
     [signIn, pathname, router],
   );
-
-  // First-run redirect into the wizard. Public endpoint, no auth needed.
-  useEffect(() => {
-    if (!hydrated) return;
-    if (pathname?.startsWith('/onboarding')) return;
-    const API = (process.env.NEXT_PUBLIC_API_URL as string | undefined) || '/api';
-    // admin-query-imperative: first-run-redirect
-    fetch(`${API}/onboarding/status`)
-      .then(r => (r.ok ? r.json() : null))
-      .then((j: { needsSetup?: boolean } | null) => {
-        if (j?.needsSetup) router.push('/onboarding');
-      })
-      .catch(() => {});
-  }, [hydrated, pathname, router]);
 
   if (!hydrated) {
     return (

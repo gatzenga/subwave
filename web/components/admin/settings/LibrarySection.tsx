@@ -266,8 +266,6 @@ export function LibrarySection({ data, form, setForm, busy, saveSettings, adminF
             l: 'tagged',
           },
         ]}
-        manualHref="/manual/llm"
-        manualLabel="How embeddings work"
       />
 
       <Card title="Tagger" sub="enabled?">

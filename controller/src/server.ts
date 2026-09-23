@@ -260,7 +260,7 @@ app.listen(config.server.port, async () => {
       const site = process.env.SITE_URL || `http://localhost:${config.server.port}`;
       console.log('');
       console.log('==============================================================');
-      console.log(`  SUB/WAVE needs setup — visit ${site}/onboarding to finish.`);
+      console.log(`  SUB/WAVE has no music server — set Navidrome in ${site}/admin/settings?section=music`);
       console.log('==============================================================');
       console.log('');
     }

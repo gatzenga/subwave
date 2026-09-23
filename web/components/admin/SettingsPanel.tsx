@@ -36,7 +36,7 @@ import {
 import {
   SECTIONS, SECTION_GROUPS, RESTART_PATHS, sectionById, type SectionId,
 } from './settings/registry';
-import { Advanced, SectionChromeProvider } from './settings/section-chrome';
+import { SectionChromeProvider } from './settings/section-chrome';
 import { SettingsSearch, type SettingsJump } from './settings/SettingsSearch';
 import { TtsSection } from './settings/TtsSection';
 import { DjBehaviourSection } from './settings/DjBehaviourSection';
@@ -303,7 +303,6 @@ export default function SettingsPanel() {
         opusEnabled: v.stream?.opusEnabled ?? true,
         opusBitrate: String(v.stream?.opusBitrate ?? 96),
         flacEnabled: v.stream?.flacEnabled ?? false,
-        aacEnabled: v.stream?.aacEnabled ?? false,
         aacBitrate: String(v.stream?.aacBitrate ?? 192),
         bitrate: String(v.stream?.bitrate ?? 192),
         bufferSeconds: String(v.stream?.bufferSeconds ?? 22),
@@ -662,7 +661,6 @@ export default function SettingsPanel() {
         opusBitrate: n.int('stream.opusBitrate', form.stream.opusBitrate),
         flacEnabled: form.stream.flacEnabled,
         oggIcyMetadata: form.stream.oggIcyMetadata,
-        aacEnabled: form.stream.aacEnabled,
         aacBitrate: n.int('stream.aacBitrate', form.stream.aacBitrate),
         bitrate: n.int('stream.bitrate', form.stream.bitrate),
         bufferSeconds: n.num('stream.bufferSeconds', form.stream.bufferSeconds),
@@ -1029,7 +1027,6 @@ export default function SettingsPanel() {
               ]}
             />
 
-            <Advanced note="track length, duck depth and the extra stream mounts">
             {form && (
               <Card title="Track length" sub="the window a track has to fall in to get picked">
                 <div className="field">
@@ -1156,44 +1153,8 @@ export default function SettingsPanel() {
             )}
 
             {form && (
-              <Card title="AAC stream" sub="/stream.aac (AAC-LC, ADTS)">
+              <Card title="Stream AAC bitrate" sub="/stream.aac">
                 <div className="grid gap-3">
-                  <div className="field">
-                    <div className="flex items-center gap-2">
-                      <Label>Serve the AAC mount</Label>
-                      <Pill tone="ink">restart required</Pill>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Seg
-                        options={[
-                          { id: 'on', label: 'On' },
-                          { id: 'off', label: 'Off' },
-                        ]}
-                        value={form.stream.aacEnabled ? 'on' : 'off'}
-                        onChange={id =>
-                          setForm(f =>
-                            f ? { ...f, stream: { ...f.stream, aacEnabled: id === 'on' } } : f,
-                          )
-                        }
-                      />
-                    </div>
-                    <SettingsFieldError path="stream.aacEnabled" errors={fieldErrors} />
-                    {form.stream.aacEnabled && (
-                      <div className="field-hint">
-                        Point a player at{' '}
-                        <code>
-                          {typeof window !== 'undefined' ? window.location.origin : ''}
-                          /stream.aac
-                        </code>
-                      </div>
-                    )}
-                    <div className="field-hint">
-                      Off by default. A continuous AAC-LC encoder for reach: players and
-                      hardware that decode AAC but not Opus. Aimed at external players; the
-                      web and mobile players stay on MP3/Opus and won&apos;t auto-select it.
-                      The mandatory <code>/stream.mp3</code> mount serves everyone either way.
-                    </div>
-                  </div>
                   <div className="field">
                     <div className="flex items-center gap-2">
                       <Label>Bitrate</Label>
@@ -1302,62 +1263,6 @@ export default function SettingsPanel() {
               </Card>
             )}
 
-            {form && (
-              <Card title="Listener country" sub="where the Stats rollup gets geography from">
-                <div className="field">
-                  <Label>Country header</Label>
-                  <Input
-                    className="w-full"
-                    aria-label="Proxy header carrying the listener country"
-                    placeholder="x-country-code"
-                    value={form.stream.countryHeader}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm(f =>
-                        f
-                          ? { ...f, stream: { ...f.stream, countryHeader: e.target.value } }
-                          : f,
-                      )
-                    }
-                  />
-                  <SettingsFieldError path="stream.countryHeader" errors={fieldErrors} />
-                  <div className="field-hint">
-                    Stats reads <code>CF-IPCountry</code> first, which only Cloudflare sets.
-                    If your own proxy adds a country header, name it here and it is read
-                    when Cloudflare&apos;s is absent. Leave blank if you have neither —
-                    an unknown country is simply left out of the rollup.
-                  </div>
-                </div>
-                <div className="field">
-                  <Label>GeoIP database</Label>
-                  <Input
-                    className="w-full"
-                    aria-label="Path to an offline GeoIP database"
-                    placeholder="/var/sub-wave/geoip/GeoLite2-Country.mmdb"
-                    value={form.stream.geoipDbPath}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm(f =>
-                        f
-                          ? { ...f, stream: { ...f.stream, geoipDbPath: e.target.value } }
-                          : f,
-                      )
-                    }
-                  />
-                  <SettingsFieldError path="stream.geoipDbPath" errors={fieldErrors} />
-                  <div className="field-hint">
-                    Last resort when no header carries the answer: the path, inside the
-                    controller container, of a MaxMind-format <code>.mmdb</code> country
-                    database you supply — GeoLite2, DB-IP Lite and IP2Location LITE all
-                    work. Nothing is bundled; each has its own licence and attribution
-                    terms. An unreadable file is logged once and then ignored, so a wrong
-                    path costs the lookup, never a listener.{' '}
-                    <strong>GEOIP_DB_PATH</strong>{' '}in the environment overrides this.
-                  </div>
-                </div>
-              </Card>
-            )}
-
-
-            </Advanced>
 
             <Card title="Broadcast" sub={data?.streamOnAir === false ? 'currently off air' : 'currently on air'}>
               <div className="grid gap-2">

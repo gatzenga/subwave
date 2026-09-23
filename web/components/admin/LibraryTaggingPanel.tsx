@@ -958,19 +958,13 @@ export default function TaggingPanel(p: TaggingPanelProps) {
           <div className="border border-[color-mix(in_oklab,var(--accent)_35%,transparent)] bg-[var(--accent-soft)] px-3 py-2 text-[11px] leading-[1.5] text-ink !normal-case">
             <b>Sounds-like is enabled — fingerprinting starts once your analyzer can do it.</b> The
             default analyzer is the lean image (bpm/key only); CLAP needs the heavy build.{' '}
-            {heavyUpgradeBox}{' '}
-            <a href="/manual/analysis" className="font-bold text-vermilion underline-offset-2 hover:underline">
-              Manual → Acoustic analysis
-            </a>
+            {heavyUpgradeBox}
           </div>
         ) : null}
         {vocalStatus === 'pending-heavy' && p.vocalEnabled ? (
           <div className="border border-[color-mix(in_oklab,var(--accent)_35%,transparent)] bg-[var(--accent-soft)] px-3 py-2 text-[11px] leading-[1.5] text-ink !normal-case">
             <b>Vocal-activity is enabled — separation starts once your analyzer can do it.</b> Demucs
-            needs the heavy build. {heavyUpgradeBox}{' '}
-            <a href="/manual/analysis" className="font-bold text-vermilion underline-offset-2 hover:underline">
-              Manual → Acoustic analysis
-            </a>
+            needs the heavy build. {heavyUpgradeBox}
           </div>
         ) : null}
       </div>
@@ -1014,10 +1008,7 @@ export default function TaggingPanel(p: TaggingPanelProps) {
           <div className="mt-1.5 font-mono text-[10px] break-words text-muted">{loadFailure.error}</div>
           <div className="mt-1.5">
             Fix the cause, then {loadFailure.restart} to retry — the failure is remembered until you
-            do, which is what stops the pass re-analysing tracks it can&rsquo;t fill.{' '}
-            <a href="/manual/analysis" className="font-bold text-vermilion underline-offset-2 hover:underline">
-              Manual → Acoustic analysis
-            </a>
+            do, which is what stops the pass re-analysing tracks it can&rsquo;t fill.
           </div>
         </div>
       )}

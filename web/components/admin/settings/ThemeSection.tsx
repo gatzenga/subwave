@@ -505,7 +505,6 @@ export function ThemeSection({ data, busy, saveSettings, adminFetch }: ThemeSect
           { n: activeSkinName, l: 'skin', accent: true },
           { n: themes ? String(themes.length) : '—', l: 'themes' },
         ]}
-        manualHref="/manual/themes"
       />
 
       <Card title="Player skin" sub="the face every listener sees">

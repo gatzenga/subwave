@@ -89,7 +89,8 @@ in step.
 
 **Icecast stays up alongside it and is load-bearing beyond compatibility.**
 `/stream.mp3` is the universal floor (Sonos, hardware radios, car receivers).
-Do not treat it as legacy.
+Do not treat it as legacy. `/stream.aac` is always served too — it has no off switch, and
+`load()` forces `stream.aacEnabled` true.
 
 **The listener count has TWO LEGS and one number.** Icecast contributes sockets;
 HLS contributes listeners who hold no socket at all, counted from the edge's
@@ -266,6 +267,13 @@ Do not reintroduce these, and do not assume their code still exists:
 - **Show-only admin controls** — Show changes, Pause-and-talk, Show boundaries
   and the dash Takeover card. The settings and air paths behind them remain,
   as with the Shows feature itself; only the controls are gone
+- **The first-run wizard** (`/onboarding`). Navidrome, the LLM and the voice
+  are set in Settings; `needsSetup` only drives the boot banner and the
+  Navidrome banner now. `POST /onboarding/generate-jingles` survives for the
+  Doctor panel
+- **Admin controls for** the TTS fallback voice, the Public API switch and
+  listener-country geography (their settings keep their stored values), and
+  every "Read this in the manual" link — there is no manual route
 - **Every transition of our own** — the crossfade setting, the DJ transition
   effects (sweep/washout/blend/dissolve/chop/loop), pair-aware drain, stem
   blends and the stem cache, the loudness card and the dead-air-trim setting.
