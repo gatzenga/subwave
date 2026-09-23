@@ -708,10 +708,6 @@ export async function pickViaPool(queue, ctx, rankTarget: { bpm: number | null; 
   const airedNow = library.lastAiredInfo();
 
   const recentPlays = summariseRecent(queue);
-  // Guarded: picker-test.mjs uses a stub queue with no such method.
-  const recentTransitions = typeof queue.recentTransitionChoices === 'function'
-    ? queue.recentTransitionChoices()
-    : [];
 
   let pickRaw;
   try {
@@ -781,7 +777,6 @@ export async function pickViaPool(queue, ctx, rankTarget: { bpm: number | null; 
           pace: currentTrack.paceMean ?? crec?.paceMean ?? undefined,
         };
       })() : null,
-      recentTransitions,
     });
   } catch (err) {
     // Top candidate rather than null: null drops the stream to auto.m3u.
@@ -821,7 +816,5 @@ export async function pickViaPool(queue, ctx, rankTarget: { bpm: number | null; 
     song: chosen,
     reason: pickRaw.reason || null,
     source: chosen._source,
-    // Present only when effects were active; applyMixTransition validates it.
-    transition: pickRaw.transition ?? null,
   };
 }

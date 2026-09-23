@@ -15,11 +15,6 @@ export const STATE_ROOT = process.env.STATE_DIR
 // stations restarts this process.
 export const STATE_DIR = resolveActiveStationDir(STATE_ROOT);
 
-// Relocated stem-cache root, as a CONTAINER path (the operator's STEMS_DIR is a
-// HOST path and means nothing in here). Empty = no relocation; music/stem-cache.ts
-// then resolves the cache under STATE_DIR.
-export const STEMS_DIR = envStr('SUBWAVE_STEMS_DIR', '');
-
 // Repo-bundled static audio (studio bed, emergency clip, default SFX). Compose
 // passes SOUNDS_DIR=/sounds; native dev falls back to the repo-local sounds/ dir.
 export const SOUNDS_DIR = process.env.SOUNDS_DIR
@@ -39,8 +34,6 @@ export const config = {
   stateDir: STATE_DIR,
   // Install-level state root (stations/, icecast-secrets.env live here).
   stateRoot: STATE_ROOT,
-  // Container path of a relocated stem cache; '' = under stateDir.
-  stemsDir: STEMS_DIR,
   soundsDir: SOUNDS_DIR,
   navidrome: {
     url: envUrl('NAVIDROME_URL', 'http://navidrome:4533'),
@@ -84,9 +77,6 @@ export const config = {
     // single-flight (one line-protocol worker cannot multiplex).
     concurrency: envInt('ANALYZE_CONCURRENCY', 1, { min: 1, max: 8 }),
     requestTimeoutMs: envInt('ANALYZE_REQUEST_TIMEOUT_MS', 120_000),
-    // Shorter deadline for transition renders: they run inside the pair-drain
-    // window and must lose the race to the drain's fallback crossfade.
-    renderTimeoutMs: envInt('ANALYZE_RENDER_TIMEOUT_MS', 60_000),
     // How long a "no backend at all" answer is cached before re-probing. Only
     // the MISS is timed; a backend that answered is remembered for the process
     // lifetime. 0 disables the caching.

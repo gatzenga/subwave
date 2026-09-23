@@ -20,21 +20,18 @@ import { Card, Btn, Pill, Seg } from './ui';
 import { SkeletonForm } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
 import { cn } from '../../lib/cn';
-import { fieldAria } from '../../lib/form';
 import ArchivesPanel from './ArchivesPanel';
 import BackupPanel from './BackupPanel';
 import {
   PICKER_MIN_TRACK_LENGTH_BOUNDS,
   SETTINGS_AAC_BITRATES,
   SETTINGS_MP3_BITRATES,
-  TRANSITION_EFFECTS,
 } from '@/lib/schemas.generated';
 import { AlertTriangle } from 'lucide-react';
 import {
   SectionHeader, SaveBar, SettingsFieldError, ELEVENLABS_VS_DEFAULTS, FISH_TTS_DEFAULTS,
   headerRows,
   type FormState, type FormUpdater, type SettingsData, type SaveSettings,
-  type LoudnessSource, type TransitionEffect,
 } from './settings/shared';
 import {
   SECTIONS, SECTION_GROUPS, RESTART_PATHS, sectionById, type SectionId,
@@ -54,41 +51,6 @@ import {
   useSettingsMutation,
   useSettingsQuery,
 } from './settings/queries';
-
-// Operator copy for the shared transition vocabulary. The drift test keeps
-// these labels in the schema's order and ensures every gesture has a hint.
-const TRANSITION_EFFECT_FIELDS = [
-  {
-    id: 'sweep',
-    label: 'Sweep',
-    hint: 'The outgoing track sinks under a closing filter while the next one rises clean — the dramatic gear-change across a clashing pair.',
-  },
-  {
-    id: 'washout',
-    label: 'Washout',
-    hint: 'A track dissolves into a tempo-synced echo tail as it ends. Also what makes an over-length track cut by the length cap sound intentional, so switching it off leaves those cuts as plain crossfades.',
-  },
-  {
-    id: 'blend',
-    label: 'Blend',
-    hint: 'A spectral handover between two tempo- and key-locked tracks, so the pair reads as one continuous piece.',
-  },
-  {
-    id: 'dissolve',
-    label: 'Dissolve',
-    hint: 'The outgoing track melts into a beatless reverb wash under the incoming one — the smooth way to hide a jump. The most expensive gesture in the kit: it runs on Liquidsoap\u2019s single streaming thread, so switch it off first if the mixer reports catch-up warnings on a slow host.',
-  },
-  {
-    id: 'chop',
-    label: 'Chop',
-    hint: 'The outgoing track is cut on its own beat, stabs thinning as the next rises through the gaps — the percussive way to lift the energy.',
-  },
-  {
-    id: 'loop',
-    label: 'Exit loop',
-    hint: 'A track\u2019s final bar repeats under whatever follows before it cuts away. Needs the track\u2019s measured tempo.',
-  },
-] as const satisfies readonly { id: TransitionEffect; label: string; hint: string }[];
 
 /**
  * Read one dotted path out of the form. Returns undefined for a missing branch
@@ -153,17 +115,11 @@ const MP3_BITRATES = SETTINGS_MP3_BITRATES;
 const AAC_BITRATES = SETTINGS_AAC_BITRATES;
 
 /**
- * Settings keys a save posts under a name the FormState does NOT use.
- *
- * `rebaselineSavedPatch` already re-homes the VALUES (audio.stemCache* is edited
- * as `transitions.*`); anything that scopes by FormState key has to follow the
- * same map or it misses the alias. Discard is the case that bites: rolling back
- * `transitions` while leaving the `audio.stemCacheGb` message on screen parks an
- * error under a value that no longer produced it.
+ * Settings keys a save posts under a name the FormState does NOT use. Anything
+ * that scopes by FormState key has to follow this map or it misses the alias.
+ * Empty today; kept so a future alias has one place to live.
  */
-const FORM_KEY_ALIASES: Record<string, readonly string[]> = {
-  transitions: ['audio'],
-};
+const FORM_KEY_ALIASES: Record<string, readonly string[]> = {};
 
 /** Does `path` belong to any of these FormState keys, alias included? */
 function ownsErrorPath(formKeys: readonly string[], path: string): boolean {
@@ -265,14 +221,6 @@ function rebaselineSavedPatch(
   const nextRecord = next as unknown as Record<string, unknown>;
   const currentRecord = current as unknown as Record<string, unknown>;
   for (const [key, value] of Object.entries(patch)) {
-    if (key === 'audio' && isRecord(value)) {
-      adopt(
-        next.transitions as unknown as Record<string, unknown>,
-        current.transitions as unknown as Record<string, unknown>,
-        value,
-      );
-      continue;
-    }
     if (key === 'tts' && isRecord(value)) {
       adopt(
         next.tts as unknown as Record<string, unknown>,
@@ -348,29 +296,12 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
     if (!data?.values) return;
     const v = data.values;
     const nextForm: FormState = {
-      crossfadeDuration: String(v.crossfadeDuration ?? ''),
       ducking: {
         voice: String(v.ducking?.voice ?? 0.22),
         intro: String(v.ducking?.intro ?? 0.3),
       },
       maxTrackSeconds: String(v.maxTrackSeconds ?? 0),
       fadeAtShowEnd: v.fadeAtShowEnd === true,
-      silenceTrim: {
-        enabled: v.silenceTrim?.enabled ?? false,
-        minGapMs: String(v.silenceTrim?.minGapMs ?? 1500),
-      },
-      transitions: {
-        pairDrain: v.transitions?.pairDrain ?? true,
-        stemBlends: v.transitions?.stemBlends ?? false,
-        // Absent reads as ON, matching the controller's resolver
-        // (settings/transition-effects.ts) — a station that has never saved
-        // this block has the whole kit.
-        effects: Object.fromEntries(
-          TRANSITION_EFFECTS.map(k => [k, v.transitions?.effects?.[k] !== false]),
-        ) as Record<TransitionEffect, boolean>,
-        stemCache: v.audio?.stemCache ?? false,
-        stemCacheGb: String(v.audio?.stemCacheGb ?? 15),
-      },
       archive: {
         enabled: v.archive?.enabled ?? false,
         bitrate: String(v.archive?.bitrate ?? 128),
@@ -390,11 +321,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
         maxListeners: String(v.stream?.maxListeners ?? 100),
         countryHeader: v.stream?.countryHeader ?? '',
         geoipDbPath: v.stream?.geoipDbPath ?? '',
-      },
-      loudness: {
-        targetLufs: String(v.loudness?.targetLufs ?? -14),
-        maxBoostDb: String(v.loudness?.maxBoostDb ?? 6),
-        source: v.loudness?.source ?? 'replaygain-then-measured',
       },
       station: v.station ?? '',
       stationDescription: v.stationDescription ?? '',
@@ -724,39 +650,20 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
     if (!form) return;
     const n = numberFields();
     saveBlock(n, {
-      crossfadeDuration: n.float('crossfadeDuration', form.crossfadeDuration),
       ducking: {
         voice: n.float('ducking.voice', form.ducking.voice),
         intro: n.float('ducking.intro', form.ducking.intro),
       },
       maxTrackSeconds: n.int('maxTrackSeconds', form.maxTrackSeconds),
       // Its own top-level key rather than part of the cap: the floor is a
-      // SELECTION filter both pickers read, where maxTrackSeconds is an
-      // on-air cut. They are edited as one pair, so they save as one PATCH.
+      // SELECTION filter both pickers read, like maxTrackSeconds. They are
+      // edited as one pair, so they save as one PATCH.
       // The controller merges `picker` field by field, so albumHours (still
       // on the LLM card) is untouched by this write.
       picker: {
         minTrackLengthSeconds: n.int('picker.minTrackLengthSeconds', form.picker.minTrackLengthSeconds),
       },
       fadeAtShowEnd: form.fadeAtShowEnd,
-      silenceTrim: {
-        enabled: form.silenceTrim.enabled,
-        minGapMs: n.int('silenceTrim.minGapMs', form.silenceTrim.minGapMs),
-      },
-      transitions: {
-        pairDrain: form.transitions.pairDrain,
-        stemBlends: form.transitions.stemBlends,
-        effects: form.transitions.effects,
-      },
-      audio: {
-        stemCache: form.transitions.stemCache,
-        stemCacheGb: n.num('audio.stemCacheGb', form.transitions.stemCacheGb),
-      },
-      loudness: {
-        targetLufs: n.float('loudness.targetLufs', form.loudness.targetLufs),
-        maxBoostDb: n.float('loudness.maxBoostDb', form.loudness.maxBoostDb),
-        source: form.loudness.source,
-      },
       stream: {
         idleWhenEmpty: form.stream.idleWhenEmpty,
         idleAfterMinutes: n.int('stream.idleAfterMinutes', form.stream.idleAfterMinutes),
@@ -909,7 +816,7 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             <span className="min-w-0 flex-1">
               <strong className="tracking-[0.08em] uppercase">Saved — not yet on air.</strong>{' '}
               The live stream is still running the previous mixer settings (bitrate, format,
-              crossfade, jingle frequency). Restart the mixer to apply what you saved.
+              duck depth, jingle frequency). Restart the mixer to apply what you saved.
             </span>
             <Btn
               sm
@@ -1127,14 +1034,13 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
           <>
             <SectionHeader
               eyebrow="danger zone"
-              title="Crossfade, stream control, and mixer restart."
+              title="Stream control and mixer restart."
               metrics={[
                 {
                   n: data?.streamOnAir == null ? '—' : data.streamOnAir ? 'on air' : 'off air',
                   l: 'broadcast',
                   accent: data?.streamOnAir === true,
                 },
-                { n: `${data?.values?.crossfadeDuration ?? '—'}s`, l: 'crossfade' },
               ]}
             />
 
@@ -1156,37 +1062,7 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             </Card>
 
 
-            <Advanced note="crossfade, duck depth, transitions, loudness and the extra stream mounts">
-            {form && (
-              <Card title="Crossfade" sub="track transition overlap">
-                <div className="field">
-                  <div className="flex items-center gap-2">
-                    <Label>Crossfade duration</Label>
-                    <Pill tone="ink">restart required</Pill>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      className="mono-num w-28"
-                      aria-label="Crossfade duration (seconds)"
-                      type="number"
-                      step={0.5}
-                      max={30}
-                      value={form.crossfadeDuration}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setForm(f => (f ? { ...f, crossfadeDuration: e.target.value } : f))
-                      }
-                    />
-                    <span className="text-[12px] text-muted">sec</span>
-                  </div>
-                  <SettingsFieldError path="crossfadeDuration" errors={fieldErrors} />
-                  <div className="field-hint">
-                    Seconds of overlap between tracks (current: {data?.values?.crossfadeDuration}s).
-                    Saving flags a pending restart. Apply it with the Mixer card below.
-                  </div>
-                </div>
-              </Card>
-            )}
-
+            <Advanced note="track length, duck depth, show boundaries and the extra stream mounts">
             {form && (
               <Card title="Track length" sub="the window a track has to fall in to get picked">
                 <div className="field">
@@ -1240,11 +1116,9 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                     The longest a track can be to get picked &mdash; hour-long album mixes and
                     DJ sets never enter the rotation. Together with the floor above this is a
                     window: set 150 and 300 and only 2&frac12;&ndash;5 minute tracks are
-                    chosen. Anything that slips through anyway is still faded out at this
-                    figure rather than airing in full, which is what keeps an unmeasured
-                    file from taking the hour. A track you queue yourself from the studio is
-                    exempt and plays in full, and a show can override this with its own limit
-                    (0 there means unlimited). Applies on the next pick; no restart needed.
+                    chosen. It only decides what gets picked &mdash; a track that is on air is
+                    never cut short. A track you queue yourself from the studio plays in full,
+                    and a show can override this with its own limit (0 there means unlimited). Applies on the next pick; no restart needed.
                   </div>
                 </div>
               </Card>
@@ -1315,172 +1189,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             )}
 
             {form && (
-              <Card title="Stem transitions" sub="pair-aware scheduling + rendered blends">
-                <div className="grid gap-3">
-                  <div className="field">
-                    <Label>Pair-aware transitions</Label>
-                    <div className="flex items-center gap-2">
-                      <Seg
-                        options={[
-                          { id: 'on', label: 'On' },
-                          { id: 'off', label: 'Off' },
-                        ]}
-                        value={form.transitions.pairDrain ? 'on' : 'off'}
-                        onChange={id =>
-                          setForm(f =>
-                            f ? { ...f, transitions: { ...f.transitions, pairDrain: id === 'on' } } : f,
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="field-hint">
-                      Holds each pick until its successor is known, so DJ-mode crossfades are
-                      sized for the actual pair instead of a blind default. Off reverts to the
-                      historical eager hand-off. Applies live; no restart.
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <Label>Stem cache</Label>
-                    <div className="flex items-center gap-2">
-                      <Seg
-                        options={[
-                          { id: 'on', label: 'On' },
-                          { id: 'off', label: 'Off' },
-                        ]}
-                        value={form.transitions.stemCache ? 'on' : 'off'}
-                        onChange={id =>
-                          setForm(f =>
-                            f ? { ...f, transitions: { ...f.transitions, stemCache: id === 'on' } } : f,
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="field-hint">
-                      Keeps the drum/bass/vocal/other stems the heavy analyzer already separates
-                      during analysis (typically 13&ndash;25&nbsp;MB per track, oldest evicted past
-                      the budget). Needs the heavy analyzer image (Demucs). Turning it on now also
-                      backfills: the analysis pass targets tracks with no cached stems, so an
-                      already-scanned library fills in over successive runs.
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <Label>Stem cache budget</Label>
-                    <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                      <Input
-                        className="mono-num w-28"
-                        aria-label="Stem cache budget (GB)"
-                        type="number"
-                        step={1}
-                        min={1}
-                        max={1000}
-                        value={form.transitions.stemCacheGb}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          setForm(f =>
-                            f
-                              ? { ...f, transitions: { ...f.transitions, stemCacheGb: e.target.value } }
-                              : f,
-                          )
-                        }
-                      />
-                      <span className="text-sm opacity-70">
-                        GB &middot; holds ~
-                        {/* /25 mirrors the controller's stem-cache APPROX_TRACK_BYTES
-                            ceiling, /13 the field-measured average (#1257). */}
-                        {Math.floor(
-                          ((Number(form.transitions.stemCacheGb) || 15) * 1024) / 25,
-                        ).toLocaleString('en-GB')}
-                        &ndash;
-                        {Math.floor(
-                          ((Number(form.transitions.stemCacheGb) || 15) * 1024) / 13,
-                        ).toLocaleString('en-GB')}{' '}
-                        tracks
-                      </span>
-                    </div>
-                    <div className="field-hint">
-                      How much disk the stem cache may use before the oldest entries are evicted
-                      (1&ndash;500&nbsp;GB). A blend only fires when BOTH tracks of a pair are
-                      cached, so a budget well under your library size means most seams stay
-                      plain crossfades. The backfill stops once the budget is full rather than
-                      separating tracks it would immediately evict.
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <Label>Stem-blend seams</Label>
-                    <div className="flex items-center gap-2">
-                      <Seg
-                        options={[
-                          { id: 'on', label: 'On' },
-                          { id: 'off', label: 'Off' },
-                        ]}
-                        value={form.transitions.stemBlends ? 'on' : 'off'}
-                        onChange={id =>
-                          setForm(f =>
-                            f ? { ...f, transitions: { ...f.transitions, stemBlends: id === 'on' } } : f,
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="field-hint">
-                      When two tempo-compatible tracks meet and both have cached stems, the seam
-                      airs as a rendered blend — the outgoing track&rsquo;s drums carry under the
-                      incoming intro until its own beat drops. Falls back to a plain crossfade on
-                      any miss. Needs pair-aware transitions + the stem cache; the Doctor flags a
-                      config that can&rsquo;t deliver.
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {form && (
-              <Card title="DJ transition effects" sub="which gestures the DJ may reach for">
-                <div className="field-hint">
-                  Only ever heard when the on-air persona is in DJ mode — this switches off
-                  individual gestures without giving up the rest of the kit. The station still
-                  validates every choice against the audio analysis, so switching one on is
-                  permission, not a guarantee. Applies live; no restart.
-                </div>
-                <div className="grid gap-3">
-                  {TRANSITION_EFFECT_FIELDS.map(({ id, label, hint }) => {
-                    const aria = fieldAria(`transition-effect-${id}`, undefined, { hasDescription: true });
-                    return (
-                      <div className="field" key={id}>
-                        <Label {...aria.labelledByProps}>{label}</Label>
-                        <div className="flex items-center gap-2">
-                          <Seg
-                            {...aria.groupProps}
-                            options={[
-                              { id: 'on', label: 'On' },
-                              { id: 'off', label: 'Off' },
-                            ]}
-                            value={form.transitions.effects[id] ? 'on' : 'off'}
-                            onChange={v =>
-                              setForm(f =>
-                                f
-                                  ? {
-                                    ...f,
-                                    transitions: {
-                                      ...f.transitions,
-                                      effects: { ...f.transitions.effects, [id]: v === 'on' },
-                                    },
-                                  }
-                                  : f,
-                              )
-                            }
-                          />
-                        </div>
-                        <div {...aria.descriptionProps} className="field-hint">{hint}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            )}
-
-            {form && (
               <Card title="Show boundaries" sub="stop a long track spilling into the next show">
                 <div className="field">
                   <Label>Fade out at a show change</Label>
@@ -1520,160 +1228,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                       </div>
                     );
                   })()}
-                </div>
-              </Card>
-            )}
-
-            {form && (
-              <Card title="Dead-air trim" sub="cut silent gaps off track edges">
-                <div className="grid gap-3">
-                  <div className="field">
-                    <Label>Trim silent edges</Label>
-                    <div className="flex items-center gap-2">
-                      <Seg
-                        options={[
-                          { id: 'on', label: 'On' },
-                          { id: 'off', label: 'Off' },
-                        ]}
-                        value={form.silenceTrim.enabled ? 'on' : 'off'}
-                        onChange={id =>
-                          setForm(f =>
-                            f ? { ...f, silenceTrim: { ...f.silenceTrim, enabled: id === 'on' } } : f,
-                          )
-                        }
-                      />
-                    </div>
-                    <SettingsFieldError path="silenceTrim.enabled" errors={fieldErrors} />
-                    <div className="field-hint">
-                      Some rips carry a chunk of silence before the music starts, or a long blank
-                      after it ends — on air that plays as dead air. With this on, the station
-                      skips past the silence and cuts away at the end instead of waiting it out.
-                      Needs the track analysed; unanalysed tracks play whole as before.
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <Label>Shortest gap worth cutting</Label>
-                    <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                      <Input
-                        className="mono-num w-28"
-                        aria-label="Shortest gap worth cutting (milliseconds)"
-                        type="number"
-                        step={100}
-                        min={250}
-                        max={30000}
-                        value={form.silenceTrim.minGapMs}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          setForm(f =>
-                            f ? { ...f, silenceTrim: { ...f.silenceTrim, minGapMs: e.target.value } } : f,
-                          )
-                        }
-                      />
-                      <span className="text-[12px] text-muted">ms</span>
-                    </div>
-                    <SettingsFieldError path="silenceTrim.minGapMs" errors={fieldErrors} />
-                    <div className="field-hint">
-                      Anything shorter than this is left alone. Tracks often open a beat after
-                      zero, and albums that segue leave space between songs on purpose — raise
-                      this if your library is full of them, lower it to catch smaller gaps.
-                      Applies on the next pick; no restart needed.
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {form && (
-              <Card title="Loudness levelling" sub="per-track volume normalisation">
-                <div className="grid gap-3">
-                  <div className="field">
-                    <Label>Loudness source</Label>
-                    <Select
-                      value={form.loudness.source}
-                      onValueChange={v =>
-                        setForm(f =>
-                          f
-                            ? {
-                                ...f,
-                                loudness: { ...f.loudness, source: v as LoudnessSource },
-                              }
-                            : f,
-                        )
-                      }
-                    >
-                      <SelectTrigger className="w-64" aria-label="Loudness source">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="replaygain-then-measured">
-                          ReplayGain tags, then measured
-                        </SelectItem>
-                        <SelectItem value="replaygain">ReplayGain tags only</SelectItem>
-                        <SelectItem value="measured">Measured (acoustic analysis)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div className="field-hint">
-                      Where each track&rsquo;s loudness figure comes from. ReplayGain tags (read
-                      via Navidrome) are a whole-file stereo measurement, the most accurate when
-                      your library carries them. Measured values come from this station&rsquo;s
-                      acoustic analysis, which scans only the opening of each track. The default
-                      prefers the tag and falls back to the measurement for untagged files.
-                    </div>
-                  </div>
-                  <div className="field">
-                    <Label>Target loudness</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        className="mono-num w-28"
-                        aria-label="Target loudness (LUFS)"
-                        type="number"
-                        step={1}
-                        min={-23}
-                        max={-9}
-                        value={form.loudness.targetLufs}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          setForm(f =>
-                            f ? { ...f, loudness: { ...f.loudness, targetLufs: e.target.value } } : f,
-                          )
-                        }
-                      />
-                      <span className="text-[12px] text-muted">LUFS · −23 to −9</span>
-                    </div>
-                    <div className="field-hint">
-                      Every analysed track is pulled toward this level. −14 is the streaming
-                      standard (Spotify, YouTube). A quieter target like −16 narrows the gap in
-                      mixed libraries: loud modern masters come down more, and quiet dynamic ones
-                      (classical, jazz) need less lift to catch up.
-                    </div>
-                  </div>
-                  <div className="field">
-                    <Label>Max boost</Label>
-                    <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                      <Input
-                        className="mono-num w-28"
-                        aria-label="Max boost (dB)"
-                        type="number"
-                        step={1}
-                        min={0}
-                        max={12}
-                        value={form.loudness.maxBoostDb}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          setForm(f =>
-                            f ? { ...f, loudness: { ...f.loudness, maxBoostDb: e.target.value } } : f,
-                          )
-                        }
-                      />
-                      <span className="text-[12px] text-muted">dB · 0 to 12</span>
-                    </div>
-                    <div className="field-hint">
-                      Cap on how far a quiet track is turned up (0 = level down only). Boost is
-                      also limited by each track&rsquo;s own measured peak headroom, so raising
-                      this won&rsquo;t distort dynamic material; very quiet, dynamic masters
-                      simply can&rsquo;t reach the target cleanly. Loud tracks are turned down as
-                      far as needed. Applies from the next queued track; no restart, tracks need
-                      acoustic analysis (Library → Analyze).
-                    </div>
-                  </div>
                 </div>
               </Card>
             )}
@@ -1888,7 +1442,7 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
                   Restart mixer
                 </Btn>
                 <div className="field-hint">
-                  Drops the broadcast for ~3–5s. Use after crossfade or jingle frequency changes.
+                  Drops the broadcast for ~3–5s. Use after duck depth, encoder or jingle frequency changes.
                   {pendingRestart && (
                     <strong className="mt-1 block text-vermilion">
                       Pending settings need a restart to apply.
@@ -1899,12 +1453,12 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
             </Card>
 
             <SaveBar
-              note="Crossfade, the encoder settings and the listener buffer only reach the stream after a mixer restart. Loudness, dead-air trim and the track-length window apply live."
+              note="Duck depth, the encoder settings and the listener buffer only reach the stream after a mixer restart. The track-length window and show boundaries apply live."
               busy={busy}
               onSave={saveDanger}
               saveLabel="Save danger zone"
               errors={fieldErrors}
-              ownedKeys={['crossfadeDuration', 'ducking', 'maxTrackSeconds', 'picker.minTrackLengthSeconds', 'fadeAtShowEnd', 'silenceTrim', 'transitions', 'audio', 'loudness', 'stream']}
+              ownedKeys={['ducking', 'maxTrackSeconds', 'picker.minTrackLengthSeconds', 'fadeAtShowEnd', 'stream']}
             />
           </>
         )}

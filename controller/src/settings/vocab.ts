@@ -56,7 +56,6 @@ import {
   SETTINGS_AAC_BITRATES,
   SETTINGS_HLS_SEGMENT_COUNTS,
   SETTINGS_HLS_SEGMENT_DURATIONS,
-  SETTINGS_LOUDNESS_SOURCES,
   SETTINGS_MP3_BITRATES,
   SETTINGS_OPUS_BITRATES,
   SETTINGS_SEARCH_PROVIDERS,
@@ -95,7 +94,6 @@ export const SCRIPT_LENGTHS: readonly string[] = PERSONA_SCRIPT_LENGTHS;
 // 'natural' (default) or 'announce' — see announceLinks().
 export const LINK_STYLES: readonly string[] = PERSONA_LINK_STYLES;
 
-export { TRANSITION_EFFECTS, type TransitionEffect } from '../schemas/settings.js';
 
 // Per-persona tone dials, 0-10, default 5. Three bands (0-3 low, 7-10 high,
 // 4-6 neutral); only a non-neutral band appends a style directive.
@@ -1005,7 +1003,3 @@ export const AAC_BITRATES = SETTINGS_AAC_BITRATES;
 export const HLS_SEGMENT_DURATIONS = SETTINGS_HLS_SEGMENT_DURATIONS;
 export const HLS_SEGMENT_COUNTS = SETTINGS_HLS_SEGMENT_COUNTS;
 
-// Where per-track loudness comes from (#998): an embedded ReplayGain tag, the
-// analyzer's measured LUFS, or tag-with-measured-fallback (the default).
-export const LOUDNESS_SOURCES = SETTINGS_LOUDNESS_SOURCES;
-export type LoudnessSource = (typeof LOUDNESS_SOURCES)[number];

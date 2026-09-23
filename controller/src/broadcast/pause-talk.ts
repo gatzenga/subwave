@@ -54,10 +54,9 @@ export function wantsPauseTalk({
 //   ^ outgoing song                      ^ DJ speaks                  ^ next song
 //     still fading                         in the clear                 already up
 //
-// `cross` sizes a transition from the OUTGOING track's liq_cross_duration
-// (radio.liq's dj_transition reads `a.metadata`), so the previous song's tail
-// is mixed over the HEAD of this silence for its own crossfade duration —
-// 10s on the station default. Un-budgeted, that is where the whole segment
+// The previous song's handover (autocue's, sized from its audio — the caller
+// budgets the longest one it can choose) is mixed over the HEAD of this
+// silence. Un-budgeted, that is where the whole segment
 // lands, and a break that plays under a fading song is the ducking this
 // feature exists to replace. The release is delayed to match (releaseDelayMs).
 export function silenceDurationMs({

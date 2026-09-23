@@ -21,17 +21,13 @@
 // upsertTrackAnalysis to the cue points.
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 const stateRoot = mkdtempSync(path.join(tmpdir(), 'subwave-silence-trim-lib-'));
 process.env.STATE_DIR = stateRoot;
-writeFileSync(
-  path.join(stateRoot, 'settings.json'),
-  JSON.stringify({ silenceTrim: { enabled: true, minGapMs: 1_500 } }),
-);
 
 const settings = await import('../src/settings.js');
 await settings.load();
@@ -87,7 +83,7 @@ test('an un-analysed track resolves to no trim, not to zero', () => {
 });
 
 test('a track object with its own fresh analysis outranks the stored row', () => {
-  // Same precedence as queue.mixAnalysisFor: a pick carrying just-measured
+  // Track object first, else the library row: a pick carrying just-measured
   // values must not get a stale answer from the DB.
   const t = resolveSilenceTrim({
     id: 'trimmed', duration: 200, leadSilenceMs: 2_000, tailSilenceMs: 0, tailStartMs: null,

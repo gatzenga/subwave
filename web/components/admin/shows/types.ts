@@ -236,8 +236,8 @@ export interface SettingsResponse {
     shows?: Array<Partial<Show>>;
     schedule?: Schedule;
     personas?: Persona[];
-    /** Crossfade-relative floor for a non-zero per-show cap or minimum track
-     *  length (server-computed). */
+    /** Floor for a non-zero per-show cap or minimum track length
+     *  (server-computed). */
     minTrackSeconds?: number;
     /** Station-wide picking windows; `minTrackLengthSeconds` is the default a
      *  show inherits when its own field is null. */

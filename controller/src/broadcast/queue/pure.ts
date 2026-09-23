@@ -11,44 +11,6 @@ import { DRAIN_DEADLINE_SEC } from '../drain-policy.js';
 import type { QueueItem, Track } from './types.js';
 import type { HostSpeechStamp } from '../session.js';
 
-interface TransitionItem {
-  track: Track;
-  sent?: boolean;
-  stemSeam?: boolean;
-}
-
-// Human-readable description of the NEXT FINALISED seam the operator will
-// hear. applyMixTransition and the pair/stem stamps run only when `incoming`
-// drains, so flags on an unsent item are still agent proposals: vetoes may
-// remove them and drain-time policy may add another. Returning null keeps the
-// admin honest until `sent` makes the pair authoritative. Exit gestures ride
-// the outgoing track while entry gestures ride the incoming track, so the
-// answer has to inspect both sides. Washout may combine with sweep/blend; stem
-// rendering owns the whole seam and therefore overrides every live effect.
-export function nextTransitionLabel(
-  outgoing: TransitionItem | null | undefined,
-  incoming: TransitionItem | null | undefined,
-): string | null {
-  if (!incoming || incoming.sent !== true) return null;
-  if (incoming.stemSeam) return 'Stem blend';
-
-  const labels: string[] = [];
-  const washing = outgoing?.track.washout === true;
-  const looping = outgoing?.track.loop === true && !washing;
-
-  if (washing) labels.push('Washout');
-  else if (looping) labels.push('Loop');
-
-  // Mirrors radio.liq's precedence: loop suppresses every entry effect;
-  // washout suppresses dissolve/chop but can coexist with sweep/blend.
-  if (!looping && incoming.track.sweep) labels.push('Sweep');
-  if (!looping && incoming.track.blend) labels.push('Blend');
-  if (!washing && !looping && incoming.track.dissolve) labels.push('Dissolve');
-  if (!washing && !looping && incoming.track.chop) labels.push('Chop');
-
-  return labels.length > 0 ? labels.join(' + ') : 'Normal';
-}
-
 export function pickLinkInterval() {
   const f = settings.effectiveFrequency();
   if (f === 'silent')     return Infinity;
@@ -198,7 +160,7 @@ export function linkClockStampFor(
 // show look-ahead adds to the wall clock (see runPickCycle).
 //
 // Measured from the on-air track's REMAINING time, never its full duration. The
-// pick cycle doesn't only run at a track start — the pair-drain deadline
+// pick cycle doesn't only run at a track start — the empty-queue deadline
 // backstop fires it ~2 min from the end, and boot recovery fires it part-way
 // through a track. Full duration there overstates the lead by everything already
 // elapsed, walking `showAt` across the next schedule boundary while the real
@@ -247,14 +209,10 @@ export function playAlreadyRecorded(
   return false;
 }
 
-// Duration ladder shared by the length-cap checks (applyMixTransition's
-// auto-washout and the drain loop's stem-blend outCapped gate): the track
-// object first (Subsonic picks carry it), the library row when it doesn't
-// (agent picks resolve from the picker tools' slim projections, which omit
-// length when the source tool didn't surface one). 0 = unknown. The two
-// checks MUST agree — a 0 read as "uncapped" in one of them arms a stem
-// blend on an ending the cap never lets air (and strips the auto-washout
-// protecting the forced cut).
+// Duration ladder: the track object first (Subsonic picks carry it), the
+// library row when it doesn't (agent picks resolve from the picker tools' slim
+// projections, which omit length when the source tool didn't surface one).
+// 0 = unknown.
 export function knownDurationSec(track: Track): number {
   const dur = Number(track.duration) || 0;
   if (dur) return dur;

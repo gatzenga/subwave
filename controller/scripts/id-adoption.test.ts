@@ -17,7 +17,7 @@
 // Run: `tsx scripts/id-adoption.test.ts` (folded into `npm run test`).
 
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -53,7 +53,6 @@ async function main() {
   process.env.STATE_DIR = stateDir;
 
   const db = await import('../src/music/library-db.js');
-  const stemCache = await import('../src/music/stem-cache.js');
   const rotation = await import('../src/music/id-rotation.js');
   const { ROTATION_PREFIX } = await import('../src/music/tagger-progress.js');
   await db.open({ embeddingDim: 8, adoptStoredDim: true });
@@ -65,7 +64,7 @@ async function main() {
   db.upsertTrackEnrichment(OLD_HEX, { lastfmTags: ['classic rock'], lyricExcerpt: 'la la' });
   db.upsertTrackAnalysis(OLD_HEX, {
     bpm: 120, musicalKey: 'Am', introMs: 4200, loudnessLufs: -11.2, peakDb: -0.8,
-    vocalRanges: [], outro: { ending: 'fade' } as never, stemsAttempted: true,
+    vocalRanges: [], outro: { ending: 'fade' } as never,
     // Dead-air trim (#1470). Days of decode time on a real library, and the
     // columns landed AFTER the first version of the carry list was written —
     // the exact class of loss the derived carry set exists to stop.
@@ -86,9 +85,6 @@ async function main() {
     trackId: OLD_HEX, title: 'Old Title', artist: 'A', album: 'B',
     playedAt: '2026-07-01T00:00:00.000Z', source: 'ai', requestedBy: null, showId: null, showName: null,
   });
-  const oldStemsDir = stemCache.dirFor(OLD_HEX);
-  mkdirSync(oldStemsDir, { recursive: true });
-  writeFileSync(join(oldStemsDir, 'head-drums.flac'), Buffer.alloc(16));
 
   db.upsertTrackMeta(OLD_NANO, { title: 'Nano', artist: 'C', album: 'D', duration: 100 });
   db.upsertTrackTags(OLD_NANO, { moods: ['stale'], energy: 'low', source: 'llm' });
@@ -157,7 +153,6 @@ async function main() {
     assert.equal(row.loudness_lufs, -11.2);
     assert.equal(row.vocal_ranges_json, '[]');
     assert.deepEqual(JSON.parse(row.outro_json as string), { ending: 'fade' });
-    assert.ok(row.stems_at, 'stem attempt stamp carried');
     assert.deepEqual(JSON.parse(row.lastfm_tags as string), ['classic rock']);
     assert.equal(row.lyric_excerpt, 'la la');
   });
@@ -214,12 +209,6 @@ async function main() {
   await test('play history follows the track', () => {
     assert.ok(sql.prepare('SELECT 1 FROM plays WHERE track_id = ?').get(NEW_HEX));
     assert.equal(sql.prepare('SELECT 1 FROM plays WHERE track_id = ?').get(OLD_HEX), undefined);
-  });
-
-  await test('the stems dir is renamed to the new id', () => {
-    assert.equal(existsSync(stemCache.dirFor(NEW_HEX)), true);
-    assert.equal(existsSync(oldStemsDir), false);
-    assert.equal(existsSync(join(stemCache.dirFor(NEW_HEX), 'head-drums.flac')), true);
   });
 
   await test('a new row that already carries its own tags is not clobbered', () => {

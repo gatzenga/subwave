@@ -151,10 +151,6 @@ export interface QueueEntry {
   t?: string;
   /** True once the controller has handed this item to Liquidsoap. */
   sent?: boolean;
-  /** The track arrives via a pre-rendered stem blend rather than a plain
-   *  crossfade. Stamped once the seam's clip is queued, so it's definitive,
-   *  not a prediction (#1257). */
-  stemSeam?: boolean;
   /** The operator block this row was queued as part of (#1622 FR 4) — a whole
    *  album, or a run of tracks for an artist show. Identity only: nothing on
    *  the air path branches on it. `index`/`size` are stamped from the plan, so

@@ -2111,7 +2111,6 @@ export const BEDS_TAIL_SEC_BOUNDS: SettingsNumericBound = { min: 0, max: 15 };
 // measured in seconds, not frames. The ceiling bounds the same mistake from
 // the other side: past 30s an operator is describing a different problem
 // (a corrupt rip) than the one a cue point solves.
-export const SILENCE_TRIM_MIN_GAP_MS_BOUNDS: SettingsNumericBound = { min: 250, max: 30000 };
 
 /**
  * `parseInt(raw, 10)` + a bounds check, exactly as the hand-rolled branch did.
@@ -2423,13 +2422,6 @@ export const SETTINGS_MP3_BITRATES = [64, 96, 128, 160, 192, 320] as const;
 export const SETTINGS_OPUS_BITRATES = [96, 128, 192, 256, 320] as const;
 export const SETTINGS_AAC_BITRATES = [128, 192, 256] as const;
 
-// Where per-track loudness comes from (queue.applyLoudnessGain, issue #998).
-export const SETTINGS_LOUDNESS_SOURCES = [
-  'replaygain-then-measured',
-  'replaygain',
-  'measured',
-] as const;
-
 export const SETTINGS_SEARCH_PROVIDERS = ['duckduckgo', 'tavily', 'brave', 'searxng'] as const;
 
 /**
@@ -2439,7 +2431,6 @@ export const SETTINGS_SEARCH_PROVIDERS = ['duckduckgo', 'tavily', 'brave', 'sear
  */
 export const SETTINGS_SEARXNG_ENGINES_MAX = 500;
 
-export const CROSSFADE_DURATION_BOUNDS: SettingsNumericBound = { min: 0, max: 30 };
 
 // `smooth_add`'s `p` — the fraction of the music the mixer LEAVES UP while a
 // voice channel has signal, so it reads backwards from a dB cut: SMALLER is a
@@ -2474,10 +2465,6 @@ export const HANDOVER_OFFSET_BOUNDS: SettingsNumericBound = { min: 5, max: 20 };
 // 5 works for every real IANA zone because every offset is a multiple of 15
 // minutes, so process and station minutes always agree modulo 5.
 export const HANDOVER_OFFSET_STEP_MINUTES = 5;
-// −23 (EBU R128 broadcast) … −9 (very loud); −14 is the streaming standard.
-export const LOUDNESS_TARGET_LUFS_BOUNDS: SettingsNumericBound = { min: -23, max: -9 };
-// 0 disables boosting entirely (cut-only levelling); 12 dB is plenty.
-export const LOUDNESS_MAX_BOOST_DB_BOUNDS: SettingsNumericBound = { min: 0, max: 12 };
 // 0 disables burst-on-connect; past 60 a listener is a full minute behind the
 // live edge and <queue-size> (which must exceed the burst) gets unreasonable.
 // Named rather than inline because settings.load() bounds the stored value
@@ -2584,18 +2571,7 @@ export const bedsPatchSchema = settingsBlockOf({
   ),
 });
 
-export const silenceTrimPatchSchema = settingsBlockOf({
-  enabled: settingsBoolLike(),
-  minGapMs: settingsIntLike(
-    SILENCE_TRIM_MIN_GAP_MS_BOUNDS,
-    `silenceTrim.minGapMs must be int in [${SILENCE_TRIM_MIN_GAP_MS_BOUNDS.min}, ${SILENCE_TRIM_MIN_GAP_MS_BOUNDS.max}]`,
-  ),
-});
 
-export const crossfadeDurationSchema = settingsFloatLike(
-  CROSSFADE_DURATION_BOUNDS,
-  `crossfadeDuration must be number in [${CROSSFADE_DURATION_BOUNDS.min}, ${CROSSFADE_DURATION_BOUNDS.max}]`,
-);
 
 // Both depths ride ONE block so the pair is edited and posted together — they
 // are read once at mixer startup out of two liquidsoap_duck_*.txt files, and a
@@ -2627,35 +2603,6 @@ export const handoverPatchSchema = settingsBlockOf({
   offsetMinutes: handoverOffsetMinutesSchema,
 });
 
-// Per-effect kill switches for the DJ transition kit (#1565). A nested block
-// rather than six flat keys beside pairDrain/stemBlends: those two are drain
-// SCHEDULING, these are which gestures may air, and one operator turning off
-// the dissolve should not read as a sibling of the pair-drain kill switch.
-//
-// Every field is absent-means-on, so a station that has never written this
-// block keeps the whole kit — the resolver is settings/transition-effects.ts
-// and it is the only place that rule is stated.
-export const TRANSITION_EFFECTS = ['sweep', 'washout', 'blend', 'dissolve', 'chop', 'loop'] as const;
-export type TransitionEffect = (typeof TRANSITION_EFFECTS)[number];
-
-const transitionEffectsPatchSchema = settingsBlockOf({
-  sweep: settingsBoolLike(),
-  washout: settingsBoolLike(),
-  blend: settingsBoolLike(),
-  dissolve: settingsBoolLike(),
-  chop: settingsBoolLike(),
-  loop: settingsBoolLike(),
-});
-
-export const transitionsPatchSchema = settingsBlockOf({
-  // stemBlends is documented as needing pairDrain, but that dependency is
-  // resolved at drain time in broadcast/drain-policy.ts and has never been a
-  // save-time refusal. Do not add one here.
-  pairDrain: settingsBoolLike(),
-  stemBlends: settingsBoolLike(),
-  effects: transitionEffectsPatchSchema,
-});
-
 export const uiPatchSchema = settingsBlockOf({
   boothBuddy: settingsBoolLike(),
   tuneInOverlay: settingsBoolLike(),
@@ -2667,21 +2614,6 @@ export const uiPatchSchema = settingsBlockOf({
     const slug = String(raw).trim().toLowerCase();
     return SETTINGS_SKIN_RE.test(slug) ? slug : undefined;
   }),
-});
-
-export const loudnessPatchSchema = settingsBlockOf({
-  targetLufs: settingsFloatLike(
-    LOUDNESS_TARGET_LUFS_BOUNDS,
-    `loudness.targetLufs must be number in [${LOUDNESS_TARGET_LUFS_BOUNDS.min}, ${LOUDNESS_TARGET_LUFS_BOUNDS.max}]`,
-  ),
-  maxBoostDb: settingsFloatLike(
-    LOUDNESS_MAX_BOOST_DB_BOUNDS,
-    `loudness.maxBoostDb must be number in [${LOUDNESS_MAX_BOOST_DB_BOUNDS.min}, ${LOUDNESS_MAX_BOOST_DB_BOUNDS.max}]`,
-  ),
-  source: settingsStrictOneOf(
-    SETTINGS_LOUDNESS_SOURCES,
-    `loudness.source must be one of: ${SETTINGS_LOUDNESS_SOURCES.join(', ')}`,
-  ),
 });
 
 export const archivePatchSchema = settingsBlockOf({
@@ -2946,7 +2878,7 @@ export const fadeAtShowEndSchema = z.boolean({
  * Trim FIRST, then a strict pair — ' en-GB ' saves, 'en-gb' does not.
  *
  * Not settingsStrictOneOf: that tests the raw value, which is right for
- * weather.units / loudness.source / search.provider (all raw `includes` today)
+ * weather.units / search.provider (all raw `includes` today)
  * and wrong here, where the branch coerces and trims before comparing.
  */
 export const localeSchema = z
@@ -2962,14 +2894,7 @@ export const localeSchema = z
 export const audioPatchSchema = settingsBlockOf({
   embeddings: settingsBoolLike(),
   vocalActivity: settingsBoolLike(),
-  stemCache: settingsBoolLike(),
   analyzeQuietOnly: settingsBoolLike(),
-  // Number() with NO floor — a fractional GB budget is stored as a float today,
-  // and load() doesn't floor it either.
-  stemCacheGb: settingsNumberLike(
-    { min: 1, max: 1000 },
-    'audio.stemCacheGb must be between 1 and 1000',
-  ),
   analyzeQuietMinutes: settingsNumberFloorLike(
     { min: 1, max: 120 },
     'audio.analyzeQuietMinutes must be between 1 and 120',
@@ -2985,9 +2910,8 @@ export const pickerPatchSchema = settingsBlockOf({
     PICKER_ALBUM_HOURS_BOUNDS,
     `picker.albumHours must be between ${PICKER_ALBUM_HOURS_BOUNDS.min} and ${PICKER_ALBUM_HOURS_BOUNDS.max} (0 = off)`,
   ),
-  // Bounds only. The crossfade-derived lower bound on a POSITIVE value is a
-  // function of settings.crossfadeDuration, which a stateless schema does not
-  // have — update() enforces it, exactly as it does for maxTrackSeconds.
+  // Bounds only. The lower bound on a POSITIVE value (settings/store.ts
+  // minTrackSeconds) is enforced in update(), exactly as for maxTrackSeconds.
   minTrackLengthSeconds: settingsNumberLike(
     PICKER_MIN_TRACK_LENGTH_BOUNDS,
     `picker.minTrackLengthSeconds must be between ${PICKER_MIN_TRACK_LENGTH_BOUNDS.min} and ${PICKER_MIN_TRACK_LENGTH_BOUNDS.max} (0 = off)`,

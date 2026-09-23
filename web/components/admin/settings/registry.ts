@@ -118,7 +118,7 @@ export const SECTIONS = [
   {
     id: 'danger', group: 'operations', label: 'Danger zone',
     hint: 'mixer · broadcast', icon: AlertTriangle,
-    formKeys: ['crossfadeDuration', 'ducking', 'maxTrackSeconds', 'picker.minTrackLengthSeconds', 'silenceTrim', 'transitions', 'stream', 'loudness'],
+    formKeys: ['ducking', 'maxTrackSeconds', 'picker.minTrackLengthSeconds', 'stream'],
   },
 ] as const satisfies readonly SectionSpec[];
 
@@ -138,7 +138,6 @@ export const sectionById = (id: string) => SECTIONS.find(s => s.id === id);
 export const RESTART_PATHS: readonly string[] = [
   'station',
   'privacy.listenerAuth',
-  'crossfadeDuration',
   'ducking.voice',
   'ducking.intro',
   'archive.enabled',
@@ -163,8 +162,8 @@ export const ADVANCED_CARDS: Partial<Record<SectionId, readonly string[]>> = {
   tts: ['fallback-voice'],
   library: ['seed-phase', 'propagation', 'enrichment'],
   danger: [
-    'crossfade', 'duck-depth', 'stem-transitions', 'dj-transition-effects', 'max-track-length', 'dead-air-trim',
-    'loudness-levelling', 'opus-stream', 'flac-stream', 'ogg-metadata',
+    'duck-depth', 'max-track-length',
+    'opus-stream', 'flac-stream', 'ogg-metadata',
     'aac-stream', 'stream-mp3-bitrate', 'listener-buffer', 'max-listeners',
     'listener-country',
   ],
@@ -288,26 +287,10 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
 
   // ── danger zone ────────────────────────────────────────────────────────────
   { label: 'Stop stream', section: 'danger', card: 'Broadcast', keywords: 'off air disconnect icecast mount' },
-  { label: 'Crossfade duration', section: 'danger', card: 'Crossfade', keywords: 'overlap seams transition restart' },
   { label: 'DJ over silence duck depth', section: 'danger', card: 'Duck depth', keywords: 'ducking voice smooth_add say idents heavy restart' },
   { label: 'DJ over a track duck depth', section: 'danger', card: 'Duck depth', keywords: 'ducking intro talk over link light smooth_add restart' },
-  { label: 'Pair-aware transitions', section: 'danger', card: 'Stem transitions', keywords: 'pair drain successor crossfade' },
-  { label: 'Stem cache', section: 'danger', card: 'Stem transitions', keywords: 'demucs drums bass vocals disk' },
-  { label: 'Stem cache budget', section: 'danger', card: 'Stem transitions', keywords: 'gb evict oldest' },
-  { label: 'Stem-blend seams', section: 'danger', card: 'Stem transitions', keywords: 'drums carry under intro blend' },
-  { label: 'Sweep', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect filter gear change clash dj mode' },
-  { label: 'Washout', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect echo tail dub exit length cap dj mode' },
-  { label: 'Blend', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect spectral handover locked pair dj mode' },
-  { label: 'Dissolve', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect reverb wash ambient cpu latency catchup stutter dj mode' },
-  { label: 'Chop', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect crossfader cut beat stabs dj mode' },
-  { label: 'Exit loop', section: 'danger', card: 'DJ transition effects', keywords: 'transition effect final bar repeat groove tempo dj mode' },
   { label: 'Minimum track length', section: 'danger', card: 'Track length', keywords: 'floor short skits interludes intros selection filter seconds' },
-  { label: 'Maximum track length', section: 'danger', card: 'Track length', keywords: 'cap cut long tracks seconds' },
-  { label: 'Trim silent edges', section: 'danger', card: 'Dead-air trim', keywords: 'silence cue in cue out dead air' },
-  { label: 'Shortest gap worth cutting', section: 'danger', card: 'Dead-air trim', keywords: 'min gap ms silence' },
-  { label: 'Loudness source', section: 'danger', card: 'Loudness levelling', keywords: 'replaygain measured lufs' },
-  { label: 'Target loudness', section: 'danger', card: 'Loudness levelling', keywords: 'lufs normalisation level' },
-  { label: 'Max boost', section: 'danger', card: 'Loudness levelling', keywords: 'db cap gain ceiling' },
+  { label: 'Maximum track length', section: 'danger', card: 'Track length', keywords: 'cap long tracks selection filter seconds' },
   { label: 'Serve the AAC mount', section: 'danger', card: 'AAC stream', keywords: 'aac adts mount restart' },
   { label: 'Bitrate', section: 'danger', card: 'AAC stream', keywords: 'aac kbps restart' },
   { label: 'Bitrate', section: 'danger', card: 'Stream MP3 bitrate', keywords: 'mp3 kbps stream restart' },

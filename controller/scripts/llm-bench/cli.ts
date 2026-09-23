@@ -237,7 +237,7 @@ function loadDotEnv(path: string) {
 }
 
 // Generous cap: a 400-char preview cut structured picks off before their
-// `transition` field, making post-hoc analysis of the report JSON misleading.
+// trailing fields, making post-hoc analysis of the report JSON misleading.
 function preview(out: unknown): string {
   try {
     const t = typeof out === 'string' ? out : JSON.stringify(out, (k, v) => (v instanceof Map ? undefined : v));

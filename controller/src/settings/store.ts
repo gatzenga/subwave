@@ -158,14 +158,17 @@ export function resolveMaxOutputTokens(fallback: number): number {
 }
 
 // Smallest non-zero max-track-length (seconds) validation accepts and the
-// admin/show UI offers. The on-air cut fires a crossfade that BEGINS
-// crossfadeDuration before the cut point, so a cap below the crossfade is
-// degenerate and below 2× leaves the track no solo airtime. 0 (= unlimited) is
-// always allowed — this is only the floor for a POSITIVE cap. Surfaced to the UI
-// via /settings.values.minTrackSeconds so client and server share one rule.
-export function minTrackSeconds(s: { crossfadeDuration?: unknown } | null | undefined = get()): number {
-  const xf = Number(s?.crossfadeDuration);
-  const cross = Number.isFinite(xf) && xf > 0 ? xf : DEFAULTS.crossfadeDuration;
-  return Math.max(30, Math.ceil(2 * cross));
+// admin/show UI offers. 0 (= unlimited) is always allowed — this is only the
+// floor for a POSITIVE cap. Surfaced to the UI via
+// /settings.values.minTrackSeconds so client and server share one rule.
+//
+// It used to be derived from the crossfade setting (a cap below the crossfade
+// left a track no solo airtime). The handover is autocue's now and there is no
+// crossfade setting; 30s is what the old formula yielded at every crossfade the
+// station could be set to up to 15s, so the floor an operator sees is unchanged.
+// The parameter stays so existing call sites need not change.
+export const MIN_TRACK_SECONDS = 30;
+export function minTrackSeconds(_s?: unknown): number {
+  return MIN_TRACK_SECONDS;
 }
 

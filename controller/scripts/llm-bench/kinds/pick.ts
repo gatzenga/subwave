@@ -7,7 +7,7 @@ import { djAgent } from '../../../src/llm/sdk.js';
 import { pickSystem, pickSchema, pickerAgent } from '../../../src/broadcast/dj-agent.js';
 import {
   benchContext, candidateSet, recentPlays, pickerToolsSynthetic,
-  pickMessagesShort, pickMessagesLong, SHOW, TRANSITIONS, TRAP_ARTIST,
+  pickMessagesShort, pickMessagesLong, SHOW, TRAP_ARTIST,
 } from '../fixtures.js';
 
 function checkPoolPick(out: any, candidates: any[]): string[] {
@@ -15,7 +15,6 @@ function checkPoolPick(out: any, candidates: any[]): string[] {
   const byId = new Map(candidates.map(c => [c.id, c]));
   if (!out?.id) v.push('missing-id');
   else if (!byId.has(out.id)) v.push('hallucinated-id');
-  if (out?.transition != null && !TRANSITIONS.includes(out.transition)) v.push('invalid-transition');
   return v;
 }
 
@@ -54,7 +53,6 @@ function agentScenario(name: string, messages: () => any[]) {
       const v: string[] = [];
       if (!out?.object?.id) v.push('missing-id');
       else if (!out.seen.has(out.object.id)) v.push('hallucinated-id');
-      if (out?.object?.transition != null && !TRANSITIONS.includes(out.object.transition)) v.push('invalid-transition');
       return v;
     },
   };

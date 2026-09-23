@@ -1,17 +1,13 @@
-// Pair-aware drain policy (#749): WHEN a queued track is handed to Liquidsoap.
-// A track's annotate stamps control the transition at its own end, so they can
-// only be pair-sized if its SUCCESSOR is known when written — hence the tail of
-// `upcoming` is held unsent until a successor is queued behind it, or the
-// on-air track is close enough to its end that it must send regardless. Pure
-// and I/O-free for scripts/drain-policy.test.ts.
+// Drain-side clock policy: how long the drain may spend before it must commit
+// the music, and when the empty-queue backstop fires a pick. Pure and I/O-free
+// for scripts/drain-policy.test.ts.
 
-// Remaining time at which the deadline routine picks the held item's successor
-// so it can drain pair-aware. Longer than a pick + a cache-hit stem render.
+// Remaining time at which the backstop picks a successor for an on-air track
+// that has nothing queued behind it.
 export const DRAIN_DEADLINE_SEC = 120;
 
-// Past this the held item is sent with track-intrinsic stamps only: Liquidsoap
-// needs the next track resolved well before the crossfade. Never risk dead air
-// for a prettier seam.
+// Past this the backstop stands down: Liquidsoap needs the next track resolved
+// well before the handover, and the auto playlist owns the endgame.
 export const HARD_DEADLINE_SEC = 45;
 
 // Minimum gap between deadline-pick ATTEMPTS. The watcher re-enters every 1.5s,
@@ -36,8 +32,7 @@ export function playableDurationSec(
 
 // Seconds left before the on-air track's EFFECTIVE end (playable span after
 // both cue points), so a capped or trimmed track ends when Liquidsoap does.
-// Null when unknowable; callers treat null as "cannot schedule" and drain
-// eagerly.
+// Null when unknowable; callers treat null as "cannot schedule".
 export function remainingSec(
   nowMs: number,
   startedAtMs: number | null | undefined,
@@ -71,30 +66,6 @@ export function introRenderBudgetSec(remaining: number | null): number | null {
   if (remaining == null) return null;
   const budget = remaining - DRAIN_COMMIT_RESERVE_SEC;
   return budget >= MIN_PRERENDER_BUDGET_SEC ? budget : 0;
-}
-
-type DrainAction = 'send-pair' | 'send-intrinsic' | 'hold';
-
-// Decide what the drain loop does with the FIRST unsent item:
-//  - 'send-pair'      — successor already queued; stamp pair-aware and send.
-//                       A listener request landing behind a held pick releases
-//                       it the same way, so FIFO is never inverted.
-//  - 'hold'           — no successor yet, but there's still time for the
-//                       deadline pick to provide one. The item stays unsent.
-//  - 'send-intrinsic' — send now with track-intrinsic stamps only: the
-//                       feature is off, the clock is unknowable (boot,
-//                       recover, untracked auto play), or the hard deadline
-//                       passed without a successor.
-export function drainAction(opts: {
-  pairDrain: boolean;
-  hasSuccessor: boolean;
-  remainingSec: number | null;
-}): DrainAction {
-  if (opts.hasSuccessor) return opts.pairDrain ? 'send-pair' : 'send-intrinsic';
-  if (!opts.pairDrain) return 'send-intrinsic';
-  if (opts.remainingSec == null) return 'send-intrinsic';
-  if (opts.remainingSec < HARD_DEADLINE_SEC) return 'send-intrinsic';
-  return 'hold';
 }
 
 // Whether the deadline routine fires the successor pick this tick: inside the

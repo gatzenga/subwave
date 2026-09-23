@@ -439,7 +439,7 @@ export default function BackupPanel() {
         <div className="mb-2 text-[12px] leading-[1.6] text-muted">
           Restoring replaces the current personas, prompt, settings and tag database with the
           contents of the backup. Existing API keys are kept. Changes to mixer settings
-          (jingle frequency, crossfade) need a mixer restart to take effect.
+          (jingle frequency, duck depth) need a mixer restart to take effect.
         </div>
         {importErr && (
           <div className="mb-2 text-[12px] leading-[1.6] text-[var(--danger)]">restore error: {importErr}</div>

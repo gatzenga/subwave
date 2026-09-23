@@ -79,22 +79,19 @@ router.get('/settings', requireAdmin, async (req, res) => {
         // Who counts the tracks between jingles (#1619) — the admin control that
         // hands the rotate to the controller and writes the mixer's ratio 0.
         jingleRotate: s.jingleRotate,
-        crossfadeDuration: s.crossfadeDuration,
         ducking: s.ducking,
         // Repaired on the way out via the same function the air path uses: a
         // profile switch or backup restore can seed an off-step value (#1576).
         handover: { offsetMinutes: handoverOffsetMinutes() },
         djBehaviour: s.djBehaviour,
         maxTrackSeconds: s.maxTrackSeconds,
-        // Crossfade-relative floor, shared with the admin/show UI so client
-        // hints match server validation.
+        // Shortest cap the server accepts, shared with the admin/show UI so
+        // client hints match server validation.
         minTrackSeconds: settings.minTrackSeconds(s),
         archive: s.archive,
         // Edited from the Backup panel, but saved through POST /settings.
         backups: s.backups,
         stream: s.stream,
-        loudness: s.loudness,
-        silenceTrim: s.silenceTrim,
         fadeAtShowEnd: s.fadeAtShowEnd,
         // Shortest playable track a boundary cut can arm on; a maxTrackSeconds
         // cap at or below this disables the feature. Served, never restated in
@@ -129,7 +126,6 @@ router.get('/settings', requireAdmin, async (req, res) => {
         // this; omit it and the next save on that card zeroes them.
         picker: s.picker,
         audio: s.audio,
-        transitions: s.transitions,
         sfx: s.sfx,
         beds: s.beds,
         ui: s.ui,

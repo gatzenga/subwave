@@ -5,7 +5,6 @@
 import { readFile, rm } from 'node:fs/promises';
 import * as db from './library-db.js';
 import * as analyzer from './analyzer.js';
-import * as stemCacheStore from './stem-cache.js';
 import * as subsonic from './subsonic.js';
 import * as settings from '../settings.js';
 import { config } from '../config.js';
@@ -202,23 +201,13 @@ export async function runAnalysisPass(opts: AnalyzeOptions = {}): Promise<Analyz
     backend,
   });
   const vocalBackfill = vocalDecision.widen;
-  // Stem cache: shares Demucs' separation with vocal detection, so the spend is
-  // disk, LRU-swept below. Same three-way capability question as audio/vocal.
-  const stemDecision = backfillDecision({
-    dimension: 'stem',
-    wanted: settings.get()?.audio?.stemCache === true,
-    capable: analyzer.vocalActivityAvailable(),
-    error: analyzer.vocalActivityError(),
-    backend,
-  });
-  const stemCache = stemDecision.widen;
 
   // Snapshot the already-analysed ids BEFORE the clear wipes the bpm marker.
   // A raw --re-analyze leaves the scope null and redoes the whole library.
   let reAnalyzeScope: string[] | null = null;
   if (opts.reAnalyze) {
     if (opts.rescan) reAnalyzeScope = db.analysedIds();
-    db.clearAnalysis({ keepVocal: !vocalBackfill, clearStems: stemCache });
+    db.clearAnalysis({ keepVocal: !vocalBackfill });
     console.log(
       `[analyze] --re-analyze: cleared existing analysis${vocalBackfill ? '' : ' (kept vocal ranges)'}` +
         (reAnalyzeScope ? ` — re-scan scope: ${reAnalyzeScope.length} already-analysed tracks` : ''),
@@ -274,63 +263,10 @@ export async function runAnalysisPass(opts: AnalyzeOptions = {}): Promise<Analyz
     logEvent(analyzer.vocalActivityError() ? 'warning' : 'info', vocalDecision.notice);
   }
 
-  // Stem backfill: the fourth widening. `stemCache` already carries the Demucs
-  // gate; suppressed under a fixed re-scan scope like the others. Capped at what
-  // the budget holds, and the cap is ANNOUNCED. That same headroom figure gates
-  // EVERY stem write in the loop below (#1257), decremented per NET-NEW dir.
-  let stemSlotsLeft = 0;
-  let existingStemDirs: Set<string> = new Set();
-  if (stemCache) {
-    stemSlotsLeft = await stemCacheStore.headroomTracks();
-    existingStemDirs = await stemCacheStore.cachedTrackIdSet();
-  }
-  if (stemCache && !reAnalyzeScope) {
-    // The loop spends stemSlotsLeft in ids order and the earlier widenings'
-    // tracks run FIRST, draining slots before this slice is reached. Reserve
-    // them up front, or the announcement over-promises.
-    const reserved = ids.filter(id => !existingStemDirs.has(id)).length;
-    const backfillSlots = Math.max(0, stemSlotsLeft - reserved);
-    if (backfillSlots <= 0) {
-      console.log(
-        stemSlotsLeft <= 0
-          ? `[analyze] stem backfill skipped — cache is at its ${settings.get()?.audio?.stemCacheGb ?? 15} GB budget ` +
-              '(raise it in Settings → Transitions to cache more tracks)'
-          : `[analyze] stem backfill skipped — the ${reserved} ride-along stem writes already queued this pass ` +
-              `claim the budget's remaining ~${stemSlotsLeft} track slots`,
-      );
-    } else {
-      const seen = new Set(ids);
-      // Priority-ordered (#1622 FR 14): the budget always binds on a real
-      // library, so this slice IS which tracks ever get stems. The ranking and
-      // the never-starve reasoning live in music/stem-priority.ts; the like
-      // signals it reads are resolved here because library-db must not import
-      // the likes store.
-      const needing = db.needsStemsIds(undefined, stemCacheStore.likeSignals())
-        .filter(id => !seen.has(id));
-      // Under --limit, only the slots the bpm/CLAP/vocal scopes haven't already
-      // spent are available — sizing off the raw cap would log stem tracks a
-      // final slice then silently drops, the exact "reads as finished"
-      // truncation the announcement exists to avoid.
-      const room = cap ? Math.min(Math.max(0, cap - ids.length), backfillSlots) : backfillSlots;
-      const stemIds = needing.slice(0, room);
-      if (stemIds.length > 0) {
-        ids = [...ids, ...stemIds];
-        const left = needing.length - stemIds.length;
-        console.log(
-          `[analyze] stem backfill: +${stemIds.length} tracks with no cached stems` +
-            (left > 0 ? ` (${left} left for later passes — budget holds ~${backfillSlots} more)` : ''),
-        );
-      }
-    }
-  } else if (stemDecision.notice && !reAnalyzeScope) {
-    // Same warn/info split as audio and vocal above.
-    logEvent(analyzer.vocalActivityError() ? 'warning' : 'info', stemDecision.notice);
-  }
-
   // Only ids pulled in solely by the CLAP widening may take the fast path;
-  // vocal and stem work applies to every id, so those runs stay full.
+  // vocal work applies to every id, so those runs stay full.
   const fullAnalysisIds = new Set(bpmIds);
-  if (vocalBackfill || stemCache) {
+  if (vocalBackfill) {
     for (const id of ids) fullAnalysisIds.add(id);
   }
 
@@ -389,8 +325,6 @@ export async function runAnalysisPass(opts: AnalyzeOptions = {}): Promise<Analyz
   // Stamp the provenance row once, on the first vector written this run.
   let audioMetaStamped = false;
   const audioModelLabel = AUDIO_MODEL_LABEL;
-  // One announcement when the stem budget gate first closes mid-pass.
-  let stemGateAnnounced = false;
 
   // Concurrent sidecar jobs stage only AFTER admission, so a quiet-time pause
   // never keeps downloading work that has not started.
@@ -403,28 +337,10 @@ export async function runAnalysisPass(opts: AnalyzeOptions = {}): Promise<Analyz
     vocalAnalyzed: boolean;
   }
 
-  const allocateStems = (id: string): string | undefined => {
-    const trackStemDecision = stemCacheStore.stemWriteDecision({
-      cacheOn: stemCache,
-      slotsLeft: stemSlotsLeft,
-      hasExistingDir: existingStemDirs.has(id),
-    });
-    if (trackStemDecision.consumesSlot) stemSlotsLeft -= 1;
-    if (stemCache && !trackStemDecision.want && !stemGateAnnounced) {
-      stemGateAnnounced = true;
-      console.log(
-        `[analyze] stem cache budget reached mid-pass — stems skipped for the remaining net-new tracks ` +
-          '(raise audio.stemCacheGb in Settings → Transitions to cache more)',
-      );
-    }
-    return trackStemDecision.want ? stemCacheStore.dirFor(id) : undefined;
-  };
-
   const runTrack = async (
     id: string,
     index: number,
     downloadPromise?: Prefetch,
-    admittedStems?: { dir: string | undefined },
   ): Promise<TrackWorkResult> => {
     const embeddingOnly = analysisModeForTrack(id, fullAnalysisIds, audioBackfill) === 'embedding-only';
     let localPath: string | null = null;
@@ -454,22 +370,18 @@ export async function runAnalysisPass(opts: AnalyzeOptions = {}): Promise<Analyz
           lyricVocal = null;
         }
       }
-      // The concurrent path reserved headroom at admission; serial spends here.
-      const stems_dir = admittedStems ? admittedStems.dir : allocateStems(id);
-      // A lyric-decided track skips Demucs unless stem caching needs it anyway.
-      const vocal = vocalBackfill ? (lyricVocal && !stems_dir ? false : true) : undefined;
+      // A lyric-decided track skips Demucs.
+      const vocal = vocalBackfill ? !lyricVocal : undefined;
       const a = localPath
         ? await analyzer.analyzePathWithUrlFallback(id, localPath, {
             embed,
             vocal,
             complete: localComplete,
-            stems_dir,
             embedding_only: embeddingOnly || undefined,
           })
         : await analyzer.analyze(id, {
             embed,
             vocal,
-            stems_dir,
             embedding_only: embeddingOnly || undefined,
           });
       let storedVocal = false;
@@ -503,7 +415,6 @@ export async function runAnalysisPass(opts: AnalyzeOptions = {}): Promise<Analyz
           leadSilenceMs: a.leadSilenceMs,
           tailSilenceMs: a.tailSilenceMs,
           tailStartMs: a.tailStartMs,
-          stemsAttempted: a.stemsCached !== null,
         });
         storedVocal = vocalRanges != null;
         // Surface the tail-vocal stuck case rather than retargeting it forever.
@@ -605,19 +516,13 @@ export async function runAnalysisPass(opts: AnalyzeOptions = {}): Promise<Analyz
     }
   } else {
     logEvent('info', `Analyzer concurrency: ${effectiveConcurrency} in-flight sidecar jobs`);
-    const admittedStems = new Map<number, { dir: string | undefined }>();
     await dispatchAnalysis(ids, {
       concurrency: effectiveConcurrency,
-      beforeStart: async (index) => {
+      beforeStart: async () => {
         await waitForQuiet(quietGate, { done: orderedDone, total: ids.length });
-        // Reserve the pass-wide stem budget in source order, before the race.
-        admittedStems.set(index, { dir: allocateStems(ids[index]) });
       },
-      run: (id, index) => runTrack(id, index, undefined, admittedStems.get(index)),
-      onOutcome: (outcome, id, index) => {
-        admittedStems.delete(index);
-        return commitOutcome(outcome, id, index);
-      },
+      run: (id, index) => runTrack(id, index, undefined),
+      onOutcome: (outcome, id, index) => commitOutcome(outcome, id, index),
     });
   }
 
@@ -627,25 +532,6 @@ export async function runAnalysisPass(opts: AnalyzeOptions = {}): Promise<Analyz
 
   // Best-effort sweep of the staging dir in case a prefetch left an orphan.
   await rm(`${config.stateRoot}/analyze-tmp`, { recursive: true, force: true }).catch(() => {});
-
-  // Keep the stem cache inside the operator's byte budget after a pass that
-  // may have written hundreds of new stem dirs (lowest stem-priority first —
-  // NOT oldest first, or this pass's best writes would be the first evicted;
-  // the hourly cleanup cron sweeps too, this just settles the bill promptly).
-  if (stemCache) {
-    const swept = await stemCacheStore.sweep().catch(() => null);
-    if (swept && swept.removed > 0) {
-      console.log(`[analyze] stem cache sweep: evicted ${swept.removed} track dirs (${Math.round(swept.freedBytes / 1024 ** 2)} MB)`);
-    }
-    // The only place a stuck-over-budget cache reaches the event log (#1257).
-    if (swept && swept.overBudgetBytes > 0) {
-      logEvent(
-        'warning',
-        `Stem cache is ${(swept.overBudgetBytes / 1024 ** 3).toFixed(1)} GB over its ${settings.get()?.audio?.stemCacheGb ?? 15} GB budget and the sweep could not evict down to it` +
-          (swept.failedDirs ? ` (${swept.failedDirs} dir delete(s) failed — check ownership/permissions on state/stems)` : ''),
-      );
-    }
-  }
 
   // Zero-shot audio moods over the vectors this and past passes wrote; no-op
   // when there is nothing new or the backend has no text tower.

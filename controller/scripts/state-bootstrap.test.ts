@@ -81,13 +81,9 @@ function bootstrap(
   }
 }
 
-// Every subdir the bootstrap is responsible for. `stems` and `transitions` are
-// the analyzer's (uid 10001) — they were missing from the list, which is why a
-// bind mount at <state>/stems landed root-owned and unwritable, i.e. why
-// "relocate the stem cache to a bigger disk" did not work even once the
-// entrypoint stopped aborting.
+// Every subdir the bootstrap is responsible for.
 const SUBDIRS = [
-  'voice', 'voices', 'archive', 'jingles', 'logs', 'sessions', 'sfx', 'stems', 'transitions',
+  'voice', 'voices', 'archive', 'jingles', 'logs', 'sessions', 'sfx',
 ];
 
 const tmp = mkdtempSync(join(tmpdir(), 'subwave-state-bootstrap-'));
@@ -145,14 +141,14 @@ for (const s of SUPERVISORS) {
   check('an unusable state path warns, names itself, and does not abort', () => {
     const { root, dir } = scratch();
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'stems'), 'not a directory');
+    writeFileSync(join(dir, 'sfx'), 'not a directory');
     const r = bootstrap(s.path, s.lib, root, dir);
     assert.equal(r.status, 0, `bootstrap aborted (exit ${r.status}) instead of degrading: ${r.out}`);
-    assert.match(r.out, /stems/, `warning does not name the path: ${r.out}`);
+    assert.match(r.out, /sfx/, `warning does not name the path: ${r.out}`);
     assert.match(r.out, /WARNING/i, `not surfaced as a warning: ${r.out}`);
     // The whole point: the boot carries on and the rest of the state dir is
     // still prepared. One bad mount must not cost the station the others.
-    for (const d of SUBDIRS.filter(x => x !== 'stems')) {
+    for (const d of SUBDIRS.filter(x => x !== 'sfx')) {
       assert.ok(existsSync(join(dir, d)), `${d} was skipped after the bad path`);
     }
     assert.ok(existsSync(join(dir, 'auto.m3u')), 'auto.m3u skipped after the bad path');
@@ -167,53 +163,6 @@ for (const s of SUPERVISORS) {
     const r = bootstrap(s.path, s.lib, root, dir);
     assert.equal(r.status, 0, `exited ${r.status}: ${r.out}`);
     assert.equal(r.out.trim(), '', `expected silence on a working mount, got: ${r.out}`);
-  });
-
-  // 4. The analyzer writes stems as uid 10001. If the bootstrap ever stops
-  //    covering that dir, relocating the stem cache to a bind mount silently
-  //    goes back to being unwritable — the second half of bug 10.
-  check('stems and transitions are world-writable for the analyzer uid', () => {
-    const { root, dir } = scratch();
-    const r = bootstrap(s.path, s.lib, root, dir);
-    assert.equal(r.status, 0, `exited ${r.status}: ${r.out}`);
-    for (const d of ['stems', 'transitions']) {
-      const mode = statSync(join(dir, d)).mode & 0o777;
-      assert.equal(mode & 0o002, 0o002, `${d} not writable by other uids (mode ${mode.toString(8)})`);
-    }
-  });
-
-  // 5. A RELOCATED stem cache (STEMS_DIR in .env → the container path
-  //    SUBWAVE_STEMS_DIR) is outside the state dir, so the subdir loop above
-  //    never touches it. Without its own entry the bind mount keeps the
-  //    root-owned 755 Docker gives a freshly created source — the analyzer
-  //    (uid 10001) then cannot write one stem, and the whole reason the
-  //    operator moved the cache to a bigger disk is silently undone.
-  check('a relocated stem cache root is created and world-writable', () => {
-    const { root, dir } = scratch();
-    const stems = join(root, 'relocated-stems');
-    const r = bootstrap(s.path, s.lib, root, dir, { SUBWAVE_STEMS_DIR: stems });
-    assert.equal(r.status, 0, `exited ${r.status}: ${r.out}`);
-    assert.equal(r.out.trim(), '', `expected silence, got: ${r.out}`);
-    assert.ok(existsSync(stems), 'relocated stems root not created');
-    const mode = statSync(stems).mode & 0o777;
-    assert.equal(mode & 0o002, 0o002, `relocated stems root mode ${mode.toString(8)}`);
-    // Still does the in-state dirs — relocation replaces nothing.
-    for (const d of SUBDIRS) assert.ok(existsSync(join(dir, d)), `${d} skipped`);
-  });
-
-  // 6. Same never-fatal contract as every other path: the exFAT/NTFS/NFS disk
-  //    people move the stem cache onto is exactly where chmod refuses, and
-  //    that must cost a warning, not the broadcast.
-  check('an unusable relocated stems root warns and does not abort', () => {
-    const { root, dir } = scratch();
-    const stems = join(root, 'relocated-stems');
-    mkdirSync(root, { recursive: true });
-    writeFileSync(stems, 'not a directory');
-    const r = bootstrap(s.path, s.lib, root, dir, { SUBWAVE_STEMS_DIR: stems });
-    assert.equal(r.status, 0, `bootstrap aborted (exit ${r.status}): ${r.out}`);
-    assert.match(r.out, /relocated-stems/, `warning does not name the path: ${r.out}`);
-    assert.match(r.out, /WARNING/i, `not surfaced as a warning: ${r.out}`);
-    for (const d of SUBDIRS) assert.ok(existsSync(join(dir, d)), `${d} skipped`);
   });
 }
 

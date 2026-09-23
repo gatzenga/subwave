@@ -24,13 +24,11 @@ const {
   archivePatchSchema,
   audioPatchSchema,
   bedsPatchSchema,
-  crossfadeDurationSchema,
   djHouseRulesSchema,
   festivalsSchema,
   jingleRatioSchema,
   likesPatchSchema,
   localeSchema,
-  loudnessPatchSchema,
   moodScheduleSchema,
   moodsSchema,
   privacyPatchSchema,
@@ -41,7 +39,6 @@ const {
   stationDescriptionSchema,
   stationSchema,
   streamPatchSchema,
-  transitionsPatchSchema,
   uiPatchSchema,
   weatherPatchSchema,
 } = await import('../src/schemas/settings.js');
@@ -203,10 +200,9 @@ test('no registered schema can leak a raw zod message', () => {
     99999, -1, 'abc', '', null, true, [], {}, NaN, Infinity, -0.5,
     { enabled: 'x', thresholdSec: 999, crossSec: 999 },
     { bitrate: 7, retentionDays: -1, bufferSeconds: 'x', opusBitrate: 1, aacBitrate: 1 },
-    { targetLufs: 99, maxBoostDb: 99, source: 'nope' },
     { lat: 999, lng: 999, units: 'Metric' },
     { provider: 'nope', baseUrl: 5, apiKey: 'x'.repeat(500) },
-    { stemCacheGb: 'x', analyzeQuietMinutes: 999 },
+    { analyzeQuietMinutes: 999 },
     { maxTracks: 99, windowDays: -9 },
     { lastfm: { username: 'x'.repeat(99) }, listenbrainz: { baseUrl: 'ftp://x' } },
     { idleAfterMinutes: 0 },
@@ -235,17 +231,6 @@ test('no registered schema can leak a raw zod message', () => {
 });
 
 // One test per behaviour that the OBVIOUS conversion would have changed.
-
-test('crossfadeDuration keeps parseFloat leniency and its message', () => {
-  assert.equal(crossfadeDurationSchema.parse('10.5'), 10.5);
-  assert.equal(crossfadeDurationSchema.parse('10.5 seconds'), 10.5);
-  assert.equal(crossfadeDurationSchema.parse([10]), 10);
-  assert.equal(
-    crossfadeDurationSchema.safeParse(31).error?.issues[0]?.message,
-    'crossfadeDuration must be number in [0, 30]',
-  );
-  assert.equal(crossfadeDurationSchema.safeParse(null).success, false);
-});
 
 test('archive.retentionDays keeps its EN DASH', () => {
   const msg = archivePatchSchema.safeParse({ retentionDays: -1 }).error?.issues[0]?.message;
@@ -282,17 +267,6 @@ test('stream keeps its bitrate sets and idle bounds', () => {
   assert.equal(streamPatchSchema.parse({ idleAfterMinutes: '10.9' }).idleAfterMinutes, 10);
   assert.equal(streamPatchSchema.safeParse({ idleAfterMinutes: 0 }).success, false);
   assert.equal(streamPatchSchema.parse({ flacEnabled: 'no' }).flacEnabled, true);
-});
-
-test('loudness.source is tested RAW — no trim, no case folding', () => {
-  assert.equal(loudnessPatchSchema.parse({ source: 'measured' }).source, 'measured');
-  assert.equal(loudnessPatchSchema.safeParse({ source: ' measured' }).success, false);
-  assert.equal(loudnessPatchSchema.safeParse({ source: 'Measured' }).success, false);
-  assert.equal(
-    loudnessPatchSchema.safeParse({ source: 'x' }).error?.issues[0]?.message,
-    'loudness.source must be one of: replaygain-then-measured, replaygain, measured',
-  );
-  assert.equal(loudnessPatchSchema.parse({ targetLufs: '-14.5' }).targetLufs, -14.5);
 });
 
 test('weather ignores a bad locationName instead of refusing it', () => {
@@ -392,13 +366,7 @@ test('scrobble string fields clear on null (?? \'\'), unlike search.apiKey', () 
   assert.deepEqual(scrobblePatchSchema.parse({ lastfm: 'nonsense' }).lastfm, {});
 });
 
-test('audio.stemCacheGb keeps a float; analyzeQuietMinutes floors', () => {
-  assert.equal(audioPatchSchema.parse({ stemCacheGb: 15.5 }).stemCacheGb, 15.5);
-  assert.equal(audioPatchSchema.parse({ stemCacheGb: true }).stemCacheGb, 1);
-  // Number(), not parseInt — '10abc' is refused here where a parseInt field
-  // would have accepted 10.
-  assert.equal(audioPatchSchema.safeParse({ stemCacheGb: '10abc' }).success, false);
-  assert.equal(audioPatchSchema.safeParse({ stemCacheGb: null }).success, false);
+test('audio.analyzeQuietMinutes floors', () => {
   assert.equal(audioPatchSchema.parse({ analyzeQuietMinutes: 10.9 }).analyzeQuietMinutes, 10);
   assert.equal(audioPatchSchema.safeParse({ analyzeQuietMinutes: 0.5 }).success, false);
 });
@@ -431,12 +399,8 @@ test('ui.skin is DROPPED when invalid, and stringifies non-strings', () => {
 });
 
 test('the never-throwing blocks still never throw', () => {
-  // ui and transitions have no refusal path at all today.
-  for (const v of [{ pairDrain: 'x' }, { stemBlends: 0 }, 'nonsense', null, []]) {
-    assert.equal(transitionsPatchSchema.safeParse(v).success, true);
-  }
+  // ui has no refusal path at all today.
   assert.equal(uiPatchSchema.safeParse({ boothBuddy: 'x', tuneInOverlay: 0 }).success, true);
-  assert.equal(transitionsPatchSchema.parse({ pairDrain: 'x' }).pairDrain, true);
 });
 
 test('djHouseRules caps at 2000 and coerces', () => {
@@ -594,16 +558,16 @@ test('update() still tolerates a key it has never heard of', async () => {
 test('the converted keys are exactly the ones with schemas', () => {
   // The remaining keys and why each resists a stateless schema are in CLAUDE.md.
   assert.deepEqual(Object.keys(SETTINGS_PATCH_SCHEMAS).sort(), [
-    'activeDjPromptId', 'archive', 'audio', 'backups', 'beds', 'crossfadeDuration',
+    'activeDjPromptId', 'archive', 'audio', 'backups', 'beds',
     'djBehaviour', 'djHouseRules', 'djPrompt', 'djPrompts', 'djSpeakClock',
     'djTalkOnlyBetweenTracks', 'ducking', 'fadeAtShowEnd', 'festivals',
     'handover', 'jingleRatio', 'jingleRotate', 'likes',
-    'locale', 'loudness', 'maxTrackSeconds', 'moodSchedule', 'moods',
+    'locale', 'maxTrackSeconds', 'moodSchedule', 'moods',
     'pauseTalkMinSeconds', 'personas',
     'picker',
     'privacy', 'schedule', 'scheduleOverride', 'scrobble', 'search',
-    'sfx', 'shows', 'silenceTrim', 'station', 'stationDescription', 'stream',
-    'theme', 'timezone', 'transitions', 'ui', 'weather',
+    'sfx', 'shows', 'station', 'stationDescription', 'stream',
+    'theme', 'timezone', 'ui', 'weather',
   ]);
 });
 
@@ -933,24 +897,19 @@ test('the route checks mood-map SHAPE without guessing the vocabulary', () => {
 
 test('update() round-trips the second slice, coercions and restarts intact', async () => {
   const a = await settings.update({
-    crossfadeDuration: '8.5',
+    ducking: { voice: 0.25 },
     station: '   ',
     locale: ' en-US ',
-    loudness: { source: 'measured', targetLufs: '-15' },
     likes: { maxTracks: 0.6 },
-    audio: { stemCacheGb: 15.5 },
     ui: { skin: 'Classic', boothBuddy: 1 },
   });
-  assert.equal(a.saved.crossfadeDuration, 8.5);
+  assert.equal(a.saved.ducking.voice, 0.25);
   assert.equal(a.saved.station, 'SUB/WAVE'); // emptied -> product default
   assert.equal(a.saved.locale, 'en-US');
-  assert.equal(a.saved.loudness.source, 'measured');
-  assert.equal(a.saved.loudness.targetLufs, -15);
   assert.equal(a.saved.likes.maxTracks, 1);
-  assert.equal(a.saved.stemCacheGb ?? a.saved.audio.stemCacheGb, 15.5);
   assert.equal(a.saved.ui.skin, 'classic');
   assert.equal(a.saved.ui.boothBuddy, true);
-  assert.equal(a.requiresRestart, true); // crossfade changed
+  assert.equal(a.requiresRestart, true); // ducking changed
 
   // An invalid skin is dropped, and the save still succeeds.
   const b = await settings.update({ ui: { skin: '-nope' } });

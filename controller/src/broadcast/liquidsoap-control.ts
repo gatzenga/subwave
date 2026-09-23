@@ -215,11 +215,6 @@ interface DjQueueSnapshot {
   ids: Set<string>;
   // subsonic_id → Liquidsoap request id; first occurrence wins.
   ridBySubsonicId: Map<string, string>;
-  // Pre-rendered transition clips carry the INCOMING track's subsonic_id and
-  // sit earlier in dj_queue, so first-occurrence would bind that id to the
-  // clip's rid and a cancel would remove the clip, not the track. Kept here
-  // instead and excluded from ids/ridBySubsonicId.
-  clipRidBySubsonicId: Map<string, string>;
   // Request ids in FIFO push order, so the entry immediately ahead of a track
   // (where a bed rides) can be found. dj_queue.queue lists oldest-first.
   orderedRids: string[];
@@ -239,7 +234,6 @@ async function fetchDjQueue(): Promise<DjQueueSnapshot> {
   const rids = res.trim().split(/\s+/).filter(Boolean);
   const ids = new Set<string>();
   const ridBySubsonicId = new Map<string, string>();
-  const clipRidBySubsonicId = new Map<string, string>();
   const bedRids = new Set<string>();
 
   for (const rid of rids) {
@@ -250,13 +244,8 @@ async function fetchDjQueue(): Promise<DjQueueSnapshot> {
       // match the id anywhere in the blob, not on an anchored top-level line.
       const match = /subsonic_id=\\?"([^"\\]+)/.exec(meta);
       if (match && match[1]) {
-        // Clips masquerade as their incoming track; route to the clip map.
-        if (/subwave_clip=\\?"1/.test(meta)) {
-          if (!clipRidBySubsonicId.has(match[1])) clipRidBySubsonicId.set(match[1], rid);
-        } else {
-          ids.add(match[1]);
-          if (!ridBySubsonicId.has(match[1])) ridBySubsonicId.set(match[1], rid);
-        }
+        ids.add(match[1]);
+        if (!ridBySubsonicId.has(match[1])) ridBySubsonicId.set(match[1], rid);
       }
       if (/subwave_kind=\\?"bed/.test(meta)) bedRids.add(rid);
     } catch (ridErr: any) {
@@ -264,7 +253,7 @@ async function fetchDjQueue(): Promise<DjQueueSnapshot> {
     }
   }
 
-  return { ids, ridBySubsonicId, clipRidBySubsonicId, orderedRids: rids, bedRids };
+  return { ids, ridBySubsonicId, orderedRids: rids, bedRids };
 }
 
 // Returns a Set of subsonic_ids currently in the queue (cached ~4s).
@@ -301,15 +290,6 @@ export async function resolveDjQueueRidWithBed(
   if (!rid) return { rid: null, bedRid: null };
   const prev = snap.orderedRids[snap.orderedRids.indexOf(rid) - 1];
   return { rid, bedRid: prev && snap.bedRids.has(prev) ? prev : null };
-}
-
-// Resolve the rid of a pending transition CLIP rendered for the given
-// incoming track (stem-blend transitions). Fresh read like the helper above;
-// null when no clip is pending for that id.
-export async function resolveClipRid(subsonicId: string): Promise<string | null> {
-  const snap = await fetchDjQueue();
-  _djQueueCache = { timestamp: Date.now(), ...snap };
-  return snap.clipRidBySubsonicId.get(subsonicId) ?? null;
 }
 
 // False when Liquidsoap replies NOT_FOUND: the request already left the queue

@@ -15,9 +15,9 @@ import { stat } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { config } from '../../config.js';
 import { writeFileAtomic } from '../../util/atomic-file.js';
-import * as settings from '../../settings.js';
 import { sleep } from './pure.js';
 import { awaitVoiceAir } from './voice-marker.js';
+import { MIXER_SEAM_MAX_SEC } from '../mixer-seam.js';
 
 const _handoffChains: Map<string, Promise<void>> = new Map();
 
@@ -264,7 +264,8 @@ export function jingleWindow(): { clearAtMs: number; windowMs: number } {
     const clipMs = (Number.isFinite(measuredSec) && measuredSec > 0 ? measuredSec * 1000 : 0)
       || (typeof m?.filename === 'string' && wavDurationMs(m.filename))
       || JINGLE_FALLBACK_MS;
-    const crossMs = (Number(settings.get()?.crossfadeDuration) || 10) * 1000;
+    // The handover after the clip — autocue sizes it, so the longest it can be.
+    const crossMs = MIXER_SEAM_MAX_SEC * 1000;
     const windowMs = clipMs + crossMs + JINGLE_TAIL_MS;
     return { clearAtMs: startedMs + windowMs, windowMs };
   } catch {

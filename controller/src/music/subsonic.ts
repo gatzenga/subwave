@@ -852,7 +852,7 @@ export function getPlayableUri(song, resolveProbeId: string | null = null) {
 export function escAnnotate(s) {
   return String(s ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
-export function getAnnotatedUri(song, opts: { maxDurationSec?: number | null; cueOutSec?: number | null; cueInSec?: number | null; resolveProbeId?: string | null } = {}) {
+export function getAnnotatedUri(song, opts: { cueOutSec?: number | null; resolveProbeId?: string | null } = {}) {
   const fields = [
     `title="${escAnnotate(song.title)}"`,
     `artist="${escAnnotate(song.artist)}"`,
@@ -876,78 +876,17 @@ export function getAnnotatedUri(song, opts: { maxDurationSec?: number | null; cu
   // stops dead, an overlap inside the decay where it rings out. A stamp from
   // here would win over that measurement, so there is none.
   //
-  // radio.liq's cross still runs persist_override=true, and autocue supplies a
-  // value per track, so nothing lingers from the track before.
   // No liq_amplify either: autocue measures loudness on the same pass that
-  // finds the cue points, and it refuses to run at all on a track that arrives
-  // with an override in its territory. Our gain was one — so the choice was
-  // never "our levels or autocue's levels", it was "our levels or autocue".
-  // music/loudness.ts still resolves a figure for the stem-blend render, which
-  // bakes it into a clip rather than asking the mixer for it.
-  // Transition gestures. sweep/dissolve/blend/chop ride the INCOMING pick and
-  // act on the outgoing branch across the cross; washout/loop ride the ENDING
-  // track and govern its own end. Absent = normal cross.
-  if (song.sweep) fields.push('liq_sweep="true"');
-  if (song.dissolve) fields.push('liq_dissolve="true"');
-  if (song.washout) fields.push('liq_washout="true"');
-  if (song.washoutDelay != null) fields.push(`liq_washout_delay="${escAnnotate(song.washoutDelay)}"`);
-  // liq_loop_bar is one bar of THIS track's tempo (mix.loopBarFor).
-  if (song.loop) fields.push('liq_loop="true"');
-  if (song.loopBar != null) fields.push(`liq_loop_bar="${escAnnotate(song.loopBar)}"`);
-  // Show-boundary fade (#1574): the track is cued out at a show change, so
-  // radio.liq suppresses the exit gestures stamped for an ending that will not
-  // happen (washout, loop) and leaves a plain full-buffer fade.
-  if (song.showFade) fields.push('liq_show_fade="true"');
-  if (song.blend) fields.push('liq_blend="true"');
-  // The chop gate period is one beat of the OUTGOING track, stamped here
-  // because the predecessor's own annotation has already been sent.
-  if (song.chop) fields.push('liq_chop="true"');
-  if (song.chopPeriod != null) fields.push(`liq_chop_period="${escAnnotate(song.chopPeriod)}"`);
-  // Hard track-length cap (#447): a positive cap stamps `liq_cue_out` and
-  // radio.liq's `cue_cut` stops the track there. Only the capped paths set it
-  // (autonomous picks + auto.m3u); listener requests pass null and play in
-  // full. A cue_out past the track's end is a no-op. An explicit cueOutSec (a
-  // stem blend's start in the OUTGOING track) competes with the cap and the
-  // earlier cut wins, so a blend can't resurrect audio past the cap. cueInSec
-  // skips the INCOMING track past the head its rendered clip already played.
-  // Cue points only for a CUT that is a decision, never for a measurement.
+  // finds the cue points and levels the track to its target itself.
   //
-  // The length cap no longer stamps one. A cap belongs in the SELECTION, where
-  // `music/track-window.ts` keeps an over-long track out of the queue in the
-  // first place, rather than airing it and cutting it off mid-song — and the
-  // backstop cost more than it saved: autocue switches itself off on any track
-  // that arrives with a cue_out, so the cap was quietly disabling autocue on
-  // most of the catalogue. `maxDurationSec` is still accepted so callers need
-  // not change; it is simply not sent.
-  //
-  // What IS still sent is an explicit cut the caller decided on: a show
-  // boundary (the track is ending because the programme changes, not because
-  // the song does) or a stem seam. autocue stands down on that one track, and
-  // that is correct — a boundary cut is a plain fade by design (#1574).
+  // Cue points only for a CUT that is a decision, never for a measurement:
+  // a show boundary (the track is ending because the programme changes, not
+  // because the song does). autocue stands down on that one track, and that is
+  // correct — a boundary cut is a plain fade by design (#1574). The length cap
+  // is a SELECTION filter (`music/track-window.ts`) and stamps nothing.
   if (typeof opts.cueOutSec === 'number' && Number.isFinite(opts.cueOutSec) && opts.cueOutSec > 0) {
     fields.push(`liq_cue_out="${escAnnotate(opts.cueOutSec)}"`);
-  }
-  if (opts.cueInSec != null && opts.cueInSec > 0) {
-    fields.push(`liq_cue_in="${escAnnotate(opts.cueInSec)}"`);
   }
   return `annotate:${fields.join(',')}:${getPlayableUri(song, opts.resolveProbeId ?? null)}`;
 }
 
-// Annotate URI for a pre-rendered stem-blend transition CLIP. It carries the
-// INCOMING track's identity, so now-playing flips the moment the blend begins
-// and the controller's lastSeenKey dedup swallows the identical second fire at
-// cue-in. `subwave_clip="1"` stops the telnet rid helpers
-// (liquidsoap-control.ts) mistaking the clip for the track itself.
-export function getClipUri(song, clipPath: string, crossSec: number) {
-  const fields = [
-    `title="${escAnnotate(song.title)}"`,
-    `artist="${escAnnotate(song.artist)}"`,
-    `album="${escAnnotate(song.album)}"`,
-    `subsonic_id="${escAnnotate(song.id)}"`,
-    'subwave_clip="1"',
-    `liq_cross_duration="${escAnnotate(crossSec)}"`,
-  ];
-  // No liq_amplify: the render already gain-matched both sources, so a stamp
-  // here would double-apply.
-  return `annotate:${fields.join(',')}:${clipPath}`;
-}

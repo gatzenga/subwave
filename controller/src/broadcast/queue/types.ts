@@ -16,9 +16,8 @@ export interface Persona {
 }
 
 // A playable track. A loose bag by design: picks arrive from the LLM agent and
-// from Subsonic carrying different subsets, and applyMixTransition arms/strips
-// the transition-effect flags in place. Every field is optional so a partial
-// pick and a fully-analysed one share one type.
+// from Subsonic carrying different subsets. Every field is optional so a
+// partial pick and a fully-analysed one share one type.
 export interface Track {
   id?: string | null;
   title?: string | null;
@@ -32,30 +31,11 @@ export interface Track {
   peakDb?: number | null;
   // OpenSubsonic ReplayGain block riding the raw Navidrome song object —
   // subsonic.ts returns API children unmodified, so tagged files carry it
-  // into the queue for free. applyLoudnessGain prefers it over the measured
-  // LUFS when settings.loudness.source allows (issue #998).
+  // into the queue for free. Informational: autocue levels on air.
   replayGain?: { trackGain?: number | null; trackPeak?: number | null } | null;
   introMs?: number | null;
   keyRanges?: TrackKeyRange[] | null;
   outro?: TrackOutro | null;
-  gainDb?: number;
-  // Transition-effect flags + their stamped parameters (armed/stripped by
-  // applyMixTransition, consumed by subsonic.getAnnotatedUri and radio.liq).
-  sweep?: boolean;
-  washout?: boolean;
-  washoutAuto?: boolean;
-  washoutDelay?: number;
-  blend?: boolean;
-  dissolve?: boolean;
-  chop?: boolean;
-  chopPeriod?: number;
-  loop?: boolean;
-  loopBar?: number;
-  crossSec?: number;
-  // Show-boundary fade (#1574): this track was cued out at a show change, so
-  // its ending is a cut rather than its own. radio.liq reads liq_show_fade off
-  // the OUTGOING track and suppresses the exit gestures above.
-  showFade?: boolean;
   [k: string]: unknown;
 }
 
@@ -155,23 +135,14 @@ export interface QueueItem {
   // protocol records ready/failed against it, so queue membership is never
   // mistaken for resolution state.
   resolveProbeId?: string;
-  transitionSfx?: string;
   startedAt?: string;
   endedAt?: string;
   source?: string;
-  // Effective cue points stamped at drain time. The pair-drain deadline math
-  // uses cueOutSec - cueInSec: both are absolute file offsets, while startedAt
-  // is the moment playback begins at cueInSec.
+  // The controller's estimate of where the track's audio ends (and starts),
+  // resolved at drain time for the on-air clock: absolute file offsets, while
+  // startedAt is the moment playback begins at cueInSec.
   cueInSec?: number;
   cueOutSec?: number;
-  // Stem-blend seam (feature: stem-blend transitions). `stemBlend` rides the
-  // OUTGOING item: a rendered clip airs after it (written to next.txt right
-  // behind its own URI). `stemSeam`/`stemCueInSec` ride the INCOMING item:
-  // its entry-side effects are stripped at its own drain (the seam INTO it
-  // is pre-rendered) and it cues in past the head the clip already played.
-  stemBlend?: { clipPath: string; blendStartSec: number; inCueSec: number } | null;
-  stemSeam?: boolean;
-  stemCueInSec?: number;
 }
 
 // One row in the rolling recent-plays sidecar (the picker's repeat window).

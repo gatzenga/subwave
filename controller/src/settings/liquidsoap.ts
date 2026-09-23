@@ -9,7 +9,6 @@ import { DEFAULTS } from './defaults.js';
 import { mixerJingleRatioFile } from '../broadcast/jingle-rotate.js';
 
 export const LIQ_JINGLE_RATIO_PATH = `${STATE_DIR}/liquidsoap_jingle_ratio.txt`;
-export const LIQ_CROSSFADE_PATH = `${STATE_DIR}/liquidsoap_crossfade.txt`;
 // radio.liq's `smooth_add` `p` on the heavy voice layer and the light intro one.
 export const LIQ_DUCK_VOICE_PATH = `${STATE_DIR}/liquidsoap_duck_voice.txt`;
 export const LIQ_DUCK_INTRO_PATH = `${STATE_DIR}/liquidsoap_duck_intro.txt`;
@@ -42,7 +41,6 @@ export async function writeLiquidsoapSettings(s) {
   // instead. One resolver for both sides, so "the mixer is rotating" and "the
   // controller is rotating" cannot disagree. See broadcast/jingle-rotate.ts.
   await writeFile(LIQ_JINGLE_RATIO_PATH, mixerJingleRatioFile(s));
-  await writeFile(LIQ_CROSSFADE_PATH, String(s.crossfadeDuration));
   // Defaulted like `station`: `undefined` in the handoff file unducks the DJ.
   await writeFile(LIQ_DUCK_VOICE_PATH, String(s.ducking?.voice ?? DEFAULTS.ducking.voice));
   await writeFile(LIQ_DUCK_INTRO_PATH, String(s.ducking?.intro ?? DEFAULTS.ducking.intro));

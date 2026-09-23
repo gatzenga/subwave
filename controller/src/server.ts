@@ -201,7 +201,7 @@ app.listen(config.server.port, async () => {
     const s = settings.get();
     await settings.ensureLiquidsoapSettingsFile();
     console.log(
-      `[settings] loaded. jingleRatio=${s.jingleRatio} crossfadeDuration=${s.crossfadeDuration} location=${s.weather.locationName} onAir=${settings.resolveOnAirLocation(s)}`,
+      `[settings] loaded. jingleRatio=${s.jingleRatio} location=${s.weather.locationName} onAir=${settings.resolveOnAirLocation(s)}`,
     );
   } catch (err) {
     console.error('[settings] load failed:', err.message);

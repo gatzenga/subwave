@@ -219,18 +219,6 @@ export function needsVocalIds(limit?: number, includeTailMissing = false): strin
   return rows.map(r => r.id);
 }
 
-// The stem-cache backfill scope moved to ./stem-scan.ts when its `ORDER BY id`
-// became a ranking (#1622 FR 14) — needsStemsIds now joins the play history and
-// projects music/stem-priority.ts, which is a page of query rather than a
-// sibling of the two backfill scopes above. Still re-exported from the same
-// library-db barrel.
-
-export function stemsCachedCount(): number {
-  return (requireDb().prepare(
-    'SELECT COUNT(*) AS n FROM tracks WHERE stems_at IS NOT NULL',
-  ).get() as { n: number }).n;
-}
-
 // The analyze CLI walks Navidrome only when this is 0.
 export function trackCount(): number {
   return (requireDb().prepare('SELECT COUNT(*) AS n FROM tracks').get() as {

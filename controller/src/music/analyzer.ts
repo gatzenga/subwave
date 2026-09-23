@@ -63,9 +63,6 @@ export interface AnalysisResult {
   audioEmbedding: number[] | null;
   // Tail features, measured off the END of a COMPLETE file only.
   outro: OutroInfo | null;
-  // true when head stems were written to the requested stems_dir. null = none
-  // requested / backend predates the feature.
-  stemsCached: boolean | null;
   // Dead-air gaps at the file's edges (ms), measured against an ABSOLUTE dBFS
   // floor — never the relative gates behind introMs / outro.startMs, which ask
   // where the MUSIC starts and would read a quiet intro as silence. The tail is
@@ -248,13 +245,7 @@ interface WorkerMessage {
   lead_silence_ms?: unknown;
   tail_silence_ms?: unknown;
   tail_start_ms?: unknown;
-  stems_cached?: boolean;
   text_embeddings?: unknown;
-  // render_transition op fields
-  path?: string;
-  blend_start_sec?: number;
-  in_cue_sec?: number;
-  clip_sec?: number;
 }
 
 type Pending = { resolve: (m: WorkerMessage) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
@@ -373,9 +364,6 @@ export interface AnalyzeRequestOpts {
   // Whether the handed-over `path` holds the COMPLETE file; false vetoes outro
   // analysis. Omitted on the url path: the backend's own fetch decides.
   complete?: boolean;
-  // Stem-cache target dir on the shared volume; implies the Demucs separation
-  // even without `vocal`.
-  stems_dir?: string;
   // Baseline analysis is already current; compute only the CLAP vector.
   embedding_only?: boolean;
 }
@@ -408,7 +396,6 @@ function localRequest(req: ({ url: string } | { path: string }) & AnalyzeRequest
           leadSilenceMs: parseSilenceMs(msg.lead_silence_ms),
           tailSilenceMs: parseSilenceMs(msg.tail_silence_ms),
           tailStartMs: parseSilenceMs(msg.tail_start_ms),
-          stemsCached: typeof msg.stems_cached === 'boolean' ? msg.stems_cached : null,
         }),
       reject,
       timer,
@@ -583,7 +570,6 @@ async function sidecarRequest(body: ({ url: string } | { path: string }) & Analy
     leadSilenceMs: parseSilenceMs(resBody.lead_silence_ms),
     tailSilenceMs: parseSilenceMs(resBody.tail_silence_ms),
     tailStartMs: parseSilenceMs(resBody.tail_start_ms),
-    stemsCached: typeof resBody.stems_cached === 'boolean' ? resBody.stems_cached : null,
   };
 }
 
@@ -762,97 +748,6 @@ export async function embedTexts(
   }
 }
 
-// What the stem-blend render op needs to align and mix — straight from
-// library.db, the worker never re-detects. Wire-shaped (snake keys pass through
-// verbatim). `gain_db` is the dB the station itself would apply to that side
-// (music/loudness.ts) and is what the worker mixes with; `lufs` is the
-// pre-#1240 input, kept so an older analyzer image still renders.
-export interface RenderTransitionPayload {
-  out: {
-    stems_dir: string;
-    duration_s: number; // tagged duration, advisory — tail alignment comes from the stems' tail-meta.json
-    outro: { start_ms: number; bars: number[]; lufs?: number | null };
-    gain_db?: number | null;
-    lufs?: number | null;
-  };
-  in: {
-    stems_dir: string;
-    bars: number[];
-    gain_db?: number | null;
-    lufs?: number | null;
-  };
-  out_dir: string;
-  clip_name: string;
-  target_lufs?: number | null;
-}
-
-export interface RenderTransitionResult {
-  path: string;
-  blendStartSec: number; // absolute in the OUTGOING track — its liq_cue_out
-  inCueSec: number;      // absolute in the INCOMING track — its liq_cue_in
-  clipSec: number;
-}
-
-// Mix a pre-rendered transition WAV from two tracks' cached stems. Returns null
-// on ANY miss or failure — the caller falls back to a plain pair-aware
-// crossfade. Needs only numpy+soundfile, so it works on the lean image as long
-// as a heavy backend cached the stems earlier.
-export async function renderTransition(
-  payload: RenderTransitionPayload,
-  opts: { timeoutMs?: number } = {},
-): Promise<RenderTransitionResult | null> {
-  const timeoutMs = opts.timeoutMs ?? config.analyzer.renderTimeoutMs;
-  const backend = await resolveBackend();
-  if (!backend) return null;
-  if (backend === 'sidecar') {
-    try {
-      const res = await fetchWithTimeout(`${_sidecarBase}/render-transition`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        timeoutMs,
-        bodyDeadline: true,
-      });
-      if (!res.ok) return null; // 404 = pre-render sidecar — silently no blend
-      const body = (await res.json()) as WorkerMessage & { ok?: boolean };
-      return coerceRenderResult(body);
-    } catch {
-      return null;
-    }
-  }
-  try {
-    if (!ready) await startWorker();
-    return await localRenderTransition(payload, timeoutMs);
-  } catch {
-    return null;
-  }
-}
-
-function coerceRenderResult(msg: WorkerMessage & { ok?: boolean }): RenderTransitionResult | null {
-  if (!msg?.ok || typeof msg.path !== 'string') return null;
-  const blendStartSec = parseFinite(msg.blend_start_sec);
-  const inCueSec = parseFinite(msg.in_cue_sec);
-  const clipSec = parseFinite(msg.clip_sec);
-  if (blendStartSec == null || inCueSec == null || clipSec == null) return null;
-  return { path: msg.path, blendStartSec, inCueSec, clipSec };
-}
-
-function localRenderTransition(payload: RenderTransitionPayload, timeoutMs: number): Promise<RenderTransitionResult | null> {
-  const id = `a${++reqSeq}`;
-  return new Promise<RenderTransitionResult | null>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error('render-transition request timed out'));
-    }, timeoutMs);
-    pending.set(id, {
-      resolve: (msg: WorkerMessage) => resolve(coerceRenderResult({ ...msg, ok: true })),
-      reject, // a worker {ok:false} rejects here — caller maps to null
-      timer,
-    });
-    proc?.stdin.write(JSON.stringify({ id, op: 'render_transition', ...payload }) + '\n');
-  });
-}
-
 // Analyse one track by id over the URL path (the backend fetches the audio).
 // Throws on failure — the caller leaves the row NULL and retries next run.
 export async function analyze(songId: string, opts: AnalyzeRequestOpts = {}): Promise<AnalysisResult> {
@@ -966,8 +861,8 @@ let pathFallbackWarned = false;
 // Prefer the shared-path handoff, degrading a sidecar that cannot see the
 // controller's state mount to the URL input. Only the machine-readable
 // path-unavailable response earns the retry; a decode/model failure must not be
-// doubled. `complete` and `stems_dir` are dropped: neither is valid when the
-// sidecar downloads its own copy.
+// doubled. `complete` is dropped: it is not valid when the sidecar downloads
+// its own copy.
 export async function analyzePathWithUrlFallback(
   songId: string,
   localPath: string,
@@ -981,12 +876,11 @@ export async function analyzePathWithUrlFallback(
       pathFallbackWarned = true;
       console.error(
         '[analyze] analyzer cannot read controller staging paths; using URL downloads ' +
-        '(slower, and stem caching still requires shared state)',
+        '(slower)',
       );
     }
     const urlOpts = { ...opts };
     delete urlOpts.complete;
-    delete urlOpts.stems_dir;
     return analyze(songId, urlOpts);
   }
 }

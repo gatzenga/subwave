@@ -16,10 +16,9 @@ process.env.STATE_DIR = STATE;
 
 const { config } = await import('../src/config.js');
 const { jingleWaitMs, jingleWindow } = await import('../src/broadcast/queue/voice-io.js');
-const settings = await import('../src/settings.js');
 
-const CROSS_SEC = Number(settings.get()?.crossfadeDuration) || 10;
-const CROSS_MS = CROSS_SEC * 1000;
+const { MIXER_SEAM_MAX_SEC } = await import('../src/broadcast/mixer-seam.js');
+const CROSS_MS = MIXER_SEAM_MAX_SEC * 1000;
 const TAIL_MS = 1_000;
 const CEILING_MS = 600_000;
 const NOW = 1_800_000_000_000;

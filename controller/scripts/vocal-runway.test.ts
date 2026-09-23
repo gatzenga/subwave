@@ -19,20 +19,13 @@
 //    feature off in silence.
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 const stateRoot = mkdtempSync(path.join(tmpdir(), 'subwave-vocal-runway-'));
 process.env.STATE_DIR = stateRoot;
-// The trim ON, so the onset shift is live and a leading blank actually costs
-// runway. With it off shiftOnsetMs is the identity and half this file proves
-// nothing.
-writeFileSync(
-  path.join(stateRoot, 'settings.json'),
-  JSON.stringify({ silenceTrim: { enabled: true, minGapMs: 1_500 } }),
-);
 
 const settings = await import('../src/settings.js');
 await settings.load();
@@ -98,7 +91,7 @@ test('the onset lands on the trimmed timeline, not on byte zero', () => {
 });
 
 test('a track carrying fresh ranges outranks the stored row', () => {
-  // Same precedence as silence-trim and queue.mixAnalysisFor: a pick holding
+  // Same precedence as silence-trim: a pick holding
   // just-measured analysis must not get a stale answer from the DB.
   assert.equal(
     vocalRunwayMs({ id: 'plain', duration: 200, vocalRanges: [{ startMs: 4_000 }] }),

@@ -41,7 +41,6 @@ import { ARTIST_VARIETY_WINDOW, runArtistGuard } from './dj-agent/artist-guard.j
 import { runAlbumGuard } from './dj-agent/album-guard.js';
 import { albumKeyFor } from '../music/album-facts.js';
 import { hasEraBound, genreResolutionWarningOnce, type VocalMode } from '../music/show-filter.js';
-import type { TransitionEffect } from '../settings/vocab.js';
 import { djCallsAllowed } from './listeners.js';
 import { autoVoiceAllowed } from './voice-policy.js';
 import { speakClockAllowed } from './clock-policy.js';
@@ -66,7 +65,7 @@ import { moodLeanClause } from './mood-lean.js';
 // wouldn't have surfaced here as a type error.
 export { runActive } from './dj-agent/runs.js';
 export {
-  PICK_SCHEMA, PICK_SCHEMA_NO_FX, pickSchema, pickSystem,
+  PICK_SCHEMA, pickSchema, pickSystem,
 } from './dj-agent/schemas.js';
 export { pickerAgent } from './dj-agent/agents.js';
 
@@ -79,7 +78,7 @@ export { pickerAgent } from './dj-agent/agents.js';
 // candidates (`seen`), with the id constrained to that exact set — z.enum
 // becomes a decode-time grammar on local models and a Zod reject elsewhere,
 // the same closing move pickNextTrack already uses. Returns a full pick object
-// (id/reason/transition) or null; never throws, so a salvage failure falls
+// (id/reason) or null; never throws, so a salvage failure falls
 // through to the caller's pick.rejected path unchanged.
 // `reason`, when given, replaces the default "you returned a bad id" framing —
 // the pick-anchor artist guard (#1124) reuses this same constrained re-pick
@@ -465,36 +464,11 @@ async function pickViaAgent(queue, ctx, { wantLink, audioWaypoint = null, pickAn
   }
   const say = trimLinkToIntro(rawLink, song) || '';
   const link = say || null;
-  const fxActive = settings.effectsActive();
-  // The no-FX schema tells the model to leave transition null, but a model can
-  // ignore a field description — say so in the log instead of discarding
-  // silently (a "blend" in the LLM log that never airs reads as a broken mixer).
-  if (!fxActive && object.transition && object.transition !== 'normal') {
-    queue.log('mix', `transition "${object.transition}" ignored (persona not in DJ mode)`);
-  }
-  // Per-effect operator switch (#1565). The agent's PICK_SCHEMA keeps the full
-  // enum whatever the switches say — it is session-anchored, so narrowing it
-  // mid-conversation would contradict the history already in it — and the
-  // prompt guidance names what is off. A model that reaches for a switched-off
-  // gesture anyway is logged for the same reason as the DJ-mode case above,
-  // rather than being dropped in silence.
-  if (fxActive && object.transition && object.transition !== 'normal'
-    && !settings.effectEnabled(object.transition as TransitionEffect)) {
-    queue.log('mix', `transition "${object.transition}" ignored (switched off in settings)`);
-  }
-  const wants = (kind: TransitionEffect) =>
-    fxActive && object.transition === kind && settings.effectEnabled(kind);
-  const sweep = wants('sweep');
-  const washout = wants('washout');
-  const blend = wants('blend');
-  const dissolve = wants('dissolve');
-  const chop = wants('chop');
-  const loop = wants('loop');
   // Attach the link to the pick so it airs as the pick starts (back-announcing
   // the captured pick anchor), instead of immediately over the current track (#189).
   // Stamp `pickAnchor` as the link's intended back-announce target so the queue
   // can drop the link if a request jumps ahead of this pick before it airs.
-  const queued = await enqueuePick(queue, song, object.reason, 'agent', link, pickAnchor, { sweep, washout, blend, dissolve, chop, loop }, { linkClockAt: linkClockStampFor(linkAirAt, clockAllowed), introPersona: linkPersona, hostSpeech: linkHostSpeech });
+  const queued = await enqueuePick(queue, song, object.reason, 'agent', link, pickAnchor, { linkClockAt: linkClockStampFor(linkAirAt, clockAllowed), introPersona: linkPersona, hostSpeech: linkHostSpeech });
   // Pick was already queued/on-air and got deduped — don't record a session turn
   // for a track that never airs. Returning false lets runTrackEvent fall through
   // to the pool for a fresh pick.
@@ -592,27 +566,6 @@ async function pickViaPool(queue, ctx, { wantLink, pickAnchor, showAt = null }: 
   }
   // Talk-within-the-intro rides enqueuePick's trimLinkToIntro chokepoint —
   // the pool link needs no enforcement of its own here (#962 follow-up).
-  // Transition effects ride the pool path too (pickNextTrack only offers the
-  // field when settings.effectsActive()), so a DJ-mode persona keeps its craft
-  // while picks run through this fallback. Re-check effectsActive at enqueue
-  // time like the agent path does — the queue would strip a stale flag anyway
-  // (applyMixTransition's dj-mode-off strip), but not stamping it keeps the
-  // pick log honest.
-  // The per-effect switches (#1565) are re-checked here for the same reason as
-  // effectsActive: pickNextTrack already narrowed the enum it offered, but the
-  // pick and the enqueue are separated by a model call, so a switch flipped in
-  // between must not reach the annotation.
-  const fxActive = settings.effectsActive();
-  const wants = (kind: TransitionEffect) =>
-    fxActive && result.transition === kind && settings.effectEnabled(kind);
-  const fx = {
-    sweep: wants('sweep'),
-    washout: wants('washout'),
-    blend: wants('blend'),
-    dissolve: wants('dissolve'),
-    chop: wants('chop'),
-    loop: wants('loop'),
-  };
   // `pickAnchor` is the link's intended back-announce target (passed to
   // generateLink as `previous`); stamp it so the queue drops the link if a
   // request jumps ahead.
@@ -625,7 +578,7 @@ async function pickViaPool(queue, ctx, { wantLink, pickAnchor, showAt = null }: 
   // whole link to protect a clock that isn't in it. Gated on the STAMP rather
   // than on `airAt` itself, so linkAirContext still steps the daypart tags to
   // air time — "after dark" stays accurate even when the numerals are withheld.
-  const queued = await enqueuePick(queue, result.song, result.reason, result.source || 'pool', link, pickAnchor, fx, {
+  const queued = await enqueuePick(queue, result.song, result.reason, result.source || 'pool', link, pickAnchor, {
     linkClockAt: linkClockStampFor(airAt, clockAllowed),
     introPersona: linkPersona,
     hostSpeech: linkHostSpeech,
@@ -660,8 +613,8 @@ async function pickViaPool(queue, ctx, { wantLink, pickAnchor, showAt = null }: 
 // the matching `showAt` clock, so both pick paths follow the show that will
 // actually be on air when the pick plays. `showAt` null → resolve at now,
 // exactly the pre-look-ahead behaviour.
-// `pickAnchor` is the selection snapshot captured when a pair-drain deadline
-// starts a pick — usually the held queue head, not a promise that it remains the
+// `pickAnchor` is the selection snapshot captured when a deadline pick starts —
+// usually the queue head, not a promise that it remains the
 // FIFO predecessor across later awaits. The anchor flows through the event,
 // mini-run, pool re-rank and link back-announce target. `anchorPrior` supplies
 // its context. Omitted means the cycle anchors to queue.current/history.
@@ -714,23 +667,6 @@ export async function runTrackEvent(queue, ctx, { wantLink, showAt = null, pickA
     // tracksLikeThis actually have one
     // to pass. Without it the agent fabricates a slug from the title/artist
     // (e.g. "lost-sultaan-romeo") and Navidrome answers "data not found".
-    // Per-pick effects reminder: the system-prompt guidance alone loses to the
-    // session history (the model sees ~40 of its own prior picks, almost all
-    // transition:"normal", and copies itself — observed on-air: 19 picks, zero
-    // washouts). The event turn is the freshest instruction in the window, so
-    // the deliberate-choice nudge rides here.
-    const recentT = typeof queue.recentTransitionChoices === 'function' ? queue.recentTransitionChoices() : [];
-    const historyNote = recentT.length
-      ? ` Your recent transition choices, oldest first: ${recentT.join(', ')} — the station strips a third repeat, so vary deliberately.`
-      : '';
-    // Compact on purpose: the full per-effect coaching is effectsGuidance()
-    // in the system prompt — this nudge only keeps the vocabulary and the
-    // deliberate-choice reminder fresh in the newest turn. Re-describing all
-    // seven effects here tripled the coaching per pick (system + event +
-    // schema description).
-    const effectClause = settings.effectsActive()
-      ? ` Set "transition" by what THIS moment needs, per the TRANSITION EFFECTS guidance — "washout"/"loop" end your pick, "sweep"/"dissolve"/"chop" resolve a clash, "blend" only for an exceptionally locked pair, "normal" otherwise. Vary your craft: never the same transition three picks running, and if your last pick used an effect, lean "normal" now unless the moment clearly calls again.${historyNote}`
-      : '';
     // The turn is split in two: `text` is the factual event the booth log shows
     // the operator, `meta.promptSuffix` carries the model-facing coaching
     // clauses. windowMessages() re-joins them, so the model sees one message and
@@ -786,7 +722,7 @@ export async function runTrackEvent(queue, ctx, { wantLink, showAt = null, pickA
         + (pickAnchor?.id ? ` [id: ${pickAnchor.id}]` : '')
         + (anchorPriorTrack ? ` (after "${anchorPriorTrack.title}" by ${anchorPriorTrack.artist})` : '')
         + '. Pick the track to play next.';
-    const promptSuffix = `${favClause}${moodClause}${effectClause}${runClause}${journeyClause}${exploreClause}`;
+    const promptSuffix = `${favClause}${moodClause}${runClause}${journeyClause}${exploreClause}`;
     session.appendTurn({
       role: 'event', kind: 'pick', text: eventText,
       meta: promptSuffix ? { promptSuffix } : {},

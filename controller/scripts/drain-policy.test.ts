@@ -1,11 +1,10 @@
-// Pins the pair-drain policy state machine (broadcast/drain-policy.ts) — the
-// pure maths behind WHEN a queued track is handed to Liquidsoap (feature:
-// pair-aware transitions, the #749 fix).
+// Pins the drain clock policy (broadcast/drain-policy.ts) — the on-air clock,
+// the empty-queue backstop window and the intro pre-render budget.
 // node:assert-via-tsx style, matching scripts/outro-mix.test.ts.
 
 import assert from 'node:assert/strict';
 import {
-  remainingSec, drainAction, shouldDeadlinePick, introRenderBudgetSec,
+  remainingSec, shouldDeadlinePick, introRenderBudgetSec,
   DRAIN_DEADLINE_SEC, HARD_DEADLINE_SEC, DEADLINE_PICK_COOLDOWN_SEC,
   DRAIN_COMMIT_RESERVE_SEC, MIN_PRERENDER_BUDGET_SEC,
 } from '../src/broadcast/drain-policy.js';
@@ -38,61 +37,10 @@ assert.equal(remainingSec(T0, T0, null), null, 'no duration → null');
 assert.equal(remainingSec(T0, T0, 0), null, 'zero duration → null');
 assert.equal(remainingSec(T0, T0, NaN), null, 'NaN duration → null');
 
-// ── drainAction ──────────────────────────────────────────────────────────────
-
-// Successor known → pair-drain immediately, no reason to wait.
-assert.equal(
-  drainAction({ pairDrain: true, hasSuccessor: true, remainingSec: 500 }),
-  'send-pair',
-  'successor known → send-pair',
-);
-// Feature off → today's eager intrinsic drain, even with a successor
-// (pair stamps are the feature; without it nothing changes byte-for-byte).
-assert.equal(
-  drainAction({ pairDrain: false, hasSuccessor: true, remainingSec: 500 }),
-  'send-intrinsic',
-  'pairDrain off + successor → intrinsic',
-);
-assert.equal(
-  drainAction({ pairDrain: false, hasSuccessor: false, remainingSec: 500 }),
-  'send-intrinsic',
-  'pairDrain off → intrinsic',
-);
-// Unknowable clock (boot, recover, untracked auto play) → intrinsic.
-assert.equal(
-  drainAction({ pairDrain: true, hasSuccessor: false, remainingSec: null }),
-  'send-intrinsic',
-  'unknown remaining → intrinsic',
-);
-// Plenty of time, no successor yet → hold for the deadline pick.
-assert.equal(
-  drainAction({ pairDrain: true, hasSuccessor: false, remainingSec: 500 }),
-  'hold',
-  'time to spare → hold',
-);
-// Still inside the pick window → keep holding.
-assert.equal(
-  drainAction({ pairDrain: true, hasSuccessor: false, remainingSec: HARD_DEADLINE_SEC + 1 }),
-  'hold',
-  'above the hard deadline → hold',
-);
-// Hard deadline passed without a successor → send with intrinsic stamps.
-// Never risk dead air for a prettier seam.
-assert.equal(
-  drainAction({ pairDrain: true, hasSuccessor: false, remainingSec: HARD_DEADLINE_SEC - 1 }),
-  'send-intrinsic',
-  'past the hard deadline → intrinsic',
-);
-assert.equal(
-  drainAction({ pairDrain: true, hasSuccessor: false, remainingSec: -10 }),
-  'send-intrinsic',
-  'expired clock → intrinsic',
-);
-
 // ── shouldDeadlinePick ───────────────────────────────────────────────────────
 
 // Fires only inside [HARD, DRAIN) — before the window there's nothing to do,
-// past the hard deadline the intrinsic fallback owns the endgame.
+// past the hard deadline the auto playlist owns the endgame.
 assert.equal(shouldDeadlinePick(null), false, 'unknown clock → no deadline pick');
 assert.equal(shouldDeadlinePick(DRAIN_DEADLINE_SEC + 1), false, 'before the window → no pick');
 assert.equal(shouldDeadlinePick(DRAIN_DEADLINE_SEC - 1), true, 'inside the window → pick');

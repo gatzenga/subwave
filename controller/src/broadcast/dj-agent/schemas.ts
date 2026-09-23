@@ -28,29 +28,18 @@ export const PICK_SCHEMA = z.object({
   // wording, in util/pick-seed.ts; don't inline a second copy here.
   id: z.string().describe(`the exact song id returned by one of the discovery tools — never invent or compose ids. ${SEED_NOT_A_PICK_CLAUSE}`),
   reason: z.string().describe('internal scratchpad only — max 12 words, never shown to the listener; do not justify, just note what makes THIS pick a fresh step (a shift in energy/era/texture, or an artist genuinely new to the rotation), not a vibe label you would recycle pick after pick (e.g. "warmer, driving energy", never a repeated "mellow reflective step"). Only call a pick a "new artist" when it has no "artist_play_count"/"artist_last_played_days_ago"; "unaired" means this song is new to the station, not that its artist is. If the artist shows recent or frequent plays, describe the real reason instead (energy shift, texture, flow)'),
-  // Transition effects (only honoured when the system prompt offers them — persona djMode, see settings.effectsActive).
-  // One-line pointer only: the full coaching is dj.effectsGuidance() in the
-  // system prompt. This description used to repeat all of it, so every agent
-  // pick carried the effects text TWICE (~500 wasted tokens per call).
-  transition: z.enum(['normal', 'blend', 'sweep', 'washout', 'dissolve', 'chop', 'loop']).nullable().describe('transition treatment per the TRANSITION EFFECTS guidance: "washout"/"loop" end THIS pick (loop needs measured tempo), "sweep"/"dissolve"/"chop" carry the previous track across a clash (chop only out of beat-driven material), "blend" only for an exceptionally locked pair; "normal" or null for a plain crossfade'),
-});
-
-// Same shape, transition coaching stripped. Zod field descriptions travel to
-// the model as part of the structured-output contract even when every prompt
-// mention is gated off, so with DJ mode off the description above kept talking
-// the model into "blend"/"sweep" picks that runTrackEvent silently discarded —
-// the LLM log showed effects that could never air. The enum stays identical
-// (validation must not depend on persona state); only the description flips.
-export const PICK_SCHEMA_NO_FX = PICK_SCHEMA.extend({
-  transition: z.enum(['normal', 'blend', 'sweep', 'washout', 'dissolve', 'chop', 'loop']).nullable().describe('always set to null — transition effects are not available for this persona'),
 });
 
 // The picker response deliberately contains no listener-facing speech. The
 // selected song crosses into generateLink only after the tool run is complete,
 // so selection context cannot become DJ copy. Keep this wrapper because
 // constrained re-picks extend the plain schema before tolerance is applied.
+//
+// There is no transition field. The picker used to choose a transition effect
+// per pick as well as the song; the handover is autocue's now (radio.liq), so
+// selection is the only thing this schema asks for.
 export function pickSchemaBase() {
-  return settings.effectsActive() ? PICK_SCHEMA : PICK_SCHEMA_NO_FX;
+  return PICK_SCHEMA;
 }
 
 export function pickSchema() {
@@ -68,11 +57,6 @@ export function pickSchema() {
 // structural signals and derails smaller models. PICKER_CRITERIA stays because
 // editorial preference (flow, context, variety, interest) is in no tool or
 // schema.
-//
-// The transition-effects guidance lives in prompts/picker.ts (dj.effectsGuidance)
-// so the pool picker shares it verbatim, and is appended ONLY when effects are
-// active (settings.effectsActive — there is no separate toggle). Invisible
-// otherwise, so the model leaves "transition" null.
 
 // `showAt` — resolve the show brief/leans for that future moment instead of
 // now: the pick airs when the current track ends, so near a show boundary the
@@ -140,5 +124,5 @@ ${instruction('picker', 'frame')}${djModeLine}${showLine}${musicLean}${playlistL
 
 ${dj.PICKER_CRITERIA}
 
-${findingCandidates}${dj.effectsGuidance()}`;
+${findingCandidates}`;
 }

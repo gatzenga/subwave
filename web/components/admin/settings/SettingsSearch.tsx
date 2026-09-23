@@ -90,7 +90,7 @@ export function SettingsSearch({ onJump, sections }: SettingsSearchProps) {
           <Search className="size-3.5" strokeWidth={2} aria-hidden />
         </span>
         <span className="min-w-0 flex-1 truncate px-2.5 py-2 text-[13px] text-muted">
-          Search settings — crossfade, api key, bitrate, timezone…
+          Search settings — duck depth, api key, bitrate, timezone…
         </span>
         <span className="inline-flex items-center border-l border-[var(--separator-strong)] px-2.5">
           <Kbd>/</Kbd>

@@ -16,7 +16,7 @@ removed — see "What is gone" below before assuming a feature exists.
 | Path | What |
 | --- | --- |
 | `controller/src/**` | Express + ESM Node. The AI DJ: picking, speech, scheduling, library |
-| `liquidsoap/radio.liq` | the mixer: queue → auto playlist → cross → dead-air guard → ducking → limiter → outputs |
+| `liquidsoap/radio.liq` | the mixer: queue → auto playlist → autocue crossfade → dead-air guard → ducking → limiter → outputs |
 | `web/**` | Next.js 15 App Router + Tailwind. Listener player (swappable skins) + admin console |
 | `docker/Dockerfile.aio` | the only image — everything above plus icecast2, Piper, Kokoro, the analyzer, Caddy |
 | `docker/aio/supervisor.sh` | boots and supervises all five processes inside that container |
@@ -65,7 +65,7 @@ Liquidsoap. This is the load-bearing fact about how the system works.
 | `say.txt` | 0.5s | WAV path → `voice_queue`, **heavy-ducked** (`ducking.voice`, default 0.22) |
 | `intro.txt` | 0.5s | between-track links → `intro_queue`, **light-ducked** (`ducking.intro`, default 0.30) |
 | `auto.m3u` | watch | fallback playlist, rewritten every `AUTO_QUEUE_REFRESH_MINUTES` |
-| `liquidsoap_*.txt` | startup | crossfade, ducking, per-codec enable/bitrate, HLS — **read once**, changes need a mixer restart |
+| `liquidsoap_*.txt` | startup | ducking, per-codec enable/bitrate, HLS — **read once**, changes need a mixer restart |
 
 **Liquidsoap → Controller** — marker files written from `on_metadata` hooks:
 `now-playing.json`, `jingle-playing.json`, `bed-playing.json`,
@@ -177,10 +177,14 @@ explained them at length are gone, so what matters is here.
 All of `radio.liq`'s rules, with the measured numbers, are in
 [`liquidsoap/CLAUDE.md`](liquidsoap/CLAUDE.md). The three most easily broken:
 
-- **Keep fade duration equal to the cross buffer.** Shorter fades inside a fixed
-  buffer sum to +6 dB. Vary the buffer, not the fade.
-- **A transition effect's operator cost is its SHAPE on one thread.** The
-  dissolve's four combs sum and subtract the dry ONCE — never per tap.
+- **The handover is autocue's, and only autocue's.** Liquidsoap measures every
+  song at resolution and the stdlib `crossfade` reads that. Never stamp
+  `liq_cross_duration`, `liq_amplify`, `liq_cue_in`/`liq_cue_out` or `liq_fade_*`
+  on a song: any cue/fade override switches autocue off for that track. The one
+  deliberate exception is a show-boundary cut. Everything that is not a song
+  (voice, sfx, pause-talk silence) carries `liq_disable_autocue`.
+- **Tempo, key, vocals and moods are for SELECTION only.** The analysis decides
+  which track comes next, never how the seam sounds.
 - **Stick with `smooth_add` for ducking.** An RMS sidechain follower drove
   `music_bus` to silence. `p` is the fraction of music LEFT UP, so smaller is
   deeper.
@@ -193,8 +197,9 @@ All of `radio.liq`'s rules, with the measured numbers, are in
   own release date is untrusted. Pass `yearUntrusted`, never raw
   `isCompilation`.
 - **Measure dead air against an ABSOLUTE floor, never a relative one.**
-  `music/silence-trim.ts` owns the cut and the onset shift; every timestamp the
-  analyzer measured from byte zero resolves through it.
+  `music/silence-trim.ts` owns the controller's ESTIMATE of it and the onset
+  shift; every timestamp the analyzer measured from byte zero resolves through
+  it. Nothing it computes reaches the mixer — autocue trims on air.
 - **Library coverage never counts on the read path.** `coverage.get()` only
   reports the last count. The walk belongs to `refresh()`.
 - **Use `getAnnotatedUri` for anything going to Liquidsoap** — raw URLs lose
@@ -205,16 +210,11 @@ All of `radio.liq`'s rules, with the measured numbers, are in
   for. Forget it and Re-decide re-tags nothing.
 - **CLAP cosines are not comparable across moods** — calibrate per mood.
 - **Enforce variety at the point of choice, not in the discovery tools.**
-- **The track-length CAP and the FLOOR are both SELECTION filters**, applied as
-  one window by `music/track-window.ts` on every pick path and on `auto.m3u`.
-  They were asymmetric once — the cap only stamped `liq_cue_out` and a long
-  track aired and faded mid-song — and that asymmetry is what the single
-  admin card made indefensible. The cue-out stamp survives as the BACKSTOP for
-  the two paths a filter cannot reach: a listener request, exempt from every
-  length rule by design, and the never-starve fallback. A never-starve filter
-  must never return its input array, and it relaxes BOTH ends together.
-- **Tempo-derived mix timing must be octave-safe.** Fold high BPM readings down
-  before deriving bars; reach the audible window by halving, never clamping.
+- **The track-length CAP and the FLOOR are both SELECTION filters and nothing
+  else**, applied as one window by `music/track-window.ts` on every pick path
+  and on `auto.m3u`. A track on air is never cut short for its length. A
+  never-starve filter must never return its input array, and it relaxes BOTH
+  ends together.
 - **The blocklist is absolute** — no never-starve anywhere. Every name tier keys
   through ONE fold (`recency.nameKey`). Never key a tier through a local
   normaliser.
@@ -229,8 +229,9 @@ All of `radio.liq`'s rules, with the measured numbers, are in
   muted voice switch or an LLM outage.
 - **Manual operator triggers are exempt from every automatic gate.**
 - **`requestedBy` says which EXEMPTIONS a track gets, never who is waiting.**
-  Four air-path behaviours key off its truthiness; a studio push sets
-  `'studio'` to earn all four.
+  Three air-path behaviours key off its truthiness (bed reason, show-boundary
+  cut, the seam a pause-talk break would take); a studio push sets `'studio'`
+  to earn all three.
 - **Absent or malformed settings must coerce to the pre-existing behaviour**, so
   an upgrade is byte-identical.
 - **Operator curation outranks listener signal.**
@@ -258,3 +259,7 @@ Do not reintroduce these, and do not assume their code still exists:
 - **ListenBrainz scrobbling** — Last.fm and Navidrome remain
 - **The split-container stack**, the CLI, the Expo app, the marketing web pages,
   multi-station, the tts-heavy sidecar
+- **Every transition of our own** — the crossfade setting, the DJ transition
+  effects (sweep/washout/blend/dissolve/chop/loop), pair-aware drain, stem
+  blends and the stem cache, the loudness card and the dead-air-trim setting.
+  autocue does the handover, the trim and the levelling; the drain is eager

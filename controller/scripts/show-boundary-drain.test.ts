@@ -4,10 +4,9 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 const root = mkdtempSync(join(tmpdir(), 'subwave-boundary-drain-'));
 process.env.STATE_DIR = root;
@@ -16,9 +15,6 @@ const settings = await import('../src/settings.js');
 const { queue } = await import('../src/broadcast/queue.js');
 const { getAnnotatedUri } = await import('../src/music/subsonic.js');
 const { BOUNDARY_TOLERANCE_SEC } = await import('../src/broadcast/show-boundary.js');
-
-const here = dirname(fileURLToPath(import.meta.url));
-const RADIO_LIQ = join(here, '..', '..', 'liquidsoap', 'radio.liq');
 
 const REMAINING_SEC = 30;   // what is left of the on-air track
 const TRACK_SEC = 25 * 60;  // the long record the feature exists for
@@ -61,8 +57,8 @@ function stage(item: Record<string, unknown> = {}) {
 }
 
 const NO_TRIM = { cueInSec: null, cueOutSec: null };
-const cutFor = (pick: Parameters<typeof queue.resolveBoundaryCut>[0], maxDurationSec: number | null = null) =>
-  queue.resolveBoundaryCut(pick, TRACK_SEC, NO_TRIM, maxDurationSec);
+const cutFor = (pick: Parameters<typeof queue.resolveBoundaryCut>[0]) =>
+  queue.resolveBoundaryCut(pick, TRACK_SEC, NO_TRIM);
 
 // The pick airs when the on-air track ends, so the boundary falls this many
 // seconds into it. Same clock the drain reads, hence the tolerance below.
@@ -134,79 +130,24 @@ test('a queued pause-and-talk break pushes the boundary cut back by its net dela
     'the hidden break delays the track, so less of it plays before the boundary');
 });
 
-test('an armed cut is always earlier than the cap and the trim', async () => {
+test('an armed cut is always earlier than a trimmed tail', async () => {
   await seed({ station: true });
-  // A #447 cap stopping the track before the boundary leaves no overshoot.
-  const early = Math.max(60, Math.floor(expectedCueSec() - 120));
-  assert.equal(cutFor(stage(), early), null,
-    'a track the cap already stops short of the boundary is left to the cap');
-
-  // An armed cut beats every other stop-early offset by at least the
-  // tolerance, which is what makes stripping the exit gestures safe.
   const late = Math.ceil(expectedCueSec() + 10 * 60);
-  const cut = cutFor(stage(), late);
-  assert.ok(cut, 'a cap past the boundary still leaves the boundary to cut');
-  assert.ok(cut.cueOutSec <= late - BOUNDARY_TOLERANCE_SEC,
-    `the cut (${cut.cueOutSec}s) precedes the cap (${late}s) by at least the tolerance`);
-
   const trimmed = queue.resolveBoundaryCut(
-    stage(), TRACK_SEC, { cueInSec: null, cueOutSec: late }, null,
+    stage(), TRACK_SEC, { cueInSec: null, cueOutSec: late },
   );
   assert.ok(trimmed && trimmed.cueOutSec <= late - BOUNDARY_TOLERANCE_SEC,
-    'and precedes a trimmed tail by the same margin');
+    'the cut precedes a trimmed tail by at least the tolerance');
 });
 
-test('an armed cut stamps the flag and strips the gestures it invalidates', async () => {
-  await seed({ station: true });
-  const pick = stage();
-  // Both exit gestures armed by applyMixTransition, as a DJ-mode seam would.
-  Object.assign(pick.track, {
-    washout: true, washoutAuto: true, washoutDelay: 0.3, loop: true, loopBar: 2,
-  });
-  const cut = queue.applyBoundaryStamps(pick, cutFor(pick));
-  assert.ok(cut && cut > 0, 'the cue comes back for the arbitration');
-  assert.equal(pick.track.showFade, true, 'the mixer is told why the track stops');
-  for (const k of ['washout', 'washoutAuto', 'washoutDelay', 'loop', 'loopBar'] as const) {
-    assert.ok(!(k in pick.track),
-      `${k} must be stripped upstream — an old broadcast image ignores liq_show_fade, `
-      + 'and the loop branch applies no fader at all');
-  }
-});
-
-test('a re-drain takes a stale flag back off again', async () => {
-  await seed({ station: true });
-  const pick = stage();
-  queue.applyBoundaryStamps(pick, cutFor(pick));
-  assert.equal(pick.track.showFade, true, 'armed on the first drain');
-  // Crash recovery re-drains the item, and the flag rides item.track, which
-  // persists; leaving it would disarm gestures on a seam that is no longer a
-  // boundary cut.
-  await seed({ station: false });
-  const again = queue.applyBoundaryStamps(pick, cutFor(pick));
-  assert.equal(again, null, 'the switch went off, so nothing arms');
-  assert.ok(!('showFade' in pick.track), 'and the stale flag is cleared, not left behind');
-});
-
-test('a boundary cut is a plain crossfade — every gesture stands down', () => {
-  const liq = readFileSync(RADIO_LIQ, 'utf8');
-  // Both sides of the seam: the incoming gestures reshape `a_source` too, and
-  // would otherwise arm on the seams the outgoing gesture used to suppress.
-  for (const flag of ['liq_washout', 'liq_loop', 'liq_sweep', 'liq_dissolve', 'liq_chop', 'liq_blend']) {
-    const line = liq.split('\n').find(l => l.includes(`${flag}"] == "true"`));
-    assert.ok(line, `radio.liq arms ${flag}`);
-    assert.ok(line.includes('not boundary_fading'),
-      `${flag} must stand down at a boundary cut — its line reads: ${line.trim()}`);
-  }
-
-  // The flag rides the OUTGOING track, and a stripped gesture leaves nothing
-  // behind in the URI.
+test('the cut is the one cue point the mixer is sent', () => {
   const uri = getAnnotatedUri(
-    { id: 'pick', title: 'The Long One', artist: 'B', showFade: true } as never,
+    { id: 'pick', title: 'The Long One', artist: 'B' } as never,
     { cueOutSec: 300 } as never,
   );
-  assert.match(uri, /liq_show_fade="true"/, 'the mixer is told why the track stops');
-  assert.match(uri, /liq_cue_out="300"/, 'alongside the cut it explains');
-  assert.doesNotMatch(uri, /liq_washout|liq_loop/, 'and no gesture the drain stripped');
+  assert.match(uri, /liq_cue_out="300"/, 'the cut reaches the mixer');
+  assert.doesNotMatch(getAnnotatedUri({ id: 'pick', title: 'T', artist: 'B' } as never),
+    /liq_cue_out/, 'and nothing else stamps one — autocue owns the ends');
 });
 
 test.after(() => rmSync(root, { recursive: true, force: true }));

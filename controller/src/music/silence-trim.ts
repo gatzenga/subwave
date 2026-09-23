@@ -5,10 +5,16 @@
 // `outro.startMs` are relative to the track's own loud level, so a quiet piano
 // intro reads as silence; never wire one to a cue point.
 //
-// Three guards: the operator's min-gap dial, a margin at each edge, and
-// MAX_TRIM_SEC. Unmeasured input yields null both sides and the track plays whole.
+// Three guards: a minimum gap, a margin at each edge, and MAX_TRIM_SEC.
+// Unmeasured input yields null both sides and the track plays whole.
+//
+// NOT A CUT ANY MORE. autocue trims every track in the mixer from the audio
+// itself; nothing computed here is sent to Liquidsoap. What remains is the
+// controller's own ESTIMATE of where a track makes sound — the now-playing
+// clock, the playable span, the DJ's talk-over runway all read it. So there is
+// no operator dial either: a knob that changes an estimate and not the sound
+// would be a knob that appears to do nothing.
 
-import * as settings from '../settings.js';
 import * as library from './library.js';
 
 // Keeps the cut off the attack or the decay's last ring; must clear the
@@ -29,16 +35,16 @@ export interface SilenceTrimTrack {
 }
 
 export interface SilenceTrimResult {
-  // Seconds into the file where playback begins; null omits liq_cue_in.
+  // Seconds into the file where the audio begins; null = from byte zero.
   cueInSec: number | null;
-  // Seconds into the file where playback stops, absolute (not a duration); null
-  // plays to the end. getAnnotatedUri takes the min of this and the #447 cap.
+  // Seconds into the file where the audio stops, absolute (not a duration);
+  // null = to the end.
   cueOutSec: number | null;
 }
 
 const NONE: SilenceTrimResult = { cueInSec: null, cueOutSec: null };
 
-// Silence to skip at one edge after the margin, min-gap dial and ceiling apply.
+// Silence to skip at one edge after the margin, min gap and ceiling apply.
 function usableTrimSec(gapMs: number | null | undefined, minGapMs: number): number | null {
   if (typeof gapMs !== 'number' || !Number.isFinite(gapMs) || gapMs <= 0) return null;
   if (gapMs < minGapMs) return null;
@@ -47,8 +53,7 @@ function usableTrimSec(gapMs: number | null | undefined, minGapMs: number): numb
   return Math.min(MAX_TRIM_SEC, kept / 1000);
 }
 
-// Resolved in one library read. Track object first, else the library record,
-// the same precedence queue.mixAnalysisFor uses.
+// Resolved in one library read. Track object first, else the library record.
 interface Measured {
   leadMs: number | null | undefined;
   tailMs: number | null | undefined;
@@ -102,18 +107,15 @@ function trimFrom(m: Measured, minGapMs: number): SilenceTrimResult {
   };
 }
 
-// The min-gap dial, or Infinity (no trim). An unreadable dial must not become 0.
-function minGapOf(cfg: { minGapMs?: unknown } | null | undefined): number {
-  return Number.isFinite(cfg?.minGapMs as number) ? (cfg?.minGapMs as number) : Infinity;
-}
+// Gaps shorter than this are not counted as dead air: a track legitimately
+// opens a beat after zero. The station default the old dial shipped with.
+const MIN_GAP_MS = 1500;
 
 export function resolveSilenceTrim(
   track: SilenceTrimTrack | null | undefined,
 ): SilenceTrimResult {
   if (!track) return NONE;
-  const cfg = settings.get()?.silenceTrim;
-  if (cfg?.enabled !== true) return NONE;
-  return trimFrom(measure(track), minGapOf(cfg));
+  return trimFrom(measure(track), MIN_GAP_MS);
 }
 
 // Seconds this track will actually make sound. Null means "no answer", never
@@ -125,9 +127,7 @@ export function playableSpanSec(
 ): number | null {
   if (!track) return null;
   const m = measure(track);
-  const cfg = settings.get()?.silenceTrim;
-  // Trim off: the file plays whole, so the span is the end reference alone.
-  const { cueInSec, cueOutSec } = cfg?.enabled === true ? trimFrom(m, minGapOf(cfg)) : NONE;
+  const { cueInSec, cueOutSec } = trimFrom(m, MIN_GAP_MS);
   const endSec = cueOutSec ?? endReferenceSec(m);
   if (endSec == null) return null;
   const span = endSec - (cueInSec ?? 0);

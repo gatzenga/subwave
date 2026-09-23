@@ -79,15 +79,12 @@ export interface StationSettings {
   };
   tts?: { defaultEngine?: string; byKind?: Record<string, string | undefined> };
   search?: { provider?: string };
-  audio?: { embeddings?: boolean; vocalActivity?: boolean; stemCache?: boolean; stemCacheGb?: number };
-  transitions?: { pairDrain?: boolean; stemBlends?: boolean };
+  audio?: { embeddings?: boolean; vocalActivity?: boolean };
   stream?: { opusEnabled?: boolean; flacEnabled?: boolean; aacEnabled?: boolean; hlsEnabled?: boolean };
   archive?: { enabled?: boolean };
-  crossfadeDuration?: number;
   jingleRatio?: number;
   jingleRotate?: JingleRotateOwner;
   maxTrackSeconds?: number;
-  loudness?: { targetLufs?: number };
 }
 
 

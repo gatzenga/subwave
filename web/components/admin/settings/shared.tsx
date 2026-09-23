@@ -14,8 +14,7 @@ import { Btn, Eyebrow, Metric } from '../ui';
 import { useSectionChrome, useReportDirty } from './section-chrome';
 import { Button } from '../../ui/button';
 import { FieldError } from '../../ui/field';
-import type { TransitionEffect, JingleRotateOwner } from '../../../lib/schemas.generated';
-export type { TransitionEffect } from '../../../lib/schemas.generated';
+import type { JingleRotateOwner } from '../../../lib/schemas.generated';
 
 export const KEY_HINTS: Record<string, string> = {
   ANTHROPIC_API_KEY: 'sk-ant-...',
@@ -267,24 +266,6 @@ export interface StreamForm {
   geoipDbPath: string;
 }
 
-export type LoudnessSource = 'replaygain-then-measured' | 'replaygain' | 'measured';
-
-export interface LoudnessForm {
-  targetLufs: string;
-  maxBoostDb: string;
-  source: LoudnessSource;
-}
-
-export interface TransitionsForm {
-  pairDrain: boolean;   // hold picks until the successor is known (#749 fix)
-  stemBlends: boolean;  // pre-rendered stem-blend seams (needs pairDrain + stem cache)
-  stemCache: boolean;   // settings.audio.stemCache — persist Demucs stems during analysis
-  stemCacheGb: string;  // settings.audio.stemCacheGb — byte budget the LRU sweep enforces
-  /** settings.transitions.effects — which gestures the DJ may reach for. Always
-   *  fully populated in the form; an absent stored field loads as `true`. */
-  effects: Record<TransitionEffect, boolean>;
-}
-
 export interface PrivacyForm {
   privatePlayer: boolean;
   listenerAuth: boolean;
@@ -294,11 +275,6 @@ export interface PrivacyForm {
   /** Disclosure, not a lock: publish every persona's soul on the roster-wide
    *  public reads (/schedule, /personas). Takes no part in the password rule. */
   publishPersonaSouls: boolean;
-}
-
-export interface SilenceTrimForm {
-  enabled: boolean;
-  minGapMs: string;
 }
 
 // settings.ducking — the two smooth_add depths radio.liq reads at mixer
@@ -332,17 +308,13 @@ export interface DjBehaviourValues {
 }
 
 export interface FormState {
-  crossfadeDuration: string;
   ducking: DuckingForm;
   maxTrackSeconds: string;
   /** Station default for the show-boundary fade (#1574). A show's own
    *  tri-state overrides it; this level is only ever on or off. */
   fadeAtShowEnd: boolean;
-  silenceTrim: SilenceTrimForm;
-  transitions: TransitionsForm;
   archive: ArchiveForm;
   stream: StreamForm;
-  loudness: LoudnessForm;
   station: string;
   stationDescription: string;
   timezone: string;
@@ -381,7 +353,6 @@ export interface SettingsData {
      *  mirrored schema rather than being respelled here, so a value added to it
      *  reaches this form. */
     jingleRotate?: JingleRotateOwner;
-    crossfadeDuration?: number;
     ducking?: { voice?: number; intro?: number };
     maxTrackSeconds?: number;
     minTrackSeconds?: number;
@@ -390,12 +361,7 @@ export interface SettingsData {
      *  the schedule is edited from the Backup panel, beside Export/Restore, and
      *  posts `{ backups }` through the same POST /settings chokepoint. */
     backups?: { cadence?: string; keep?: number };
-    transitions?: {
-      pairDrain?: boolean;
-      stemBlends?: boolean;
-      effects?: Partial<Record<TransitionEffect, boolean>>;
-    };
-    audio?: { embeddings?: boolean; vocalActivity?: boolean; stemCache?: boolean; stemCacheGb?: number };
+    audio?: { embeddings?: boolean; vocalActivity?: boolean };
     stream?: {
       opusEnabled?: boolean;
       opusBitrate?: number;
@@ -411,8 +377,6 @@ export interface SettingsData {
       countryHeader?: string;
       geoipDbPath?: string;
     };
-    loudness?: { targetLufs?: number; maxBoostDb?: number; source?: LoudnessSource };
-    silenceTrim?: { enabled?: boolean; minGapMs?: number };
     /** Absent on a settings.json predating the key — false, like the
      *  controller's own coercion. */
     fadeAtShowEnd?: boolean;

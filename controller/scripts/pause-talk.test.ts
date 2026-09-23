@@ -26,7 +26,7 @@ test('pause-talk is an explicit show opt-in with an inclusive duration threshold
 // in one place only and the segment plays under a fading song.
 test('the silence covers the incoming crossfade, the release latency and the exit ramp', () => {
   const voiceWindowMs = 31_250;
-  const incomingCrossMs = 10_000;   // station default crossfadeDuration
+  const incomingCrossMs = 10_000;   // an arbitrary handover length
   assert.equal(
     silenceDurationMs({ voiceWindowMs, incomingCrossMs }),
     incomingCrossMs

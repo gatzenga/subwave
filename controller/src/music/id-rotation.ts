@@ -3,12 +3,10 @@
 // acknowledging it only after every write succeeds. Older JSON handoffs remain
 // readable so an interrupted run from the first implementation can recover.
 
-import { existsSync } from 'node:fs';
-import { readFile, rename, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { config } from '../config.js';
 import * as db from './library-db.js';
-import * as stemCache from './stem-cache.js';
 import * as subsonic from './subsonic.js';
 import * as blocklist from './blocklist.js';
 import * as playlistRecipes from './playlist-recipes.js';
@@ -43,16 +41,6 @@ async function readManifest(): Promise<RotationManifest | null> {
   return parsed;
 }
 
-async function moveStemDirs(map: ReadonlyMap<string, string>): Promise<void> {
-  for (const [old, neu] of map) {
-    try {
-      const from = stemCache.dirFor(old);
-      const to = stemCache.dirFor(neu);
-      if (existsSync(from) && !existsSync(to)) await rename(from, to);
-    } catch { /* best-effort cache: a miss can be recomputed */ }
-  }
-}
-
 // A complete walk calls this before pruning. No filesystem write is needed to
 // make recovery possible: adoptRotatedIds commits its journal with the rows.
 export async function adoptAndPrune(
@@ -61,7 +49,6 @@ export async function adoptAndPrune(
   const { adopted } = db.adoptRotatedIds(liveIds);
   const pending = db.pendingIdRotations();
   if (pending.size) {
-    await moveStemDirs(pending);
     // Also emitted when retrying a walk that already committed its adoption.
     // A stopped child may have missed the previous notification entirely.
     reportRotation({ adopted });
@@ -95,8 +82,6 @@ async function applyRotation(): Promise<RotationApplyResult> {
     ...db.pendingIdRotations(),
   ]);
   if (!manifest && !trackMap.size) return { applied: false, complete: true };
-  await moveStemDirs(trackMap);
-
   // The journal proves song IDs only. Confirm playlist transforms against the
   // live index; on an outage apply track IDs but keep the map and hold sync.
   // Boot before Navidrome is ready is a normal reason to defer this half.

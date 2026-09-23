@@ -767,7 +767,7 @@ function toAdminRow(s: AdminSong) {
     // Lets getLocalPath() use the on-disk file when MUSIC_LIBRARY_PATH is mounted.
     path: s.path ?? null,
     // Deliberately NOT `?? null`: an absent key drops out of the JSON round trip
-    // and stays undefined, telling applyLoudnessGain to re-fetch the song.
+    // and stays undefined. Informational only — autocue levels on air.
     replayGain: s.replayGain,
     moods: tag?.moods ?? [],
     energy: tag?.energy ?? null,
@@ -850,8 +850,8 @@ router.post('/dj/queue-track', requireAdmin, async (req, res) => {
     // Explicit operator action — bypass the request/AI dedup guard (#619) so a
     // deliberate manual queue always fires, even for an already-queued track.
     //
-    // `requestedBy: 'studio'` earns the four air-path exemptions (length cap,
-    // show-boundary cut, bed reason, sub-crossfade warning); `operator: true`
+    // `requestedBy: 'studio'` earns the air-path exemptions (show-boundary
+    // cut, bed reason, the seam a pause-talk break would take); `operator: true`
     // marks it as an operator push rather than an ordinary queued track.
     const queuePosition = await queue.push({
       track, requestedBy: 'studio', operator: true, allowDuplicate: true,

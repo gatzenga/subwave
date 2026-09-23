@@ -1,8 +1,7 @@
 // Show-boundary fade policy (#1574): whether an autonomous pick that would run
-// past the next show change is cut there, and where. The cut rides the existing
-// #447 `liq_cue_out` stamp (earliest-wins in subsonic.getAnnotatedUri) — never a
-// second cue writer, since the cap, the silence trim and a stem blend all cut the
-// same tail. The scan takes `minuteAt`/`keyAt` so it stays pure; the impure
+// past the next show change is cut there, and where. The cut is the one
+// `liq_cue_out` the controller still sends (subsonic.getAnnotatedUri); autocue
+// owns every other end. The scan takes `minuteAt`/`keyAt` so it stays pure; the impure
 // wrappers are at the bottom.
 
 import { zonedParts } from '../time.js';

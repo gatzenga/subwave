@@ -106,13 +106,11 @@ test('pick-criteria → criteria is unchanged, all four numbered rules intact', 
   assert.ok(c.endsWith('4. INTEREST — prefer something that creates a moment, not the most generic option.'));
 });
 
-test('pick-criteria → effects keeps every transition the schema enum accepts', () => {
-  const fx = instruction('pick-criteria', 'effects');
-  // Prompt and enum must offer the same set, or a coached transition is
-  // rejected by the schema and an accepted one is never used.
-  for (const t of ['washout', 'loop', 'sweep', 'dissolve', 'chop', 'blend', 'normal']) {
-    assert.ok(fx.includes(`"${t}"`), `effects coaching never mentions "${t}"`);
-  }
+test('pick-criteria carries no transition coaching — the handover is autocue\'s', () => {
+  // The picker used to choose a transition effect per pick. It chooses songs
+  // now and nothing else; radio.liq's autocue decides the handover. A missing
+  // section throws, which is exactly the assertion.
+  assert.throws(() => instruction('pick-criteria', 'effects'));
 });
 
 console.log('\nthe two discovery-budget variants stay in step:');

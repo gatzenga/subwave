@@ -103,20 +103,9 @@ bootstrap_state_dirs() {
 	local sub
 	state_prepare_dir "$root"
 	state_prepare_dir "$dir"
-	# stems + transitions are the analyzer's, and the only two dirs worth
-	# relocating to a bigger disk — a bind mount there lands root-owned 755,
-	# which the analyzer cannot write without this chmod.
-	for sub in voice voices archive jingles logs sessions sfx stems transitions; do
+	for sub in voice voices archive jingles logs sessions sfx; do
 		state_prepare_dir "$dir/$sub"
 	done
-	# A RELOCATED stem cache (SUBWAVE_STEMS_DIR — the container path of the
-	# mount; compose sets it from STEMS_DIR, AIO operators pass -e) sits
-	# outside $dir, so the loop above never reaches it and the mount would
-	# keep its root-owned 755. Per-station subdirs under it are created by the
-	# analyzer itself, which inherits this 777.
-	if [ -n "${SUBWAVE_STEMS_DIR:-}" ]; then
-		state_prepare_dir "$SUBWAVE_STEMS_DIR"
-	fi
 	# Liquidsoap's reload_mode="watch" playlists need the files to exist.
 	state_prepare_file "$dir/auto.m3u" 666
 	state_prepare_file "$dir/jingles.m3u" 666
@@ -289,7 +278,7 @@ warn_if_state_unmounted() {
 # (`subwave-analyzer${ANALYZER_HEAVY:+-heavy}`). The AIO has no analyzer
 # service to select — CLAP and Demucs are baked into the venv at build time or
 # they are not — so the variable is inert here by construction. Operators set
-# it, see no stem-transitions card, and conclude the feature is broken (#1300
+# it, see no vocal-activity results, and conclude the feature is broken (#1300
 # bug 9); the caveat was documented (docs/unraid.md, the doctor) but nothing
 # said it at the boot right after they set it.
 #
@@ -315,7 +304,7 @@ warn_if_analyzer_heavy_ignored() {
 	log "  It is a docker-compose variable that picks the analyzer service's"
 	log "  image tag. The all-in-one image has no analyzer service — CLAP and"
 	log "  Demucs are baked in at build time, and this build does not have them."
-	log "  Sounds-like search, vocal-aware timing and stem transitions will stay"
+	log "  Sounds-like search and vocal-aware timing will stay"
 	log "  unavailable no matter what this variable is set to."
 	log "  To get them, change this container's IMAGE to:"
 	log "    ghcr.io/perminder-klair/subwave-aio-heavy"

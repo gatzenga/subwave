@@ -143,7 +143,6 @@ test('a converted key reports at the path SettingsPanel keys its inputs off', as
   // (<SettingsFieldError path="…" />), so a change here is a change to a
   // contract with the browser — and one nothing else would catch.
   const cases: Array<[Record<string, unknown>, string]> = [
-    [{ crossfadeDuration: 999 }, 'crossfadeDuration'],
     [{ maxTrackSeconds: -5 }, 'maxTrackSeconds'],
     [{ stream: { bitrate: 7 } }, 'stream.bitrate'],
     [{ stream: { opusBitrate: 1 } }, 'stream.opusBitrate'],

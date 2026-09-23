@@ -40,8 +40,6 @@ import { skillEligible } from '../skills/eligibility.js';
 import { getStationTimezone, onStationTimezoneChange } from '../time.js';
 import { withTrace, pruneOldEvents } from '../observability/events.js';
 import * as archives from './archives.js';
-import * as stemCacheStore from '../music/stem-cache.js';
-import * as stemBlendStore from './stem-blend.js';
 import * as doctor from '../doctor.js';
 import * as backup from '../backup/scheduled.js';
 
@@ -395,9 +393,7 @@ async function refreshAutoPlaylistInner() {
 
   // The track-length window, never-starve: this coast is the last dead-air
   // guard, so a window that would empty the pool is skipped. 0/null at either
-  // end leaves that end open. The cap still rides out as a liq_cue_out stamp
-  // below — that is the backstop for what never-starve lets through, not the
-  // mechanism any more.
+  // end leaves that end open. A selection filter only — nothing is cut on air.
   if (minDurationSec || maxDurationSec) {
     replacePool(applyTrackWindow(pool, { min: minDurationSec, max: maxDurationSec }, { starve: false }));
   }
@@ -409,20 +405,9 @@ async function refreshAutoPlaylistInner() {
     if (allowed.length) replacePool(allowed);
   }
 
-  // This fallback bypasses the drain, so it has to stamp what the drain would:
-  // loudness gain (same resolver, so both paths level identically), the
-  // max-track cue_out cap (#447) and the silence trim (music/silence-trim.ts).
-  // No loudness / off / unmeasured → no stamp → unity and an untouched entry.
-  for (const t of pool) await queue.applyLoudnessGain(t);
-
-  // No measured cue points: autocue trims these in the mixer, from the audio.
-  // Same reason as the live drain (broadcast/queue.ts) — its `start_next` is
-  // computed against its own cue_out, so a second opinion from here moves the
-  // end of the track out from under the handover. The length cap stays, being a
-  // decision rather than a measurement.
-  const lines = ['#EXTM3U', ...pool.map((t: any) =>
-    subsonic.getAnnotatedUri(t, { maxDurationSec })
-  )];
+  // No cue points and no gain: autocue levels and trims these in the mixer,
+  // from the audio, exactly as it does the live drain's picks.
+  const lines = ['#EXTM3U', ...pool.map((t: any) => subsonic.getAnnotatedUri(t))];
   // Atomic replace: Liquidsoap watches this file (reload_mode="watch"), so an
   // in-place write can trigger a reload of a truncated playlist.
   await writeFileAtomic(config.liquidsoap.autoPlaylist, lines.join('\n'));
@@ -955,37 +940,6 @@ async function cleanup() {
     }
   } catch (err) {
     queue.log('error', `Archive retention failed: ${err.message}`);
-  }
-  // Stem cache sweep — keep the per-track Demucs stem windows inside the
-  // operator's byte budget (feature: stem-blend transitions), evicting by the
-  // music/stem-priority.ts ranking rather than by age. The analysis pass
-  // sweeps after itself too; this catches lazily-added dirs.
-  try {
-    const { removed, freedBytes, failedDirs, overBudgetBytes } = await stemCacheStore.sweep();
-    if (removed) {
-      queue.log('scheduler',
-        `Stem cache: evicted ${removed} track dir(s) (${Math.round(freedBytes / 1_000_000)} MB freed)`);
-    }
-    // A sweep that couldn't reach the budget is an operator problem, not a
-    // no-op (#1257) — say so every hour it persists. Usual cause: the
-    // controller can't delete what the analyzer wrote (state/stems ownership).
-    if (overBudgetBytes > 0) {
-      const budgetGb = settings.get()?.audio?.stemCacheGb ?? 15;
-      queue.log('error',
-        `Stem cache: still ${(overBudgetBytes / 1024 ** 3).toFixed(1)} GB over its ${budgetGb} GB budget after the sweep` +
-        (failedDirs ? ` — ${failedDirs} dir delete(s) failed; check ownership/permissions on state/stems` : ''));
-    }
-  } catch (err) {
-    queue.log('error', `Stem cache sweep failed: ${err.message}`);
-  }
-  // Rendered transition clips are single-use, so anything over an hour old is
-  // an orphan — except clips still queued for a seam that hasn't aired, which
-  // can legitimately out-age the window.
-  try {
-    const removed = await stemBlendStore.cleanupOldClips(queue.pendingClipPaths());
-    if (removed) queue.log('scheduler', `Transitions: removed ${removed} orphaned clip(s)`);
-  } catch (err) {
-    queue.log('error', `Transition clip sweep failed: ${err.message}`);
   }
 }
 

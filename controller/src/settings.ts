@@ -1,7 +1,7 @@
 // Durable settings — overrides for values that have static defaults in code.
 // Stored at <stateDir>/settings.json. Some apply live (weather location,
 // DJ personas, shows); others require a Liquidsoap restart (jingle frequency,
-// crossfade duration).
+// ducking depths).
 //
 // This module is the public barrel for the settings layer. It owns the two
 // operations that touch the settings file — load() (lenient, never throws, so a
@@ -39,8 +39,6 @@ import {
   KOKORO_LANG_RE,
   KOKORO_VOICE_RE,
   LLM_PROVIDERS,
-  LOUDNESS_SOURCES,
-  LoudnessSource,
   MOOD_PERIODS,
   PERIOD_MOOD_DEFAULTS,
   SEARCH_PROVIDERS,
@@ -72,7 +70,6 @@ import {
   normalizeTtsGainMap,
   normalizeTtsSpeedMap,
   takeoverShowId,
-  TRANSITION_EFFECTS,
   validateTtsCorrectionsStrict,
 } from './settings/vocab.js';
 import {
@@ -130,7 +127,6 @@ import {
   ICECAST_LISTENER_AUTH_PATH,
   LIQ_ARCHIVE_BITRATE_PATH,
   LIQ_ARCHIVE_ENABLED_PATH,
-  LIQ_CROSSFADE_PATH,
   LIQ_JINGLE_RATIO_PATH,
   LIQ_OPUS_ENABLED_PATH,
   LIQ_STREAM_BITRATE_PATH,
@@ -154,7 +150,6 @@ export {
   KOKORO_VOICE_LANGUAGES,
   LINK_STYLES,
   LLM_PROVIDERS,
-  LOUDNESS_SOURCES,
   MAX_OUTPUT_TOKENS_MAX,
   MAX_OUTPUT_TOKENS_MIN,
   MOODS_LIMIT,
@@ -177,7 +172,6 @@ export {
   SHOW_TOPIC_MAX,
   SOUL_MAX,
   TONE_DIALS,
-  TRANSITION_EFFECTS,
   TTS_CORRECTIONS_LIMIT,
   TTS_ENGINES,
   TTS_GAIN_CLAMP_DB,
@@ -231,7 +225,6 @@ export {
   effectiveFrequency,
   effectiveMaxTrackSec,
   effectiveMinTrackSec,
-  effectsActive,
   getActivePersona,
   getEffectivePersona,
   getOnAirRoster,
@@ -246,11 +239,9 @@ export {
   spokenProperNounDirective,
 } from './settings/persona.js';
 export { writeLiquidsoapSettings } from './settings/liquidsoap.js';
-export { effectEnabled, enabledEffects } from './settings/transition-effects.js';
 export type {
   DjPromptEntry,
   EraWindow,
-  LoudnessSource,
   NormalizedShow,
   ScheduleOverride,
 } from './settings/vocab.js';
@@ -393,7 +384,6 @@ export async function load() {
     // and an unrecognised owner here would decide whether TWO rotates run.
     // Anything but the explicit opt-in reads as the mixer (#1619).
     jingleRotate: jingleRotateOwner(stored),
-    crossfadeDuration: stored.crossfadeDuration ?? DEFAULTS.crossfadeDuration,
     // Bounded here as well as at the save path: a hand-edited settings.json is
     // load()'s input, so it repairs rather than throws — and an out-of-range `p`
     // reaches radio.liq as a handoff file, where 3.0 is a music BOOST under the
@@ -526,23 +516,6 @@ export async function load() {
         stored.stream.geoipDbPath.trim().length <= STREAM_GEOIP_DB_PATH_MAX
           ? stored.stream.geoipDbPath.trim()
           : DEFAULTS.stream.geoipDbPath,
-    },
-    loudness: {
-      targetLufs:
-        typeof stored.loudness?.targetLufs === 'number' &&
-        stored.loudness.targetLufs >= BOUNDS.loudnessTargetLufs.min &&
-        stored.loudness.targetLufs <= BOUNDS.loudnessTargetLufs.max
-          ? stored.loudness.targetLufs
-          : DEFAULTS.loudness.targetLufs,
-      maxBoostDb:
-        typeof stored.loudness?.maxBoostDb === 'number' &&
-        stored.loudness.maxBoostDb >= BOUNDS.loudnessMaxBoostDb.min &&
-        stored.loudness.maxBoostDb <= BOUNDS.loudnessMaxBoostDb.max
-          ? stored.loudness.maxBoostDb
-          : DEFAULTS.loudness.maxBoostDb,
-      source: LOUDNESS_SOURCES.includes(stored.loudness?.source)
-        ? (stored.loudness.source as LoudnessSource)
-        : DEFAULTS.loudness.source,
     },
     weather: {
       lat: stored.weather?.lat ?? DEFAULTS.weather.lat,
@@ -941,10 +914,6 @@ export async function load() {
     audio: {
       embeddings: typeof stored.audio?.embeddings === 'boolean' ? stored.audio.embeddings : DEFAULTS.audio.embeddings,
       vocalActivity: typeof stored.audio?.vocalActivity === 'boolean' ? stored.audio.vocalActivity : DEFAULTS.audio.vocalActivity,
-      stemCache: typeof stored.audio?.stemCache === 'boolean' ? stored.audio.stemCache : DEFAULTS.audio.stemCache,
-      stemCacheGb: Number.isFinite(stored.audio?.stemCacheGb) && stored.audio.stemCacheGb > 0
-        ? stored.audio.stemCacheGb
-        : DEFAULTS.audio.stemCacheGb,
       analyzeQuietOnly:
         typeof stored.audio?.analyzeQuietOnly === 'boolean'
           ? stored.audio.analyzeQuietOnly
@@ -952,19 +921,6 @@ export async function load() {
       analyzeQuietMinutes: Number.isFinite(stored.audio?.analyzeQuietMinutes)
         ? Math.max(1, Math.min(120, Math.floor(stored.audio.analyzeQuietMinutes)))
         : DEFAULTS.audio.analyzeQuietMinutes,
-    },
-    transitions: {
-      pairDrain: typeof stored.transitions?.pairDrain === 'boolean' ? stored.transitions.pairDrain : DEFAULTS.transitions.pairDrain,
-      stemBlends: typeof stored.transitions?.stemBlends === 'boolean' ? stored.transitions.stemBlends : DEFAULTS.transitions.stemBlends,
-      // Per-effect kill switches (#1565) — same absent-means-default repair as
-      // every sibling, and the default is `true`, so a stored block missing a
-      // field (or missing entirely) normalises to the whole kit on.
-      effects: Object.fromEntries(TRANSITION_EFFECTS.map(k => [
-        k,
-        typeof stored.transitions?.effects?.[k] === 'boolean'
-          ? stored.transitions.effects[k]
-          : DEFAULTS.transitions.effects[k],
-      ])) as typeof DEFAULTS.transitions.effects,
     },
     sfx: {
       enabled: typeof stored.sfx?.enabled === 'boolean' ? stored.sfx.enabled : DEFAULTS.sfx.enabled,
@@ -975,17 +931,6 @@ export async function load() {
       thresholdSec: Number.isFinite(stored.beds?.thresholdSec) ? stored.beds.thresholdSec : DEFAULTS.beds.thresholdSec,
       crossSec: Number.isFinite(stored.beds?.crossSec) ? stored.beds.crossSec : DEFAULTS.beds.crossSec,
       tailSec: Number.isFinite(stored.beds?.tailSec) ? stored.beds.tailSec : DEFAULTS.beds.tailSec,
-    },
-    silenceTrim: {
-      enabled:
-        typeof stored.silenceTrim?.enabled === 'boolean'
-          ? stored.silenceTrim.enabled
-          : DEFAULTS.silenceTrim.enabled,
-      minGapMs: Number.isInteger(stored.silenceTrim?.minGapMs) &&
-        stored.silenceTrim.minGapMs >= BOUNDS.silenceTrimMinGapMs.min &&
-        stored.silenceTrim.minGapMs <= BOUNDS.silenceTrimMinGapMs.max
-        ? stored.silenceTrim.minGapMs
-        : DEFAULTS.silenceTrim.minGapMs,
     },
     scrobble: {
       lastfm: {
@@ -1031,9 +976,8 @@ export async function load() {
         : DEFAULTS.picker.albumHours,
       // Minimum-track-length floor (#1573). Same lenient clamp, and the same
       // reason it has to be listed HERE and not just in DEFAULTS: this block
-      // composes explicitly. The crossfade floor is NOT re-applied on load —
-      // load is lenient by contract, and a crossfade lowered after the fact
-      // must not delete a floor the operator set deliberately.
+      // composes explicitly. The minimum-floor check is NOT re-applied on load —
+      // load is lenient by contract.
       minTrackLengthSeconds:
         coerceMinTrackLengthSeconds(stored.picker?.minTrackLengthSeconds, false)
         ?? DEFAULTS.picker.minTrackLengthSeconds,
@@ -1102,13 +1046,6 @@ export async function update(patch) {
       restart = true;
     }
   }
-  if ('crossfadeDuration' in patch) {
-    const v = parseSettingsPatchKey<number>('crossfadeDuration', patch.crossfadeDuration);
-    if (v !== cur.crossfadeDuration) {
-      next.crossfadeDuration = v;
-      restart = true;
-    }
-  }
   if ('ducking' in patch) {
     const dk = parseSettingsPatchKey<{ voice?: number; intro?: number }>('ducking', patch.ducking);
     // Per-field change gating, like every other liquidsoap_*.txt key: the panel
@@ -1132,11 +1069,8 @@ export async function update(patch) {
     );
     if (!parsedCap.success) throw new Error(parsedCap.error.issues[0].message);
     const v = parsedCap.data;
-    // Non-zero caps must clear the crossfade-relative floor (0 = unlimited stays
-    // allowed): the track crossfades out starting crossfadeDuration before the
-    // cap, so a shorter cap is degenerate / leaves no solo airtime. Uses next's
-    // crossfade, already applied above if this same patch changed it.
-    const floor = minTrackSeconds(next);
+    // Non-zero caps must clear the floor (0 = unlimited stays allowed).
+    const floor = minTrackSeconds();
     if (v !== 0 && v < floor) {
       throw new Error(
         `maxTrackSeconds must be 0 (no limit) or at least ${floor}s`,
@@ -1245,14 +1179,6 @@ export async function update(patch) {
     // legitimate save, which is why there is no truthiness guard.
     for (const k of ['countryHeader', 'geoipDbPath'] as const) {
       if (st[k] !== undefined) (next.stream as Record<string, unknown>)[k] = st[k];
-    }
-  }
-  if ('loudness' in patch) {
-    // Read live by queue.applyLoudnessGain when each track is annotated — no
-    // Liquidsoap file, no restart. Applies from the next queued track.
-    const lo = parseSettingsPatchKey<Record<string, unknown>>('loudness', patch.loudness);
-    for (const k of ['targetLufs', 'maxBoostDb', 'source'] as const) {
-      if (lo[k] !== undefined) (next.loudness as Record<string, unknown>)[k] = lo[k];
     }
   }
   if ('weather' in patch) {
@@ -1617,14 +1543,10 @@ export async function update(patch) {
       // (it also serves albumHours, where a fraction is a real answer), so the
       // rounding lands here rather than widening that shared helper.
       const v = Math.round(pk.minTrackLengthSeconds as number);
-      // A positive FLOOR must clear the crossfade-derived minimum, the same
-      // figure maxTrackSeconds is bounded by above and for the same reason: a
-      // track shorter than 2x the crossfade never gets solo airtime, so the
-      // smallest floor worth expressing is the one the mixer already imposes.
-      // 0 (= off) always stays allowed, which is what keeps an untouched
-      // station byte-identical. Uses next's crossfade, already applied above if
-      // this same patch changed it.
-      const floor = minTrackSeconds(next);
+      // A positive FLOOR must clear the same minimum maxTrackSeconds is bounded
+      // by (settings/store.ts minTrackSeconds). 0 (= off) always stays allowed,
+      // which is what keeps an untouched station byte-identical.
+      const floor = minTrackSeconds();
       if (v !== 0 && v < floor) {
         throw new Error(
           `picker.minTrackLengthSeconds must be 0 (no floor) or at least ${floor}s`,
@@ -1819,37 +1741,14 @@ export async function update(patch) {
     }
   }
   if ('audio' in patch) {
-    // stemCacheGb throws rather than silently ignoring, matching
-    // analyzeQuietMinutes: swallowing an out-of-range value meant the admin UI
-    // showed a saved budget the sweep was never using. Ceiling raised
-    // 500 → 1000 (#1257) — at the measured ~13 MB/track a 500 GB budget stops
-    // short of a ~50k-track library.
     const au = parseSettingsPatchKey<Record<string, unknown>>('audio', patch.audio);
     for (const k of [
       'embeddings',
       'vocalActivity',
-      'stemCache',
-      'stemCacheGb',
       'analyzeQuietOnly',
       'analyzeQuietMinutes',
     ] as const) {
       if (au[k] !== undefined) (next.audio as Record<string, unknown>)[k] = au[k];
-    }
-  }
-  if ('transitions' in patch) {
-    const tr = parseSettingsPatchKey<Record<string, unknown>>('transitions', patch.transitions);
-    for (const k of ['pairDrain', 'stemBlends'] as const) {
-      if (tr[k] !== undefined) (next.transitions as Record<string, unknown>)[k] = tr[k];
-    }
-    // Nested block, so it needs its own per-field loop like scrobble.* does: the
-    // flat copy above would replace the whole `effects` object, and a patch that
-    // sends only `{ dissolve: false }` would silently reset the other five to
-    // whatever the applier happened to write.
-    const fx = tr.effects as Record<string, unknown> | undefined;
-    if (fx !== undefined) {
-      for (const k of TRANSITION_EFFECTS) {
-        if (fx[k] !== undefined) (next.transitions.effects as Record<string, unknown>)[k] = fx[k];
-      }
     }
   }
   // On the shared schema (#1348). The block schemas keep the branches' own
@@ -1883,18 +1782,6 @@ export async function update(patch) {
     }
     if (bd.tailSec !== undefined) {
       next.beds.tailSec = bd.tailSec;
-    }
-  }
-  if ('silenceTrim' in patch) {
-    const st = parseSettingsPatchKey<{
-      enabled?: boolean;
-      minGapMs?: number;
-    }>('silenceTrim', patch.silenceTrim);
-    if (st.enabled !== undefined) {
-      next.silenceTrim.enabled = st.enabled;
-    }
-    if (st.minGapMs !== undefined) {
-      next.silenceTrim.minGapMs = st.minGapMs;
     }
   }
   if ('ui' in patch) {
@@ -2070,7 +1957,6 @@ export async function ensureLiquidsoapSettingsFile() {
   const s = await load();
   if (
     !existsSync(LIQ_JINGLE_RATIO_PATH) ||
-    !existsSync(LIQ_CROSSFADE_PATH) ||
     !existsSync(LIQ_ARCHIVE_ENABLED_PATH) ||
     !existsSync(LIQ_ARCHIVE_BITRATE_PATH) ||
     !existsSync(LIQ_OPUS_ENABLED_PATH) ||

@@ -13,7 +13,6 @@ assert.equal('say' in PICK_SCHEMA.shape, false,
 const picked = PICK_SCHEMA.parse({
   id: 'selected-track',
   reason: 'fresh artist',
-  transition: null,
   say: 'this must be ignored as an unknown field',
 });
 assert.equal('say' in picked, false,
@@ -21,8 +20,8 @@ assert.equal('say' in picked, false,
 
 assert.ok('reason' in PICK_SCHEMA.shape,
   'selection keeps its internal rationale field');
-assert.ok('transition' in PICK_SCHEMA.shape,
-  'selection keeps its transition decision field');
+assert.equal('transition' in PICK_SCHEMA.shape, false,
+  'selection offers no transition field — autocue owns the handover');
 
 assert.doesNotMatch(pickSystem(), /the "say" link/,
   'the selection prompt must not instruct the removed listener-facing field');

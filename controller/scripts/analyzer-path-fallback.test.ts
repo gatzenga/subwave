@@ -8,7 +8,6 @@ interface SeenRequest {
   embed?: boolean;
   vocal?: boolean;
   complete?: boolean;
-  stems_dir?: string;
   embedding_only?: boolean;
 }
 
@@ -79,7 +78,6 @@ test('a sidecar path-unavailable response retries once by URL without shared-pat
       embed: true,
       vocal: true,
       complete: false,
-      stems_dir: '/var/sub-wave/stems/remote-track',
       embedding_only: true,
     },
   );
@@ -92,13 +90,11 @@ test('a sidecar path-unavailable response retries once by URL without shared-pat
     embed: true,
     vocal: true,
     complete: false,
-    stems_dir: '/var/sub-wave/stems/remote-track',
     embedding_only: true,
   });
   assert.equal(typeof requests[1].url, 'string');
   assert.equal(requests[1].path, undefined);
   assert.equal(requests[1].complete, undefined, 'the URL downloader must determine completeness itself');
-  assert.equal(requests[1].stems_dir, undefined, 'a remote analyzer cannot write controller-local stems');
   assert.equal(requests[1].embed, true);
   assert.equal(requests[1].vocal, true);
   assert.equal(requests[1].embedding_only, true);

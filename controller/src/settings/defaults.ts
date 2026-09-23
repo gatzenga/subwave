@@ -8,16 +8,12 @@ import { ARTIST_VARIETY_WINDOW } from '../broadcast/dj-agent/artist-guard.js';
 import {
   BEDS_CROSS_SEC_BOUNDS,
   BEDS_TAIL_SEC_BOUNDS,
-  SILENCE_TRIM_MIN_GAP_MS_BOUNDS,
   BACKUP_KEEP_BOUNDS,
   BACKUP_KEEP_DEFAULT,
   BEDS_THRESHOLD_SEC_BOUNDS,
-  CROSSFADE_DURATION_BOUNDS,
   DUCK_DEPTH_BOUNDS,
   HANDOVER_OFFSET_BOUNDS,
   JINGLE_RATIO_BOUNDS,
-  LOUDNESS_MAX_BOOST_DB_BOUNDS,
-  LOUDNESS_TARGET_LUFS_BOUNDS,
   type JingleRotateOwner,
 } from '../schemas/settings.js';
 import { SHOW_MAX_TRACK_SECONDS, SHOW_MIN_TRACK_LENGTH_MAX } from '../schemas/show.js';
@@ -27,7 +23,6 @@ import {
   FESTIVAL_DEFAULTS,
   HLS_SEGMENT_COUNTS,
   HLS_SEGMENT_DURATIONS,
-  LoudnessSource,
   MOOD_DEFAULTS,
   MP3_BITRATES,
   OPUS_BITRATES,
@@ -49,7 +44,6 @@ export const DEFAULTS = {
   // rather than the only mode. Needs a mixer restart either way — the ratio
   // file is read once at startup.
   jingleRotate: 'mixer' as JingleRotateOwner,
-  crossfadeDuration: 10.0, // seconds
   // How far the music drops under each spoken layer — `smooth_add`'s `p`, so
   // the number is what is LEFT UP, not the cut: 0.22 is ~-13 dB, 0.30 is ~-10.
   // These are exactly the literals radio.liq carried before they were settings,
@@ -138,16 +132,6 @@ export const DEFAULTS = {
     // over the setting, like every other config path.
     countryHeader: '',
     geoipDbPath: '',
-  },
-  // Per-track loudness normalisation (music/mix.ts gainForLoudness), read live at
-  // annotate time. maxBoostDb caps the upward direction only, and the boost is
-  // further limited by the track's own measured peak headroom. `source` picks the
-  // figure: embedded ReplayGain tags (whole-file R128) vs the analyzer's measured
-  // LUFS (leading window only) (#998).
-  loudness: {
-    targetLufs: -14,
-    maxBoostDb: 6,
-    source: 'replaygain-then-measured' as LoudnessSource,
   },
   weather: {
     // The ONLY location data Open-Meteo sees, and the only kind that never
@@ -528,14 +512,6 @@ export const DEFAULTS = {
     // vocal-absence intro detector. Needs the demucs stack; expensive, so opt-in.
     // ANALYZE_VOCAL_ACTIVITY=1 also enables it.
     vocalActivity: false,
-    // Keep the Demucs stems the analysis pass already computes (head + tail
-    // windows) as FLAC under state/stems/<id>/, so a transition render is a fast
-    // mix instead of a fresh separation. Needs the demucs stack like
-    // vocalActivity; ~13-25 MB per track (#1257), swept to stemCacheGb by the
-    // music/stem-priority.ts ranking (lowest value out first, mtime to break
-    // ties) — the same order the backfill scans in.
-    stemCache: false,
-    stemCacheGb: 15,
     // Pause the analysis pass while anyone is listening, resuming once the stream
     // has been listener-free for analyzeQuietMinutes (#1099). Checked between
     // tracks inside runAnalysisPass, so it covers the tagger child, `npm run
@@ -543,29 +519,6 @@ export const DEFAULTS = {
     // the bypass is turning this off. ANALYZE_QUIET_ONLY=1 also enables it.
     analyzeQuietOnly: false,
     analyzeQuietMinutes: 10,
-  },
-  // Transition scheduling + stem-blend rendering (docs/stem-transitions-research.md).
-  transitions: {
-    // Hold each queued pick unsent until its successor is known (or the on-air
-    // track nears its end), so its exit stamps — adaptive crossfade length, and
-    // stem-blend clips — can be sized for the actual pair (#749). Kill-switch: off
-    // reverts to the eager drain.
-    pairDrain: true,
-    // Needs pairDrain plus the heavy analyzer with a warmed stem cache.
-    stemBlends: false,
-    // Per-effect kill switches (#1565). All on: the kit is what DJ mode IS, and
-    // before this block the only way to drop one gesture was to turn djMode off
-    // and lose all six. Resolved through broadcast/transition-policy.ts, which
-    // reads an absent or malformed block as "all on" — so this default and a
-    // station that has never written the block are the same station.
-    effects: {
-      sweep: true,
-      washout: true,
-      blend: true,
-      dissolve: true,
-      chop: true,
-      loop: true,
-    },
   },
   // When disabled, the segment-director agent is never shown the effect
   // catalogue, so it stops garnishing spoken breaks with stingers. The files stay
@@ -599,21 +552,6 @@ export const DEFAULTS = {
     // FR 5c). Sized INTO the bed rather than taken out of it, so this is the
     // quiet an operator hears at any crossSec — see bed-policy.bedLengthFor.
     tailSec: 3,
-  },
-  // Dead-air trim — cut near-silent runs off the head/tail of a track so a bad
-  // rip's leading blank or a long mastering gap doesn't air as silence
-  // (music/silence-trim.ts stamps liq_cue_in / liq_cue_out; radio.liq's
-  // cue_cut does the cutting). ON by default here: this station wants tight
-  // transitions out of the box, and a switch the operator has to find first is
-  // the wrong default for the one feature that decides how the seams sound.
-  // Upstream ships it off so an upgrade stays byte-identical; that does not
-  // apply to a fork with one operator. Controller-side only — no restart.
-  silenceTrim: {
-    enabled: true,
-    // Gaps shorter than this are left alone. A track legitimately opens a beat
-    // after zero, and a segued album's inter-track space is deliberate; only a
-    // gap the listener would call dead air is worth a cue point.
-    minGapMs: 1500,
   },
   // Each backend is independent, paste-only (no OAuth), and gated on listener
   // count > 0 at scrobble time — a null/unknown count is treated as zero, i.e.
@@ -677,7 +615,6 @@ export const BOUNDS = {
   // schemas/settings.ts and re-export here: a mirrored module may not import a
   // non-mirrored one, so the schema has to own the constant.
   jingleRatio: { ...JINGLE_RATIO_BOUNDS, type: 'int' },
-  crossfadeDuration: { ...CROSSFADE_DURATION_BOUNDS, type: 'float' },
   duckingVoice: { ...DUCK_DEPTH_BOUNDS, type: 'float' },
   duckingIntro: { ...DUCK_DEPTH_BOUNDS, type: 'float' },
   handoverOffsetMinutes: { ...HANDOVER_OFFSET_BOUNDS, type: 'int' },
@@ -690,10 +627,7 @@ export const BOUNDS = {
   // The FLOOR's ceiling (#1573), from the same schema module for the same
   // reason. Far lower than the cap's — see SHOW_MIN_TRACK_LENGTH_MAX.
   minTrackLengthSeconds: { min: 0, max: SHOW_MIN_TRACK_LENGTH_MAX, type: 'int' },
-  silenceTrimMinGapMs: { ...SILENCE_TRIM_MIN_GAP_MS_BOUNDS, type: 'int' },
   backupsKeep: { ...BACKUP_KEEP_BOUNDS, type: 'int' },
-  loudnessTargetLufs: { ...LOUDNESS_TARGET_LUFS_BOUNDS, type: 'float' },
-  loudnessMaxBoostDb: { ...LOUDNESS_MAX_BOOST_DB_BOUNDS, type: 'float' },
 };
 
 export const MP3_BITRATE_SET = new Set<number>(MP3_BITRATES);

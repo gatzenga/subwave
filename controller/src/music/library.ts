@@ -104,7 +104,7 @@ export function get(songId: string): any {
     bpm: t.bpm,
     musicalKey: t.musicalKey,
     introMs: t.introMs,
-    // queue.applyLoudnessGain's library-lookup fallback; absent = unity gain.
+    // Measured loudness — informational; autocue levels on air.
     loudnessLufs: t.loudnessLufs,
     peakDb: t.peakDb,
     // Acoustic surface for the agent picker's Subsonic-fallback path, kept

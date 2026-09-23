@@ -366,9 +366,6 @@ interface TrackAnalysisWrite {
   leadSilenceMs?: number | null;
   tailSilenceMs?: number | null;
   tailStartMs?: number | null;
-  // true stamps stems_at so the backfill scope drops the track. Pass true for a
-  // MISS too: the stamp records the attempt, not disk presence (migration 17).
-  stemsAttempted?: boolean;
 }
 
 // Stamps ANALYSIS_VERSION so resumable runs skip analysed rows and a bump
@@ -398,9 +395,6 @@ export function upsertTrackAnalysis(id: string, a: TrackAnalysisWrite): void {
         outro_json          = COALESCE(?, outro_json),
         tail_silence_ms     = COALESCE(?, tail_silence_ms),
         tail_start_ms       = COALESCE(?, tail_start_ms),
-        -- A pass with the stem cache off passes null and must not clear an
-        -- earlier stem pass's stamp.
-        stems_at            = COALESCE(?, stems_at),
         -- Success wipes the failure history: analyze_fail_count counts
         -- CONSECUTIVE failures.
         analyze_error       = NULL,
@@ -426,7 +420,6 @@ export function upsertTrackAnalysis(id: string, a: TrackAnalysisWrite): void {
       a.outro != null ? JSON.stringify(a.outro) : null,
       Number.isFinite(a.tailSilenceMs as number) ? Math.max(0, Math.round(a.tailSilenceMs as number)) : null,
       Number.isFinite(a.tailStartMs as number) ? Math.max(0, Math.round(a.tailStartMs as number)) : null,
-      a.stemsAttempted ? new Date().toISOString() : null,
       ANALYSIS_VERSION,
       id,
     );
@@ -529,18 +522,15 @@ export function analysisFailures(limit = 200): AnalysisFailureRow[] {
 
 // Drop the acoustic analysis so a --re-analyze can recompute it. `keepVocal`
 // preserves vocal_ranges_json when the slow Demucs pass won't be rerun.
-// `clearStems` is the mirror: only a pass that will rewrite stems may reset the
-// stamps, or the whole library re-separates when the cache is next enabled.
-export function clearAnalysis(opts: { keepVocal?: boolean; clearStems?: boolean } = {}): void {
+export function clearAnalysis(opts: { keepVocal?: boolean } = {}): void {
   const d = requireDb();
   const vocalCol = opts.keepVocal ? '' : ' vocal_ranges_json = NULL,';
-  const stemsCol = opts.clearStems ? ' stems_at = NULL,' : '';
   d.prepare(
     `UPDATE tracks SET bpm = NULL, musical_key = NULL, intro_ms = NULL,
       analysis_confidence = NULL, loudness_lufs = NULL, peak_db = NULL,
       structure_json = NULL, pace_json = NULL, beats_json = NULL, bars_json = NULL,
       key_ranges_json = NULL, outro_json = NULL,
-      lead_silence_ms = NULL, tail_silence_ms = NULL, tail_start_ms = NULL,${vocalCol}${stemsCol} analysis_version = NULL,
+      lead_silence_ms = NULL, tail_silence_ms = NULL, tail_start_ms = NULL,${vocalCol} analysis_version = NULL,
       audio_moods = NULL, audio_mood_scores_json = NULL,
       -- The failure history goes with the analysis it describes, or the tracks
       -- most in need of a retry would be the only ones skipped.

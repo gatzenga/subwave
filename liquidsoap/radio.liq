@@ -15,13 +15,15 @@ settings.log.file.path := "/var/log/liquidsoap/radio.log"
 # is the reason a hip-hop pair with a cold stop and a cold start no longer
 # collides for several seconds.
 #
-# amplify_behavior "amplify": autocue measures loudness on the same pass and
-# applies its own gain. It has to own this, not merely record it — autocue
-# DISABLES ITSELF on any track that arrives carrying an override in its
-# territory ("Override metadata detected … disabling autocue!"), and a
-# per-track liq_amplify stamp is exactly that. One measurement, one owner, or
-# no measurement at all.
-settings.autocue.amplify_behavior := "amplify"
+# Loudness comes from the same pass: autocue's default amplify_behavior is
+# "override", so the gain it measures is the one `amplify(override=
+# "liq_amplify")` applies further down. One measurement, one owner.
+#
+# What autocue must NOT touch is anything that is not a song. It registers on
+# EVERY decoded file, so the DJ's voice clips and the pause-talk silence would
+# be trimmed and loudness-normalised too — the voice would jump to the music's
+# -14 LUFS target, and a silence file can be cued down to nothing. Those carry
+# `liq_disable_autocue` (see no_autocue below and broadcast/queue.ts).
 enable_autocue_metadata()
 
 # Telnet server — the controller's only channel into the mixer (restart, skip,
@@ -109,7 +111,6 @@ jingle_now_on_air = ref(false)
 # Missing/garbage keeps the default, so an upgrade is byte-identical.
 
 jingle_ratio = ref(30)
-crossfade_duration = ref(10.0)
 # smooth_add's `p` on the two ducking layers (see the DUCKING block below).
 duck_voice = ref(0.22)
 duck_intro = ref(0.30)
@@ -136,33 +137,11 @@ stream_bitrate = ref(192)
 ogg_icy_metadata = ref(true)
 station_name = ref("SUB/WAVE")
 
-# DJ TRANSITION EFFECTS (sweep / washout / dissolve / chop / exit loop) — built
-# per-branch inside dj_transition below, on the OUTGOING track's source only.
-# Every envelope is a closure over source.elapsed() on its own branch, so it
-# holds in AUDIO time under any clock (wall-clock envelopes drift).
-#
-# Engine constraints, all measured — do not "simplify" past them:
-#   * v2.4.5 is the MINIMUM runtime; 2.4.4's O(n) clock scan pegs a core on
-#     every effect transition (see Dockerfile.broadcast).
-#   * comb, NOT echo: native `echo` (incl. ping_pong) type-checks then passes
-#     audio through bit-for-bit on 2.2.5 and 2.4.4.
-#   * filter.rc, NOT the SVF `filter` (unstable near sr/4, collapses to
-#     near-silence — hence the 9 kHz cap on every "open" cutoff) and NOT
-#     iir_filter/HPF ("Early computation of source content-type" crash).
-#     Re-run scripts/fx-render-test.sh before adding any other operator class
-#     inside the cross callback.
-
 if file.exists("#{state_dir}/liquidsoap_jingle_ratio.txt") then
   raw = string.trim(file.contents("#{state_dir}/liquidsoap_jingle_ratio.txt"))
   v = int_of_string(default=30, raw)
   # 0 is a valid value: jingles OFF (#997).
   if v >= 0 then jingle_ratio := v end
-end
-
-if file.exists("#{state_dir}/liquidsoap_crossfade.txt") then
-  raw = string.trim(file.contents("#{state_dir}/liquidsoap_crossfade.txt"))
-  v = float_of_string(default=10.0, raw)
-  if v >= 0.0 then crossfade_duration := v end
 end
 
 # Duck depths. `p` is the fraction of the music LEFT UP under a voice channel:
@@ -261,7 +240,7 @@ if file.exists("#{state_dir}/liquidsoap_station_name.txt") then
   if raw != "" then station_name := raw end
 end
 
-log("settings loaded: jingle_ratio=#{jingle_ratio()} crossfade_duration=#{crossfade_duration()} duck_voice=#{duck_voice()} duck_intro=#{duck_intro()} archive_enabled=#{archive_enabled()} archive_bitrate=#{archive_bitrate()} stream_bitrate=#{stream_bitrate()} opus_enabled=#{opus_enabled()} opus_bitrate=#{opus_bitrate()} flac_enabled=#{flac_enabled()} aac_enabled=#{aac_enabled()} aac_bitrate=#{aac_bitrate()} ogg_icy_metadata=#{ogg_icy_metadata()} station_name=#{station_name()}")
+log("settings loaded: jingle_ratio=#{jingle_ratio()} duck_voice=#{duck_voice()} duck_intro=#{duck_intro()} archive_enabled=#{archive_enabled()} archive_bitrate=#{archive_bitrate()} stream_bitrate=#{stream_bitrate()} opus_enabled=#{opus_enabled()} opus_bitrate=#{opus_bitrate()} flac_enabled=#{flac_enabled()} aac_enabled=#{aac_enabled()} aac_bitrate=#{aac_bitrate()} ogg_icy_metadata=#{ogg_icy_metadata()} station_name=#{station_name()}")
 
 # subhttp:<full-url> — whole-file download via curl (http.get.stream returns
 # spurious 522s on the Cloudflare-fronted Navidrome origin).
@@ -452,569 +431,9 @@ music = fallback(
 # crossfade out).
 music = cue_cut(music)
 
-# CROSSFADE TRANSITION — equal-amplitude blend across the full cross window.
-#
-# INVARIANT: fade.out/fade.in span the ENTIRE cross() buffer so the tracks curve
-# past each other at ~-6 dB midpoint and sum to ~unity. A shorter fade leaves the
-# outgoing at full level while the incoming ramps: +6 dB, audible doubling. To
-# vary the blend, vary the cross BUFFER, never the fade inside it.
-#
-# Low-level `cross`, NOT the `crossfade` wrapper: crossfade(smart=false) routes
-# through its internal simple_transition and ignores a custom callback. `a`/`b`
-# are records with .source/.metadata/.db_level.
-#
-# `cross` sizes this transition's buffer from the OUTGOING track's
-# liq_cross_duration stamp, so the fade must read `a.metadata` too or fade !=
-# buffer (longer is truncated into a gap, shorter sums to +6 dB).
-def dj_transition(a, b) =
-  d = float_of_string(default=crossfade_duration(), a.metadata["liq_cross_duration"])
-  # EFFECT ARMING. Every effect is APPLIED to the outgoing branch, but which
-  # track carries the FLAG differs, which is why there is no arming state and no
-  # remaining() watcher:
-  #   * washout + loop ride the ENDING track (`a`) — flag, delay tap and bar
-  #     length were stamped on it when it was queued.
-  #   * sweep / dissolve / chop ride the INCOMING pick (`b`) — chosen from the
-  #     PAIR, armed only between clashing tracks (mix.effectAllowedFor).
-  # Precedence: loop beats everything, then washout (which may carry the
-  # length-cap auto-arm). The queue strips the losers upstream; enforced here too.
-  #
-  # SHOW-BOUNDARY FADE (#1574) — liq_show_fade means the controller CUT this
-  # track at a show change, so EVERY gesture stands down on both sides and the
-  # seam is the plain fade.out(duration=d) below. All six reshape `a_source`
-  # (the loop applies no fader at all, sweep/chop hold it hot on the log fade),
-  # and over a mid-record cut there is no ending for any of that to describe.
-  # They cannot merely be left alone: forcing washing/looping false would ARM
-  # the `b` gestures on seams where the outgoing one used to suppress them.
-  boundary_fading = a.metadata["liq_show_fade"] == "true"
-  washing = a.metadata["liq_washout"] == "true" and not boundary_fading
-  looping = a.metadata["liq_loop"] == "true" and not washing and not boundary_fading
-  sweeping = b.metadata["liq_sweep"] == "true" and not looping and not boundary_fading
-  dissolving = b.metadata["liq_dissolve"] == "true" and not washing and not looping and not boundary_fading
-  chopping = b.metadata["liq_chop"] == "true" and not washing and not looping and not boundary_fading
-  # FADE SHAPE per effect. exp drops the dry EARLY so the washout's tail reads
-  # as a dissolve (it dips below unity mid-cross, which is the effect; the +6 dB
-  # hazard is only for fades that hold full level early). log does the opposite,
-  # holding the outgoing hot so the EFFECT rather than the fader does the
-  # removal — a sweep over an already-quiet track is inaudible and a chop must
-  # stab at full level. Loop takes NO fader here: it captures the raw outgoing
-  # bar and applies its own complementary ride after the cascade; the hot fade
-  # made every loop transition jump in level at its start.
-  a_source =
-    if washing then
-      fade.out(duration=d, type="exp", initial_metadata=a.metadata, a.source)
-    elsif sweeping or chopping then
-      fade.out(duration=d, type="log", initial_metadata=a.metadata, a.source)
-    elsif looping then
-      a.source
-    else
-      fade.out(duration=d, initial_metadata=a.metadata, a.source)
-    end
-  # SWEEP ENVELOPE — riding the filter out of a track. Cutoffs move in
-  # LOG-frequency space (pow) throughout; linear Hz ramps read as
-  # nothing-then-everything.
-  a_source =
-    if sweeping then
-      log("DJ sweep: closing the filter over the outgoing track (d=#{d}s)")
-      sweep_src = a_source
-      # Close FAST and DEEP — 9 kHz to 1.1 kHz over the first 45% of the blend —
-      # so the choke arrives while the outgoing is still loud. A shallower close
-      # over 70% was inaudible under the fade.
-      def sweep_cut() =
-        e = source.elapsed(sweep_src)
-        e = if e < 0. then 0. else e end
-        t_close = 0.45 * d
-        t_hold  = 0.55 * d
-        t_back  = 0.85 * d
-        # Dive, touch the floor briefly, then PARTIALLY re-open as the incoming
-        # takes over — a sustained floor reads as "the track went quiet".
-        depth =
-          if e < t_close then
-            x = e / t_close
-            3.0 * x * x - 2.0 * x * x * x
-          elsif e < t_hold then
-            1.0
-          elsif e < t_back then
-            x = (e - t_hold) / (t_back - t_hold)
-            1.0 - 0.6 * (3.0 * x * x - 2.0 * x * x * x)
-          else
-            0.4
-          end
-        9000.0 * pow(1100.0 / 9000.0, depth)      # 9 kHz open → 1.1 kHz floor
-      end
-      # Makeup on the choked branch: the filter guts the outgoing's energy while
-      # the incoming is only half-faded, so lift the residual +2.6 dB as the
-      # cutoff bottoms out. Without it the mid-blend goes near-quiet.
-      def sweep_gain() =
-        e = source.elapsed(sweep_src)
-        e = if e < 0. then 0. else e end
-        g_max = 1.35
-        t_from = 0.30 * d
-        t_to   = 0.50 * d
-        if e <= t_from then 1.0
-        elsif e >= t_to then g_max
-        else
-          x = (e - t_from) / (t_to - t_from)
-          1.0 + (3.0 * x * x - 2.0 * x * x * x) * (g_max - 1.0)
-        end
-      end
-      # PARALLEL DRY BLEED — why the stages run full-wet. Wetness on cascaded
-      # stages MULTIPLIES the dry path (0.35 x 0.35 ~= 12% ~= -18 dB), so a
-      # wetness cap craters the mid-band. An explicit dry branch around a
-      # full-wet chain gives a hard floor: 30% of the untouched track reaches
-      # the mix (~-10 dB, ~-8 dB after makeup) however deep the cutoff dives.
-      swept = filter.rc(frequency=sweep_cut, mode="low", wetness=1.,
-                filter.rc(frequency=sweep_cut, mode="low", wetness=1., a_source))
-      amplify(sweep_gain, add(normalize=false,
-        [amplify(0.30, a_source), amplify(0.75, swept)]))
-    else
-      a_source
-    end
-  # BLEND (spectral handover) — the OUTGOING track hands its lows then its mids
-  # (by ~65% of the blend) to the incoming, keeping only its highs, while the
-  # incoming arrives lows-first (b-side block further down). Armed only between
-  # COMPATIBLE tracks (mix.effectAllowedFor). At e=0 the HPF sits at 30 Hz, i.e.
-  # transparent, so the engage is seamless.
-  blending = b.metadata["liq_blend"] == "true" and not looping and not boundary_fading
-  a_source =
-    if blending then
-      log("DJ blend: spectral handover into the next track (d=#{d}s)")
-      ha_src = a_source
-      def blend_hp() =
-        e = source.elapsed(ha_src)
-        e = if e < 0. then 0. else e end
-        t_end = 0.65 * d
-        x = if e >= t_end then 1.0 else e / t_end end
-        sxx = 3.0 * x * x - 2.0 * x * x * x
-        30.0 * pow(1800.0 / 30.0, sxx)            # 30 Hz → 1.8 kHz (log space)
-      end
-      # SUBTRACT-HPF: filter.rc mode="high" is BROKEN (a static 400 Hz HPF
-      # collapses music to -115 dB on 2.2.5; a 40 Hz HPF on a 440 Hz tone
-      # renders -inf on 2.4.4). Build the high-pass as dry - lowpass(dry).
-      blend_low = filter.rc(frequency=blend_hp, mode="low", wetness=1., a_source)
-      add(normalize=false, [a_source, amplify(-1., blend_low)])
-    else
-      a_source
-    end
-  # WASHOUT ENVELOPE — dub-style tail. The comb feedback swells while the exp
-  # fade pulls the dry away, so the delay line self-sustains over the incoming
-  # track's opening. The tail must be dead before the transition source
-  # truncates at d, or it clicks off. Tap length (liq_washout_delay) is stamped
-  # by the controller, tempo-synced to a dotted eighth of the track's BPM.
-  a_source =
-    if washing then
-      wd = float_of_string(default=0.30, a.metadata["liq_washout_delay"])
-      log("DJ washout: dissolving the outgoing track, tap=#{wd}s (d=#{d}s)")
-      wash_src = a_source
-      # The swell must beat the exp fade: swelling at 25% seeds the tail from an
-      # already-faded signal and the wash is inaudible. Buildup is bounded by the
-      # exp fade starving the input, plus the bus limiter.
-      def wash_fb() =
-        e = source.elapsed(wash_src)
-        e = if e < 0. then 0. else e end
-        fb_max = -1.0            # peak feedback dB — nearer 0 = longer tail
-        fb_off = -90.0           # idle/silent
-        t_swell = 0.10 * d
-        t_hold  = 0.85 * d
-        t_rel   = 0.97 * d
-        if e < t_swell then
-          x = e / t_swell
-          s = 3.0 * x * x - 2.0 * x * x * x       # smoothstep swell
-          fb_off + s * (fb_max - fb_off)
-        elsif e < t_hold then
-          fb_max
-        elsif e < t_rel then
-          fb_max + ((e - t_hold) / (t_rel - t_hold)) * (fb_off - fb_max)
-        else
-          fb_off
-        end
-      end
-      # Late makeup so the tail sits PRESENT over the incoming fade-in. It comes
-      # up only after the exp fade has dropped the dry, so it lifts the echoes
-      # alone and never bumps the still-audible song.
-      def wash_gain() =
-        e = source.elapsed(wash_src)
-        e = if e < 0. then 0. else e end
-        g_max = 1.95             # ≈ +5.8 dB — the tail must sit OVER a dense incoming mix
-        t_from = 0.30 * d
-        t_to   = 0.55 * d
-        if e <= t_from then 1.0
-        elsif e >= t_to then g_max
-        else
-          x = (e - t_from) / (t_to - t_from)
-          1.0 + (3.0 * x * x - 2.0 * x * x * x) * (g_max - 1.0)
-        end
-      end
-      # Darkening tail. The comb's loop is fixed, so a lowpass AFTER it closes
-      # across the window instead (9 kHz -> 3 kHz) and later repeats arrive
-      # darker. Wet must ramp in: an RC at 9 kHz is not transparent, and
-      # engaging it full-wet would dull the still-audible dry.
-      def tail_cut() =
-        e = source.elapsed(wash_src)
-        e = if e < 0. then 0. else e end
-        t_from = 0.35 * d
-        t_to   = 0.90 * d
-        x = if e <= t_from then 0.0 elsif e >= t_to then 1.0 else (e - t_from) / (t_to - t_from) end
-        s = 3.0 * x * x - 2.0 * x * x * x
-        9000.0 * pow(3000.0 / 9000.0, s)
-      end
-      def tail_wet() =
-        e = source.elapsed(wash_src)
-        e = if e < 0. then 0. else e end
-        t_on = 0.20 * d
-        x = if e >= t_on then 1.0 else e / t_on end
-        3.0 * x * x - 2.0 * x * x * x
-      end
-      washed = comb(delay=wd, feedback=wash_fb, a_source)
-      washed = filter.rc(frequency=tail_cut, mode="low", wetness=tail_wet,
-                 filter.rc(frequency=tail_cut, mode="low", wetness=tail_wet, washed))
-      amplify(wash_gain, washed)
-    else
-      a_source
-    end
-  # DISSOLVE ENVELOPE — reverb wash. Same topology as the washout (comb ->
-  # cascaded damped lowpass -> late makeup) with two differences:
-  #   1. FOUR parallel combs at mutually prime, tempo-UNRELATED delays
-  #      (89/113/151/181 ms) instead of one tempo-synced tap, so the tails smear
-  #      into diffuse ambience instead of a rhythmic pulse. No allpass exists in
-  #      the proven kit, so diffusion comes from the prime spread plus damping.
-  #   2. The damping lowpass closes deeper (7 kHz -> 1.2 kHz).
-  # Each comb's tail is isolated from its dry pass-through (the -4x subtraction
-  # below) so the wash can run hot without multiplying the dry path.
-  a_source =
-    if dissolving then
-      log("DJ dissolve: reverb wash under the next track (d=#{d}s)")
-      diss_src = a_source
-      def diss_fb() =
-        e = source.elapsed(diss_src)
-        e = if e < 0. then 0. else e end
-        # Per-tap dB. Tail decay is fb/delay per SECOND, so short taps need
-        # near-unity feedback: -0.5 dB on 89-181 ms taps ~= 3-6 dB/s, a
-        # multi-second wash. -2.5 dB on 43-101 ms taps decays 25-58 dB/s and
-        # renders indistinguishable from dry.
-        fb_max = -0.5
-        fb_off = -90.0
-        # Swell must beat the exp fade, as in the washout.
-        t_swell = 0.10 * d
-        t_hold  = 0.80 * d
-        t_rel   = 0.93 * d
-        if e < t_swell then
-          x = e / t_swell
-          s = 3.0 * x * x - 2.0 * x * x * x
-          fb_off + s * (fb_max - fb_off)
-        elsif e < t_hold then
-          fb_max
-        elsif e < t_rel then
-          fb_max + ((e - t_hold) / (t_rel - t_hold)) * (fb_off - fb_max)
-        else
-          fb_off
-        end
-      end
-      # Late makeup, same rationale as the washout. Lower than its figure
-      # because these taps start well below its single unity tap.
-      def diss_gain() =
-        e = source.elapsed(diss_src)
-        e = if e < 0. then 0. else e end
-        g_max = 1.3
-        t_from = 0.25 * d
-        t_to   = 0.50 * d
-        if e <= t_from then 1.0
-        elsif e >= t_to then g_max
-        else
-          x = (e - t_from) / (t_to - t_from)
-          1.0 + (3.0 * x * x - 2.0 * x * x * x) * (g_max - 1.0)
-        end
-      end
-      # Darkening: a lowpass closing across the window makes the wash recede.
-      # Wet ramps in rather than engaging at cross start, as in the washout.
-      def diss_cut() =
-        e = source.elapsed(diss_src)
-        e = if e < 0. then 0. else e end
-        t_from = 0.30 * d
-        t_to   = 0.90 * d
-        x = if e <= t_from then 0.0 elsif e >= t_to then 1.0 else (e - t_from) / (t_to - t_from) end
-        s = 3.0 * x * x - 2.0 * x * x * x
-        7000.0 * pow(1200.0 / 7000.0, s)
-      end
-      def diss_wet() =
-        e = source.elapsed(diss_src)
-        e = if e < 0. then 0. else e end
-        t_on = 0.10 * d
-        x = if e >= t_on then 1.0 else e / t_on end
-        3.0 * x * x - 2.0 * x * x * x
-      end
-      # PURE-TAIL isolation: comb passes its input through, so summing four
-      # combs directly would force a 0.25 weight to keep the dry at unity and
-      # bury the tails 12 dB down (measured: a -44 dB mid-cross crater).
-      # Subtracting the dry leaves ONLY the feedback tails.
-      #
-      # ONE subtraction for all four taps, never one per tap (#1565). The
-      # per-tap form is algebraically identical (bit-identical over 60s) but
-      # adds twelve full-frame operators on Liquidsoap's SINGLE streaming
-      # thread: offline throughput ~345 vs ~645 audio-seconds per 10s of CPU
-      # (1.87x), and on air it stalled the clock on ~1 dissolve in 5
-      # ("Latency is too high: we must catchup 0.20-0.46 seconds").
-      # Two measured non-savings, so nobody re-derives them: removing the second
-      # darkening lowpass is inside run-to-run noise (754 vs 762), and dropping
-      # to two combs buys ~15%. A host that still cannot afford the dissolve
-      # turns it off (`transitions.effects.dissolve`) rather than thinning it.
-      # scripts/fx-render-test.sh mirrors this shape; keep them in lockstep.
-      washed = add(normalize=false,
-        [comb(delay=0.089, feedback=diss_fb, a_source),
-         comb(delay=0.113, feedback=diss_fb, a_source),
-         comb(delay=0.151, feedback=diss_fb, a_source),
-         comb(delay=0.181, feedback=diss_fb, a_source),
-         amplify(-4., a_source)])
-      washed = amplify(0.7, washed)
-      washed = filter.rc(frequency=diss_cut, mode="low", wetness=diss_wet,
-                 filter.rc(frequency=diss_cut, mode="low", wetness=diss_wet, washed))
-      # Dry (faded) + wash: the track walks out through its own ambience.
-      add(normalize=false, [a_source, amplify(diss_gain, washed)])
-    else
-      a_source
-    end
-  # CHOP ENVELOPE — crossfader cut: rhythmic gating of the outgoing track,
-  # opening AT each beat start so the downbeat transient survives. Pure
-  # `amplify` over source.elapsed(). Runs on its own compressed clock
-  # dd = min(d, 10s) — stretched over a long crossfade the cut reads as slow
-  # pumping (#861). Four envelopes ride that clock:
-  #   * RATE accelerates, quarters -> eighths -> sixteenth stutter. Divisions
-  #     are p/2 and p/4, so every beat start stays a gate-open.
-  #   * DUTY tightens, and the FLOOR under the closed gate drops to silence only
-  #     after the first quarter (full silence between the first stabs reads as
-  #     dropouts).
-  #   * WET ramps the gesture in, so gain is exactly 1 at e=0.
-  #   * MASTER silences the branch before the transition source truncates at d.
-  # Gate edges are ~12 ms smoothsteps; square edges click.
-  a_source =
-    if chopping then
-      p = float_of_string(default=0.5, b.metadata["liq_chop_period"])
-      p = if p <= 0.05 then 0.5 else p end
-      dd = if d > 10. then 10. else d end
-      log("DJ chop: cutting the outgoing track on the beat (p=#{p}s, dd=#{dd}s, d=#{d}s)")
-      chop_src = a_source
-      def chop_gain() =
-        e = source.elapsed(chop_src)
-        e = if e < 0. then 0. else e end
-        # Accelerating clock: quarters → eighths → sixteenth stutter.
-        pp =
-          if e < 0.40 * dd then p
-          elsif e < 0.72 * dd then 0.5 * p
-          else 0.25 * p
-          end
-        beat = int_of_float(e / pp)
-        ph = e / pp - float_of_int(beat)         # phase within the gate
-        t1 = 0.15 * dd
-        t2 = 0.72 * dd
-        duty =
-          if e < t1 then
-            x = e / t1
-            1.0 - (3.0 * x * x - 2.0 * x * x * x) * 0.45
-          elsif e < t2 then
-            x = (e - t1) / (t2 - t1)
-            0.55 - (3.0 * x * x - 2.0 * x * x * x) * 0.25
-          else
-            0.30
-          end
-        f_end = 0.25 * dd
-        floor_g =
-          if e >= f_end then 0.0
-          else
-            x = e / f_end
-            0.45 * (1.0 - (3.0 * x * x - 2.0 * x * x * x))
-          end
-        eps = 0.012 / pp                         # ~12 ms edges, in phase units
-        shape =
-          if ph < eps then
-            x = ph / eps
-            3.0 * x * x - 2.0 * x * x * x
-          elsif ph < duty then 1.0
-          elsif ph < duty + eps then
-            x = (ph - duty) / eps
-            1.0 - (3.0 * x * x - 2.0 * x * x * x)
-          else 0.0
-          end
-        g_gate = floor_g + (1.0 - floor_g) * shape
-        # Engage ramp: gain 1.0 at e=0, gate fully in by 8% of the gesture.
-        t_eng = 0.08 * dd
-        wet =
-          if e >= t_eng then 1.0
-          else
-            x = e / t_eng
-            3.0 * x * x - 2.0 * x * x * x
-          end
-        g = 1.0 - wet * (1.0 - g_gate)
-        # Master release: the rest of the buffer belongs to the incoming ramp.
-        master =
-          if e < 0.82 * dd then 1.0
-          elsif e < 0.92 * dd then
-            x = (e - 0.82 * dd) / (0.10 * dd)
-            1.0 - (3.0 * x * x - 2.0 * x * x * x)
-          else 0.0
-          end
-        g * master
-      end
-      amplify(chop_gain, a_source)
-    else
-      a_source
-    end
-  # LOOP ENVELOPE — exit loop: the last bar of the OUTGOING track is caught in a
-  # loop as the dry is hard-cut, rides in tempo under the pick, then filters down
-  # and releases.
-  #
-  # Measured on the v2.4.5 image (#863): this build's `comb` is a ONE-SHOT
-  # feed-forward echo, NOT recirculating — one burst in yields exactly one
-  # delayed copy whatever the feedback, so no single comb can loop. Hence a
-  # CASCADE OF DOUBLING DELAYS: K combs at bar, 2*bar, 4*bar, 8*bar convolve to
-  # taps at every multiple 0..(2^K-1) of bar, so a one-bar capture tiles
-  # gaplessly and terminates by construction. At feedback=0.0 the tap set is
-  # flat at -6 dB whatever the stage count. Later stages are built only when
-  # their delay < d, since a tap at >= d is never heard.
-  #
-  # Known compromise: the analyzer gives tempo, not beat PHASE, so this is a
-  # tape-loop, not a gridded loop; the ride-out lowpass softens the splice tick.
-  a_source =
-    if looping then
-      bar = float_of_string(default=2.0, a.metadata["liq_loop_bar"])
-      bar = if bar <= 0.2 then 2.0 else bar end
-      log("DJ loop: catching the last bar of the outgoing track (bar=#{bar}s, d=#{d}s)")
-      loop_src = a_source
-      # Dry gate: unity through the capture pass, then the hard cut. Everything
-      # after is the cascade re-emitting that one bar.
-      def loop_dry() =
-        e = source.elapsed(loop_src)
-        e = if e < 0. then 0. else e end
-        edge = 0.012
-        if e < bar - edge then 1.0
-        elsif e < bar then
-          x = (e - (bar - edge)) / edge
-          1.0 - (3.0 * x * x - 2.0 * x * x * x)
-        else 0.0 end
-      end
-      # Ride-out darkening: the cutoff closes 9 kHz -> 2.5 kHz over the back
-      # half. Wet stays 0 through the capture pass and ramps in only after the
-      # cut, because the still-audible dry passes through this chain too.
-      def loop_cut() =
-        e = source.elapsed(loop_src)
-        e = if e < 0. then 0. else e end
-        t_from = 0.45 * d
-        t_to   = 0.90 * d
-        x = if e <= t_from then 0.0 elsif e >= t_to then 1.0 else (e - t_from) / (t_to - t_from) end
-        s = 3.0 * x * x - 2.0 * x * x * x
-        9000.0 * pow(2500.0 / 9000.0, s)
-      end
-      def loop_wet() =
-        e = source.elapsed(loop_src)
-        e = if e < 0. then 0. else e end
-        t_on = bar + 0.15 * d
-        x = if e >= t_on then 1.0 elsif e <= bar then 0.0 else (e - bar) / (0.15 * d) end
-        3.0 * x * x - 2.0 * x * x * x
-      end
-      # Complementary ride: the loop is built from the raw capture so every
-      # repeated bar has a stable internal level, and this outer envelope gives
-      # back headroom as the incoming rises. A log-faded outgoing here stays hot
-      # through the capture pass and produces an audible level jump.
-      def loop_gain() =
-        e = source.elapsed(loop_src)
-        e = if e < 0. then 0. else e end
-        if e >= d then 0.0 else 1.0 - e / d end
-      end
-      gated  = amplify(loop_dry, a_source)
-      looped = comb(delay=bar, feedback=0.0, gated)
-      looped = comb(delay=2.0 * bar, feedback=0.0, looped)
-      looped = if 4.0 * bar < d then comb(delay=4.0 * bar, feedback=0.0, looped) else looped end
-      looped = if 8.0 * bar < d then comb(delay=8.0 * bar, feedback=0.0, looped) else looped end
-      # feedback=0.0 emits each delayed copy at 0 dB, and because the dry gate
-      # keeps exactly one bar and the delays double, the copies occupy
-      # non-overlapping bar slots at unity. NEVER apply global makeup to the
-      # cascade: it doubles the direct capture pass before any delayed copy
-      # exists, recreating the ~+6 dB transition-entry jump.
-      looped = filter.rc(frequency=loop_cut, mode="low", wetness=loop_wet,
-                 filter.rc(frequency=loop_cut, mode="low", wetness=loop_wet, looped))
-      amplify(loop_gain, looped)
-    else
-      a_source
-    end
-  b_source = fade.in(duration=d, initial_metadata=b.metadata, b.source)
-  # INCOMING SIDE. Every effect here releases by driving WETNESS to 0, never by
-  # parking the cutoff open: an RC filter at its open cutoff is still not
-  # transparent, and the branch operators vanish at the d boundary, so the track
-  # must be bit-clean before then.
-  #
-  # BLEND, incoming side: the pick arrives lows-first, a lowpass opening
-  # 250 Hz -> 9 kHz as the outgoing HPF climbs.
-  b_source =
-    if blending then
-      bin_src = b_source
-      def blend_lp() =
-        e = source.elapsed(bin_src)
-        e = if e < 0. then 0. else e end
-        t_open = 0.70 * d
-        x = if e >= t_open then 1.0 else e / t_open end
-        sxx = 3.0 * x * x - 2.0 * x * x * x
-        250.0 * pow(9000.0 / 250.0, sxx)
-      end
-      def blend_lp_wet() =
-        e = source.elapsed(bin_src)
-        e = if e < 0. then 0. else e end
-        t_from = 0.70 * d
-        t_to   = 0.82 * d
-        x = if e <= t_from then 0.0 elsif e >= t_to then 1.0 else (e - t_from) / (t_to - t_from) end
-        1.0 - (3.0 * x * x - 2.0 * x * x * x)
-      end
-      filter.rc(frequency=blend_lp, mode="low", wetness=blend_lp_wet,
-        filter.rc(frequency=blend_lp, mode="low", wetness=blend_lp_wet, bin_src))
-    else
-      b_source
-    end
-  # SWEEP, incoming side — two moves, both fully out well before the outgoing
-  # track is gone. SURFACING: a lowpass opens 500 Hz -> 9 kHz while the old
-  # track still dominates; it must open fast and early, or the muffle outlives
-  # the transition. Then the BASS SWAP below.
-  b_source =
-    if sweeping then
-      in_src = b_source
-      def surf_cut() =
-        e = source.elapsed(in_src)
-        e = if e < 0. then 0. else e end
-        t_open = 0.30 * d
-        x = if e >= t_open then 1.0 else e / t_open end
-        s = 3.0 * x * x - 2.0 * x * x * x
-        500.0 * pow(9000.0 / 500.0, s)            # 500 Hz → open, log space
-      end
-      def surf_wet() =
-        e = source.elapsed(in_src)
-        e = if e < 0. then 0. else e end
-        t_from = 0.20 * d
-        t_to   = 0.32 * d
-        x = if e <= t_from then 0.0 elsif e >= t_to then 1.0 else (e - t_from) / (t_to - t_from) end
-        1.0 - (3.0 * x * x - 2.0 * x * x * x)     # wet 1 → 0 (fully dry by 40%)
-      end
-      # BASS SWAP — hold the pick's low end back so two basslines never fight
-      # across the long blend, then release. It releases earlier than a club
-      # bass-swap would: with both tracks processed the middle of the blend goes
-      # near-silent. Built as a SUBTRACT-HPF (mode "high" is broken, see the
-      # blend block): subtract the track's own <160 Hz content, then ease that
-      # subtraction to zero.
-      def bass_amt() =
-        e = source.elapsed(in_src)
-        e = if e < 0. then 0. else e end
-        t_from = 0.38 * d
-        t_to   = 0.55 * d
-        x = if e <= t_from then 0.0 elsif e >= t_to then 1.0 else (e - t_from) / (t_to - t_from) end
-        0.0 - (1.0 - (3.0 * x * x - 2.0 * x * x * x))
-      end
-      bs = filter.rc(frequency=surf_cut, mode="low", wetness=surf_wet,
-             filter.rc(frequency=surf_cut, mode="low", wetness=surf_wet, in_src))
-      bs_low = filter.rc(frequency=160., mode="low", wetness=1., bs)
-      add(normalize=false, [bs, amplify(bass_amt, bs_low)])
-    else
-      b_source
-    end
-  add(normalize=false, [a_source, b_source])
-end
 
 # The PRE-cross handle for the on_metadata hook attached further down. Hooking
-# the post-cross source fires TWICE per transition (dj_transition's fades both
+# the post-cross source fires TWICE per transition (the crossfade's fades both
 # pass initial_metadata= and the outgoing track wins), stranding the UI one song
 # behind. Also what the starve guard samples.
 music_meta = music
@@ -1051,8 +470,8 @@ music =
     )
     # Announce each jingle to the controller (#997): jingles are otherwise
     # invisible to it and play outside its airVoice serialiser. Written at FEED
-    # time — the jingle turns audible ~crossfade_duration later — and the
-    # controller holds its voice chain until start + crossfade + clip length.
+    # time — the jingle turns audible once the handover into it completes — and
+    # the controller holds its voice chain until start + handover + clip length.
     jingles.on_metadata(synchronous=false, fun (m) ->
       file.write(
         data=json.stringify(compact=true, {
@@ -1089,26 +508,43 @@ music = fallback(
   [jingle_now, music]
 )
 
-# Per-track loudness normalisation: the controller stamps `liq_amplify`
-# ("<n> dB") on any track with a measured LUFS. BEFORE the cross so each track
-# carries its own gain into the crossfade, and AFTER the music_meta capture.
+# Per-track loudness normalisation: autocue attaches `liq_amplify` ("<n> dB",
+# toward its -14 LUFS target) to every song it measured. BEFORE the cross so
+# each track carries its own gain into the crossfade, and AFTER the music_meta
+# capture.
 music = amplify(override="liq_amplify", 1., music)
 
-# persist_override=true (2.4): with the new default the liq_cross_duration
-# override is reset before it sizes the stamped track's own end-of-track buffer
-# (fx-render-test.sh xdur: a stamped 12 renders 86s without persist, 78s with).
-# The flip side is that a stamp lingers over later UNstamped tracks, so the
-# controller stamps every track it annotates.
-music = cross(
-  duration=crossfade_duration(),
-  persist_override=true,
-  dj_transition,
-  music
-)
+# THE HANDOVER — Liquidsoap's own `crossfade`, driven by autocue.
+#
+# This used to be a 550-line transition of our own (six DJ effects, pair-sized
+# fade lengths, a show-boundary special case). It is now the stdlib operator,
+# because that is what autocue is built to feed: its `cross.simple` transition
+# reads the per-track `liq_cross_start_duration` / `liq_cross_end_duration`
+# (the buffer), `liq_fade_in` / `liq_fade_out` (the fades) and
+# `liq_fade_out_start_next` (where the next track enters) straight off the
+# metadata autocue attached at resolution. A track that stops dead hands over
+# with no overlap; one that rings out hands over inside its own decay.
+#
+# The explicit arguments are only the FALLBACK for an item autocue did not
+# measure: a show-boundary cut (it carries a liq_cue_out, so autocue stands
+# down on it — and a boundary cut is meant to be a plain fade, #1574), a bed,
+# the pause-talk silence. The last two also carry a liq_cross_duration of their
+# own, which `cross` still honours through its override_duration key. They are
+# Liquidsoap's defaults, stated so nobody has to look them up.
+music = crossfade(duration=5., fade_in=3., fade_out=3., music)
 
 # DJ VOICE — TTS clips dropped as paths into say.txt / intro.txt.
 # voice_queue = solo voice (heavy duck: station IDs, hourly, request
 # back-announce); intro_queue = talk-over links (light duck).
+# Everything pushed onto a voice/sfx channel is excluded from autocue: it is not
+# a song, its level is tuned by the TTS chain (per-engine gain + mic_chain), and
+# its exact length is what the voice markers and voice_until() time against.
+# `liq_disable_autocue` is autocue's own documented off-switch; nested annotate
+# is fine, so a clip that already carries a pause-delivery annotation keeps it.
+def no_autocue(uri) =
+  "annotate:liq_disable_autocue=\"true\":#{uri}"
+end
+
 voice_queue = request.queue(id="voice_queue")
 intro_queue = request.queue(id="intro_queue")
 
@@ -1242,9 +678,9 @@ def poll_voice() =
     if contents != "" then
       log("DJ says: #{contents}")
       if has_leadin then
-        ignore(voice_queue.push(request.create(leadin_path)))
+        ignore(voice_queue.push(request.create(no_autocue(leadin_path))))
       end
-      ignore(voice_queue.push(request.create(contents)))
+      ignore(voice_queue.push(request.create(no_autocue(contents))))
       write_pause_voice_accepted(contents)
     end
   end
@@ -1258,9 +694,9 @@ def poll_intro() =
     if contents != "" then
       log("DJ talk-over: #{contents}")
       if has_leadin then
-        ignore(intro_queue.push(request.create(leadin_path)))
+        ignore(intro_queue.push(request.create(no_autocue(leadin_path))))
       end
-      ignore(intro_queue.push(request.create(contents)))
+      ignore(intro_queue.push(request.create(no_autocue(contents))))
     end
   end
 end
@@ -1273,7 +709,7 @@ def poll_sfx() =
     if contents != "" then
       log("DJ sound effect: #{contents}")
       # No lead-in: a stinger must start promptly to land under the voice.
-      ignore(sfx_queue.push(request.create(contents)))
+      ignore(sfx_queue.push(request.create(no_autocue(contents))))
     end
   end
 end
@@ -1574,7 +1010,7 @@ radio = compress(
 # METADATA — ICY title driven explicitly from the pre-cross on_meta hook so it
 # matches now-playing.json. BOTH operators are load-bearing:
 #  1. metadata.map strip kills ALL metadata still flowing through the chain.
-#     dj_transition's fades pass initial_metadata=, so ~crossfade seconds after
+#     the crossfade's fades pass initial_metadata=, so ~crossfade seconds after
 #     on_meta fires the cross re-emits the OUTGOING track's metadata, which
 #     would clobber the title back and freeze Icecast one track behind.
 #  2. insert_metadata is then the ONLY source of stream metadata, pushed from
@@ -2048,7 +1484,7 @@ server.register(
 )
 
 # Skip the current track: .skip() on the final source propagates down the chain
-# and force-ends the track, after which cross runs the normal dj_transition into
+# and force-ends the track, after which the crossfade runs its normal handover into
 # the next one (dj_queue item, else auto).
 server.register(
   "skip",

@@ -167,7 +167,6 @@ test('the production generation seam discards a delayed A link across A to B to 
     'agent',
     generated.link,
     null,
-    {},
     { introPersona: generated.introPersona, hostSpeech: generated.hostSpeech },
   );
 

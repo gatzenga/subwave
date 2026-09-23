@@ -208,9 +208,7 @@ if (phase === 1) {
     schedule: week(showId),
     scheduleOverride: null,
     timezone: 'Europe/London',
-    crossfadeDuration: 1,
     jingleRatio: 0,
-    transitions: { pairDrain: false, stemBlends: false },
     tts: { enabled: true, defaultEngine: 'piper' },
     llm: { pickerAgent: true, pauseWhenEmpty: false },
     requests: {

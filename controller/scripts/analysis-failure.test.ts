@@ -79,12 +79,11 @@ async function main() {
   });
 
   await test('…and every widened scope with it, not just bpm/key', () => {
-    // The three backfill widenings live in a different module and query the
+    // The backfill widenings live in a different module and query the
     // tracks table directly. A widening that forgets the exclusion re-attempts
     // the dead track on every pass — the exact bug, relocated.
     assert.ok(!db.unanalysedAudioIds().includes('t1'), 'audio backfill still targets it');
     assert.ok(!db.needsVocalIds().includes('t1'), 'vocal backfill still targets it');
-    assert.ok(!db.needsStemsIds().includes('t1'), 'stem backfill still targets it');
     // The healthy tracks are untouched.
     assert.deepEqual(db.needsVocalIds(), ['t2', 't3']);
   });

@@ -99,8 +99,6 @@ export function recentPlays() {
   ];
 }
 
-export const TRANSITIONS = ['normal', 'blend', 'sweep', 'washout', 'dissolve', 'chop', 'loop'];
-
 // --- Synthetic discovery tools for the agent paths (picker-test port) -------
 
 export function pickerToolsSynthetic() {

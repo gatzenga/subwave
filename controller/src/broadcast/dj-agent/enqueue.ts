@@ -50,8 +50,7 @@ export function trackFields(song) {
     // slim projection `duration_sec`, library rows `durationSec`.
     duration: song.duration ?? song.duration_sec ?? song.durationSec ?? null,
     // Rides raw Subsonic songs (pool picks) but not the slim projection agent
-    // picks resolve from — undefined there tells queue.applyLoudnessGain to
-    // recover it with a getSong lookup.
+    // picks resolve from. Informational only — autocue levels on air.
     replayGain: song.replayGain,
   };
 }
@@ -95,7 +94,6 @@ export async function enqueuePick(
   queue, song, reason, source,
   link: string | null = null,
   linkPrev: any = null,
-  { sweep = false, washout = false, blend = false, dissolve = false, chop = false, loop = false }: { sweep?: boolean; washout?: boolean; blend?: boolean; dissolve?: boolean; chop?: boolean; loop?: boolean } = {},
   { linkClockAt = null, introPersona = null, hostSpeech = null }: { linkClockAt?: Date | null; introPersona?: Persona | null; hostSpeech?: HostSpeechStamp | null } = {},
 ): Promise<number> {
   // Single chokepoint for the intro budget: every pick path funnels its link
@@ -107,16 +105,6 @@ export async function enqueuePick(
     ? null
     : trimLinkToIntro(link, song);
   const track: any = trackFields(song);
-  // Transition effects (DJ mode only); getAnnotatedUri stamps the liq_* flags
-  // and radio.liq ramps them. sweep muffles the crossfade INTO this pick;
-  // dissolve/chop act on the PREVIOUS track under this pick; washout rings this
-  // track out as it ENDS.
-  if (sweep) track.sweep = true;
-  if (washout) track.washout = true;
-  if (blend) track.blend = true;
-  if (dissolve) track.dissolve = true;
-  if (chop) track.chop = true;
-  if (loop) track.loop = true;
   const pos = await queue.push({
     track,
     requestedBy: null,

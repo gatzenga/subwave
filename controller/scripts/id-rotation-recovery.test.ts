@@ -28,9 +28,6 @@ async function scenario(mode: string) {
     db.upsertTrackMeta(OLD, { title: 'Song', artist: 'Artist' });
     db.upsertTrackTags(OLD, { moods: ['warm'], energy: 'medium', source: 'llm', confidence: 1 });
     db.upsertTrackMeta(NEW, { title: 'Song', artist: 'Artist' });
-    const stems = await import('../src/music/stem-cache.js');
-    mkdirSync(stems.dirFor(OLD), { recursive: true });
-    writeFileSync(join(stems.dirFor(OLD), 'vocals.wav'), 'cached audio');
     assert.equal(db.adoptRotatedIds(new Set([NEW])).adopted, 1);
     // Stop at the exact seam: SQLite committed, no filesystem handoff ran.
     process.exit(0);
@@ -64,9 +61,6 @@ async function scenario(mode: string) {
       assert.equal(existsSync(rotation.manifestPath()), false);
       assert.deepEqual(await rotation.applyPendingRotation(), { applied: true, complete: true });
       assert.equal(read('blocklist.json').entries[0].id, NEW);
-      const stems = await import('../src/music/stem-cache.js');
-      assert.equal(readFileSync(join(stems.dirFor(NEW), 'vocals.wav'), 'utf8'), 'cached audio');
-      assert.equal(existsSync(stems.dirFor(OLD)), false);
       assert.deepEqual(await rotation.applyPendingRotation(), { applied: false, complete: true });
       return;
     }
