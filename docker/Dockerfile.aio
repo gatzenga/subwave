@@ -217,11 +217,18 @@ RUN mkdir -p /var/sub-wave && chmod 777 /var/sub-wave
 # liquidsoap write their logs, and Next.js standalone writes its cache. They
 # are created here so the entrypoint has something to hand over — /var/run is
 # a tmpfs on some hosts, so the entrypoint recreates them too.
+# /var/log/liquidsoap ships as a SYMLINK into the state dir, not a directory.
+# The supervisor used to make this link itself at boot, which needs write
+# permission on /var/log — root has it, the station's own user does not, so the
+# link silently stopped being made and radio.log went back to living inside the
+# container, lost on every recreate. A symlink baked in at build time needs no
+# permission at runtime, and its target does not have to exist yet.
 RUN groupadd -g 1000 subwave && \
     useradd -u 1000 -g 1000 -d /var/sub-wave -s /bin/bash subwave && \
-    mkdir -p /var/log/icecast2 /var/run/icecast2 /var/log/liquidsoap /web/.next/cache && \
-    chown -R subwave:subwave /etc/icecast2 /var/log/icecast2 /var/run/icecast2 \
-                             /var/log/liquidsoap /web/.next
+    mkdir -p /var/log/icecast2 /var/run/icecast2 /web/.next/cache && \
+    rm -rf /var/log/liquidsoap && \
+    ln -sfn /var/sub-wave/logs /var/log/liquidsoap && \
+    chown -R subwave:subwave /etc/icecast2 /var/log/icecast2 /var/run/icecast2 /web/.next
 
 # Re-declared for the final stage (ARGs don't cross stage boundaries) so the
 # controller reports the same version as the web build above.

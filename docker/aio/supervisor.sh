@@ -183,7 +183,10 @@ link_liquidsoap_log() {
 	fi
 
 	mkdir -p "$target" 2>/dev/null || true
-	chmod 777 "$target" 2>/dev/null || true
+	# Under PUID/PGID one uid owns everything, so there is nobody to widen this
+	# for — same rule as state_prepare_dir, and for the same reason: on a NAS a
+	# 777 here overwrites the operator's ACL on their own log folder.
+	[ "${SUBWAVE_SINGLE_UID:-}" = "1" ] || chmod 777 "$target" 2>/dev/null || true
 
 	# 2. Point the in-container path at it — unless something is mounted
 	#    there (an operator's bind mount is already persistent; use as-is).
@@ -231,8 +234,13 @@ link_liquidsoap_log() {
 	# Deliberately NOT recursive: liquidsoap only needs to create/append
 	# radio.log in the directory itself, and an operator who pointed
 	# <state>/logs at their own disk shouldn't have its contents re-owned.
-	chmod 777 "$LIQ_LOG_DIR" 2>/dev/null || true
-	chown liquidsoap:liquidsoap "$LIQ_LOG_DIR" 2>/dev/null || true
+	#
+	# Skipped entirely under PUID/PGID: liquidsoap already runs as the owner, and
+	# both calls follow the link into the operator's state folder.
+	if [ "${SUBWAVE_SINGLE_UID:-}" != "1" ]; then
+		chmod 777 "$LIQ_LOG_DIR" 2>/dev/null || true
+		chown liquidsoap:liquidsoap "$LIQ_LOG_DIR" 2>/dev/null || true
+	fi
 }
 
 # Can a file actually be created under $LIQ_LOG_DIR? Runs as root, so it proves

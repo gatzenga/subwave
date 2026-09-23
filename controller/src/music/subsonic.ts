@@ -878,9 +878,12 @@ export function getAnnotatedUri(song, opts: { maxDurationSec?: number | null; cu
   //
   // radio.liq's cross still runs persist_override=true, and autocue supplies a
   // value per track, so nothing lingers from the track before.
-  // Per-track loudness gain offset, in the "<n> dB" form Liquidsoap's amplify
-  // override parses. Applied before the ducking layers. Absent = unity.
-  if (song.gainDb != null) fields.push(`liq_amplify="${escAnnotate(song.gainDb)} dB"`);
+  // No liq_amplify either: autocue measures loudness on the same pass that
+  // finds the cue points, and it refuses to run at all on a track that arrives
+  // with an override in its territory. Our gain was one — so the choice was
+  // never "our levels or autocue's levels", it was "our levels or autocue".
+  // music/loudness.ts still resolves a figure for the stem-blend render, which
+  // bakes it into a clip rather than asking the mixer for it.
   // Transition gestures. sweep/dissolve/blend/chop ride the INCOMING pick and
   // act on the outgoing branch across the cross; washout/loop ride the ENDING
   // track and govern its own end. Absent = normal cross.
@@ -907,10 +910,22 @@ export function getAnnotatedUri(song, opts: { maxDurationSec?: number | null; cu
   // stem blend's start in the OUTGOING track) competes with the cap and the
   // earlier cut wins, so a blend can't resurrect audio past the cap. cueInSec
   // skips the INCOMING track past the head its rendered clip already played.
-  const cueOut = [opts.maxDurationSec, opts.cueOutSec]
-    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0);
-  if (cueOut.length) {
-    fields.push(`liq_cue_out="${escAnnotate(Math.min(...cueOut))}"`);
+  // Cue points only for a CUT that is a decision, never for a measurement.
+  //
+  // The length cap no longer stamps one. A cap belongs in the SELECTION, where
+  // `music/track-window.ts` keeps an over-long track out of the queue in the
+  // first place, rather than airing it and cutting it off mid-song — and the
+  // backstop cost more than it saved: autocue switches itself off on any track
+  // that arrives with a cue_out, so the cap was quietly disabling autocue on
+  // most of the catalogue. `maxDurationSec` is still accepted so callers need
+  // not change; it is simply not sent.
+  //
+  // What IS still sent is an explicit cut the caller decided on: a show
+  // boundary (the track is ending because the programme changes, not because
+  // the song does) or a stem seam. autocue stands down on that one track, and
+  // that is correct — a boundary cut is a plain fade by design (#1574).
+  if (typeof opts.cueOutSec === 'number' && Number.isFinite(opts.cueOutSec) && opts.cueOutSec > 0) {
+    fields.push(`liq_cue_out="${escAnnotate(opts.cueOutSec)}"`);
   }
   if (opts.cueInSec != null && opts.cueInSec > 0) {
     fields.push(`liq_cue_in="${escAnnotate(opts.cueInSec)}"`);

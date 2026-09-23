@@ -15,10 +15,13 @@ settings.log.file.path := "/var/log/liquidsoap/radio.log"
 # is the reason a hip-hop pair with a cold stop and a cold start no longer
 # collides for several seconds.
 #
-# amplify_behavior "keep": autocue also measures loudness, but levels are this
-# station's own business (settings.loudness + the per-track liq_amplify stamp),
-# so its gain is recorded and not applied.
-settings.autocue.amplify_behavior := "keep"
+# amplify_behavior "amplify": autocue measures loudness on the same pass and
+# applies its own gain. It has to own this, not merely record it — autocue
+# DISABLES ITSELF on any track that arrives carrying an override in its
+# territory ("Override metadata detected … disabling autocue!"), and a
+# per-track liq_amplify stamp is exactly that. One measurement, one owner, or
+# no measurement at all.
+settings.autocue.amplify_behavior := "amplify"
 enable_autocue_metadata()
 
 # Telnet server — the controller's only channel into the mixer (restart, skip,
