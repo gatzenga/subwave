@@ -8,7 +8,6 @@ import { writeFileAtomic } from '../util/atomic-file.js';
 import { shuffle } from '../util/shuffle.js';
 import { mapPool } from '../util/async-pool.js';
 import * as subsonic from '../music/subsonic.js';
-import * as silenceTrim from '../music/silence-trim.js';
 import * as dj from '../llm/dj.js';
 import * as library from '../music/library.js';
 import * as settings from '../settings.js';
@@ -416,14 +415,14 @@ async function refreshAutoPlaylistInner() {
   // No loudness / off / unmeasured → no stamp → unity and an untouched entry.
   for (const t of pool) await queue.applyLoudnessGain(t);
 
-  const lines = ['#EXTM3U', ...pool.map((t: any) => {
-    const trim = silenceTrim.resolveSilenceTrim(t);
-    return subsonic.getAnnotatedUri(t, {
-      maxDurationSec,
-      cueInSec: trim.cueInSec,
-      cueOutSec: trim.cueOutSec,
-    });
-  })];
+  // No measured cue points: autocue trims these in the mixer, from the audio.
+  // Same reason as the live drain (broadcast/queue.ts) — its `start_next` is
+  // computed against its own cue_out, so a second opinion from here moves the
+  // end of the track out from under the handover. The length cap stays, being a
+  // decision rather than a measurement.
+  const lines = ['#EXTM3U', ...pool.map((t: any) =>
+    subsonic.getAnnotatedUri(t, { maxDurationSec })
+  )];
   // Atomic replace: Liquidsoap watches this file (reload_mode="watch"), so an
   // in-place write can trigger a reload of a truncated playlist.
   await writeFileAtomic(config.liquidsoap.autoPlaylist, lines.join('\n'));

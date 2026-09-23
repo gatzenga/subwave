@@ -1995,8 +1995,15 @@ class Queue {
         // seam's cue-in is DEEPER into the track than any leading silence (the
         // clip already played that head), so the later of the two is the one
         // that leaves no audio played twice.
-        const cueOutCandidates = positiveCues([item.stemBlend?.blendStartSec, trim.cueOutSec, boundaryCueSec]);
-        const cueInCandidates = positiveCues([item.stemSeam ? item.stemCueInSec : null, trim.cueInSec]);
+        // The measured silence is NOT stamped any more — autocue trims the track
+        // in the mixer, from the audio itself. Mixing the two sources is worse
+        // than either alone: autocue computes `start_next` relative to ITS OWN
+        // cue_out, so a cue_out from here moves the end of the track out from
+        // under the handover it was measured for. What stays is every cut that
+        // is a DECISION rather than a measurement — the length cap, a show
+        // boundary, a stem seam — because autocue cannot know about those.
+        const cueOutCandidates = positiveCues([item.stemBlend?.blendStartSec, boundaryCueSec]);
+        const cueInCandidates = positiveCues([item.stemSeam ? item.stemCueInSec : null]);
         item.cueInSec = cueInCandidates.length ? Math.max(...cueInCandidates) : undefined;
         const uri = subsonic.getAnnotatedUri(item.track, {
           maxDurationSec,
@@ -2004,8 +2011,12 @@ class Queue {
           cueInSec: item.cueInSec ?? null,
           resolveProbeId: item.resolveProbeId,
         });
+        // Still logged, because the figures remain the controller's own view of
+        // the track (the clock, the playable span, the crossfade-swallow check
+        // all read them) — but they are an observation now, not an instruction
+        // to the mixer.
         if (trim.cueInSec != null || trim.cueOutSec != null) {
-          this.log('mix', `silence trimmed on "${item.track.title}"${trim.cueInSec != null ? ` head ${trim.cueInSec}s` : ''}${trim.cueOutSec != null ? ` tail from ${trim.cueOutSec}s` : ''}`);
+          this.log('mix', `silence measured on "${item.track.title}"${trim.cueInSec != null ? ` head ${trim.cueInSec}s` : ''}${trim.cueOutSec != null ? ` tail from ${trim.cueOutSec}s` : ''} (autocue trims it on air)`);
         }
         // Queue-file writes wait longer than the default 1.5s: with a clip
         // following, two back-to-back writes are the norm and one missed
