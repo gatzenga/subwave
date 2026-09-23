@@ -263,7 +263,7 @@ Do not reintroduce these, and do not assume their code still exists:
   only the boot-time read of the active station remains), the tts-heavy sidecar
 - **The DJ Brain settings section** and the "Extended Sleeve Notes" placeholder
 - **Skins** other than Classic, Drift and Platter (Unit SW-9, Subamp, TTY are
-  gone), and the Blueprint, Recon and Cyberpunk themes
+  gone), and the Blueprint, Recon, Cyberpunk and Flare themes
 - **Show-only admin controls** — Show changes, Pause-and-talk, Show boundaries
   and the dash Takeover card. The settings and air paths behind them remain,
   as with the Shows feature itself; only the controls are gone
