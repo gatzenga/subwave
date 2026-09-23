@@ -288,7 +288,6 @@ export interface DuckingForm {
 export interface DjBehaviourForm {
   showWelcome: boolean;
   sameHostAcknowledgement: boolean;
-  extendedSleeveNotes: boolean;
   releaseYearMentions: 'regular' | 'occasional' | 'rare';
   recapLimit: string;
   recapMinutes: string;
@@ -300,7 +299,6 @@ export interface DjBehaviourForm {
 export interface DjBehaviourValues {
   showWelcome?: boolean;
   sameHostAcknowledgement?: boolean;
-  extendedSleeveNotes?: boolean;
   releaseYearMentions?: 'regular' | 'occasional' | 'rare';
   recapLimit?: number;
   recapMinutes?: number;

@@ -41,7 +41,6 @@ import { SettingsSearch, type SettingsJump } from './settings/SettingsSearch';
 import { TtsSection } from './settings/TtsSection';
 import { DjBehaviourSection } from './settings/DjBehaviourSection';
 import { LlmSection } from './settings/LlmSection';
-import { BrainSection } from './settings/BrainSection';
 import { LibrarySection } from './settings/LibrarySection';
 import { StationSection } from './settings/StationSection';
 import { ThemeSection } from './settings/ThemeSection';
@@ -237,11 +236,8 @@ function rebaselineSavedPatch(
   return next;
 }
 
-export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabled?: boolean }) {
-  const sections = useMemo(
-    () => SECTIONS.filter(s => s.id !== 'brain' || djBrainEnabled),
-    [djBrainEnabled],
-  );
+export default function SettingsPanel() {
+  const sections = SECTIONS;
   const { adminFetch, needsAuth, hydrated } = useAdminAuth();
   const settingsQuery = useSettingsQuery<SettingsData>({
     adminFetch,
@@ -285,12 +281,8 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
   const searchParams = useSearchParams();
   useEffect(() => {
     const s = searchParams.get('section');
-    if (s === 'brain' && !djBrainEnabled) {
-      setActiveSection('station');
-      return;
-    }
     if (s && sections.some(x => x.id === s)) setActiveSection(s as SectionId);
-  }, [router, searchParams, sections, djBrainEnabled]);
+  }, [router, searchParams, sections]);
 
   useEffect(() => {
     if (!data?.values) return;
@@ -341,7 +333,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
       djBehaviour: {
         showWelcome: v.djBehaviour?.showWelcome === true,
         sameHostAcknowledgement: v.djBehaviour?.sameHostAcknowledgement === true,
-        extendedSleeveNotes: v.djBehaviour?.extendedSleeveNotes === true,
         releaseYearMentions: v.djBehaviour?.releaseYearMentions ?? 'regular',
         recapLimit: String(v.djBehaviour?.recapLimit ?? 10),
         recapMinutes: String(v.djBehaviour?.recapMinutes ?? 120),
@@ -876,12 +867,6 @@ export default function SettingsPanel({ djBrainEnabled = false }: { djBrainEnabl
               <DjBehaviourSection
                 data={data} form={form} setForm={updateForm} busy={busy}
                 saveSettings={saveSettings} fieldErrors={fieldErrors}
-              />
-            )}
-            {djBrainEnabled && activeSection === 'brain' && (
-              <BrainSection
-                data={data} form={form} setForm={updateForm} busy={busy}
-                saveSettings={saveSettings} fieldErrors={fieldErrors} adminFetch={adminFetch} refresh={refresh}
               />
             )}
             {activeSection === 'llm' && data.llm && (

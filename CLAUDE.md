@@ -258,7 +258,9 @@ Do not reintroduce these, and do not assume their code still exists:
   OpenAI, Google
 - **ListenBrainz scrobbling** — Last.fm and Navidrome remain
 - **The split-container stack**, the CLI, the Expo app, the marketing web pages,
-  multi-station, the tts-heavy sidecar
+  multi-station (the switcher, `/admin/stations` and the `/stations` route —
+  only the boot-time read of the active station remains), the tts-heavy sidecar
+- **The DJ Brain settings section** and the "Extended Sleeve Notes" placeholder
 - **Every transition of our own** — the crossfade setting, the DJ transition
   effects (sweep/washout/blend/dissolve/chop/loop), pair-aware drain, stem
   blends and the stem cache, the loudness card and the dead-air-trim setting.

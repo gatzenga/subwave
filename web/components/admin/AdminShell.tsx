@@ -36,7 +36,6 @@ import { useStationFeed } from '../../hooks/useStationFeed';
 import SignInForm from './SignInForm';
 import NavidromeBanner from './NavidromeBanner';
 import MusicStarvedBanner from './MusicStarvedBanner';
-import StationSwitcher from './StationSwitcher';
 import OdometerNumber from '../OdometerNumber';
 import ThemeSwitcher from '../ThemeSwitcher';
 import {
@@ -187,7 +186,6 @@ const FOOTER_LINKS: { href: string; label: string; icon: NavIcon; pill: string }
 // explicitly; their crumb sections mirror where the rail stays lit.
 function resolveCrumb(pathname: string | null): { section?: string; page: string } {
   if (pathname?.startsWith('/admin/doctor')) return { section: 'Monitor', page: 'DJ Doc' };
-  if (pathname?.startsWith('/admin/stations')) return { section: 'System', page: 'Stations' };
   for (const section of NAV_SECTIONS) {
     const item = section.items.find(n => pathname?.startsWith(n.href));
     if (item) return { section: section.label, page: item.label };
@@ -259,7 +257,7 @@ export default function AdminShell({ children, defaultOpen = true }: AdminShellP
     <AdminQueryProvider key={auth}>
       <div className="admin-root paper">
         <SidebarProvider defaultOpen={defaultOpen} style={{ '--sidebar-width': '13rem' } as CSSProperties}>
-          <AdminSidebar pathname={pathname} onSignOut={signOut} adminFetch={adminFetch} />
+          <AdminSidebar pathname={pathname} onSignOut={signOut} />
           <SidebarInset className="min-w-0 bg-transparent">
             <TopBar pathname={pathname} />
             <NavidromeBanner adminFetch={adminFetch} onStatus={setNavidromeOk} />
@@ -352,11 +350,9 @@ function AdminCommandMenu() {
 function AdminSidebar({
   pathname,
   onSignOut,
-  adminFetch,
 }: {
   pathname: string | null;
   onSignOut: () => void;
-  adminFetch: (path: string, init?: RequestInit) => Promise<Response>;
 }) {
   const { setOpenMobile, isMobile } = useSidebar();
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
@@ -381,7 +377,6 @@ function AdminSidebar({
           </span>
         </Link>
         <span className="caption px-1 group-data-[collapsible=icon]:hidden">control center</span>
-        <StationSwitcher adminFetch={adminFetch} onNavigate={closeOnMobileNav} />
       </SidebarHeader>
 
       <SidebarContent className="gap-4 px-2 py-1">

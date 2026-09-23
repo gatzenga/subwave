@@ -3,21 +3,6 @@
 import { adminJson, type AdminFetch } from '@/lib/admin-query';
 import { useAdminQuery } from '@/lib/admin-query';
 
-export interface StationRow {
-  id: string | null;
-  name: string;
-  configured: boolean;
-  createdAt: string | null;
-  active: boolean;
-}
-
-export interface StationsResponse {
-  multiStation: boolean;
-  activeId: string | null;
-  limit?: number;
-  stations: StationRow[];
-}
-
 export interface ArchiveEntry {
   path: string;
   date: string;
@@ -43,23 +28,9 @@ export interface RestorableBackups {
 }
 
 export const operationKeys = {
-  stations: () => ['operations', 'stations'] as const,
   archives: () => ['operations', 'archives'] as const,
   restorableBackups: () => ['operations', 'restorable-backups'] as const,
 };
-
-export function useStationsQuery(adminFetch: AdminFetch, enabled = true) {
-  return useAdminQuery<StationsResponse>({
-    key: operationKeys.stations(),
-    adminFetch,
-    enabled,
-    request: async (fetcher, signal) => {
-      const response = await adminJson<StationsResponse>(fetcher, '/stations', undefined, signal);
-      return { ...response, stations: Array.isArray(response.stations) ? response.stations : [] };
-    },
-    toastOnError: false,
-  });
-}
 
 /**
  * Authorization headers must exist only long enough to build the request.

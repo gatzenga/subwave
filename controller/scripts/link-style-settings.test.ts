@@ -11,22 +11,16 @@ const settings = await import('../src/settings.js');
 const { setCache } = await import('../src/settings/store.js');
 test('DJ link-style defaults survive a cold load', async () => {
   await settings.load();
-  assert.equal(settings.get().djBehaviour.extendedSleeveNotes, false);
   assert.equal(settings.get().djBehaviour.releaseYearMentions, 'regular');
 
-  await settings.update({ djBehaviour: { extendedSleeveNotes: true, releaseYearMentions: 'rare' } } as never);
+  await settings.update({ djBehaviour: { releaseYearMentions: 'rare' } } as never);
 
   setCache(null);
   await settings.load();
-  assert.equal(settings.get().djBehaviour.extendedSleeveNotes, true);
   assert.equal(settings.get().djBehaviour.releaseYearMentions, 'rare');
 });
 
-test('extended sleeve notes refuse non-boolean patches', async () => {
-  await assert.rejects(
-    () => settings.update({ djBehaviour: { extendedSleeveNotes: 'on' } } as never),
-    /djBehaviour\.extendedSleeveNotes must be a boolean/,
-  );
+test('link style refuses an unknown value', async () => {
   await assert.rejects(
     () => settings.update({ djBehaviour: { releaseYearMentions: 'sometimes' } } as never),
     /djBehaviour\.releaseYearMentions must be regular, occasional or rare/,

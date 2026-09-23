@@ -10,7 +10,7 @@
 
 import {
   Radio, Palette, Cpu, Mic, Library,
-  Activity, Archive, Save, AlertTriangle, Music2, BrainCircuit,
+  Activity, Archive, Save, AlertTriangle, Music2,
   MessageCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -69,15 +69,6 @@ export const SECTIONS = [
     id: 'behaviour', group: 'the dj', label: 'DJ behaviour',
     hint: 'talk placement · prompt memory', icon: MessageCircle,
     formKeys: ['djTalkOnlyBetweenTracks', 'pauseTalkMinSeconds', 'djBehaviour'],
-  },
-  {
-    // One-field setup for the hosted DJ Brain: writes both `llm` and
-    // `tts.cloud` in a single save, but owns neither slice — the LLM provider
-    // and TTS voice sections keep the dirty tracking for those keys, and this
-    // one holds local state only, so it lists no formKeys.
-    id: 'brain', group: 'the dj', label: 'DJ Brain',
-    hint: 'one field · brain + voice', icon: BrainCircuit,
-    formKeys: [],
   },
   {
     id: 'llm', group: 'the dj', label: 'LLM provider',
@@ -157,7 +148,7 @@ export const RESTART_PATHS: readonly string[] = [
  * index can say "adv" on a result and open the disclosure when it jumps there.
  */
 export const ADVANCED_CARDS: Partial<Record<SectionId, readonly string[]>> = {
-  station: ['listener-requests', 'public-api'],
+  station: ['public-api'],
   llm: ['fallback', 'reasoning', 'next-track-picker', 'idle-behaviour', 'daily-token-budget'],
   tts: ['fallback-voice'],
   library: ['seed-phase', 'propagation', 'enrichment'],
@@ -191,13 +182,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Private player', section: 'station', card: 'Privacy', keywords: 'password gate hide lock' },
   { label: 'Stream password', section: 'station', card: 'Privacy', keywords: 'listener auth icecast lock restart' },
   { label: 'Station password', section: 'station', card: 'Privacy', keywords: 'secret shared passphrase' },
-  { label: 'Accept requests', section: 'station', card: 'Listener requests', keywords: 'request line open closed' },
-  { label: 'Max queued requests', section: 'station', card: 'Listener requests', keywords: 'pending queue limit' },
-  { label: 'Seconds between requests', section: 'station', card: 'Listener requests', keywords: 'cooldown rate limit' },
-  { label: 'Per-listener hourly cap', section: 'station', card: 'Listener requests', keywords: 'ip rate limit hour' },
-  { label: 'Station hourly cap', section: 'station', card: 'Listener requests', keywords: 'global rate limit hour' },
-  { label: 'Repeat cooldown', section: 'station', card: 'Listener requests', keywords: 'same track again minutes' },
-  { label: 'One request per listener at a time', section: 'station', card: 'Listener requests', keywords: 'ip pending single' },
   { label: 'Publish persona souls', section: 'station', card: 'Public API', keywords: 'system prompt schedule personas public json' },
 
   // ── music source ───────────────────────────────────────────────────────────
@@ -209,10 +193,10 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Station skin', section: 'theme', card: 'Player skin', keywords: 'classic unit platter drift subamp tty listen face' },
   { label: 'Active theme', section: 'theme', card: 'Themes', keywords: 'palette colours colors newsprint nightshift dark light' },
   { label: 'Show the tune-in overlay', section: 'theme', card: 'Tune-in overlay', keywords: 'gate tap to listen splash' },
-  { label: 'Show the Booth Sprite', section: 'theme', card: 'Booth Buddy', keywords: 'mascot sprite request box' },
+  { label: 'Show the Booth Sprite', section: 'theme', card: 'Booth Buddy', keywords: 'mascot sprite' },
 
   // ── llm provider ───────────────────────────────────────────────────────────
-  { label: 'Provider', section: 'llm', card: 'Provider', keywords: 'ollama anthropic openai google deepseek openrouter requesty gateway compatible' },
+  { label: 'Provider', section: 'llm', card: 'Provider', keywords: 'ollama anthropic openai google openrouter compatible' },
   { label: 'Ollama server URL', section: 'llm', card: 'Provider', keywords: 'host docker internal 11434 local' },
   { label: 'API key', section: 'llm', card: 'Provider', keywords: 'token secret credential sk-' },
   { label: 'Model', section: 'llm', card: 'Provider', keywords: 'llama claude gpt gemini model id' },
@@ -233,14 +217,10 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
 
   // ── tts voice ──────────────────────────────────────────────────────────────
   { label: 'DJ speech', section: 'tts', card: 'Station voice', keywords: 'on air music only mute silent' },
-  { label: 'Engine', section: 'tts', card: 'Voice engine', keywords: 'piper kokoro chatterbox pocket-tts cloud remote' },
+  { label: 'Engine', section: 'tts', card: 'Voice engine', keywords: 'piper kokoro' },
   { label: 'Voice', section: 'tts', card: 'Voice engine', keywords: 'speaker accent alba amy' },
   { label: 'Voice level (dB)', section: 'tts', card: 'Voice engine', keywords: 'gain trim loudness decibel' },
   { label: 'Speech speed', section: 'tts', card: 'Voice engine', keywords: 'rate tempo faster slower' },
-  { label: 'API key', section: 'tts', card: 'Voice engine', keywords: 'openai elevenlabs fish audio cloud token' },
-  { label: 'Model', section: 'tts', card: 'Voice engine', keywords: 'cloud speech model gpt-4o-mini-tts' },
-  { label: 'Latency mode', section: 'tts', card: 'Voice engine', keywords: 'fish audio low normal balanced' },
-  { label: 'Server URL', section: 'tts', card: 'Voice engine', keywords: 'remote http endpoint' },
   { label: 'Fallback engine', section: 'tts', card: 'Fallback voice', keywords: 'rescue voice slot backup' },
 
   // ── dj behaviour ───────────────────────────────────────────────────────────
@@ -249,7 +229,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Lookback window', section: 'behaviour', card: 'Prompt memory', keywords: 'minutes recap repeat anti-repeat context history' },
   { label: 'Characters per line', section: 'behaviour', card: 'Prompt memory', keywords: 'chars length recap tokens context' },
   { label: 'Show changes', section: 'behaviour', card: 'Show changes', keywords: 'handoff presenter same host acknowledgement shift transition programme' },
-  { label: 'Extended Sleeve Notes', section: 'behaviour', card: 'Extended Sleeve Notes', keywords: 'source backed editorial provenance provider credits artist context coming soon' },
   { label: 'Link style', section: 'behaviour', card: 'Link style', keywords: 'release year regular occasional rare metadata sleeve notes' },
 
   // ── library tagger ─────────────────────────────────────────────────────────

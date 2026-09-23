@@ -568,8 +568,6 @@ export async function load() {
       sameHostAcknowledgement: typeof stored.djBehaviour?.sameHostAcknowledgement === 'boolean'
         ? stored.djBehaviour.sameHostAcknowledgement
         : DEFAULTS.djBehaviour.sameHostAcknowledgement,
-      extendedSleeveNotes: typeof stored.djBehaviour?.extendedSleeveNotes === 'boolean'
-        ? stored.djBehaviour.extendedSleeveNotes : DEFAULTS.djBehaviour.extendedSleeveNotes,
       releaseYearMentions: ['regular', 'occasional', 'rare'].includes(stored.djBehaviour?.releaseYearMentions)
         ? stored.djBehaviour.releaseYearMentions : DEFAULTS.djBehaviour.releaseYearMentions,
       recapLimit: parsedIntIn(
@@ -1324,7 +1322,6 @@ export async function update(patch) {
     const behaviour = parseSettingsPatchKey<{
       showWelcome?: boolean;
       sameHostAcknowledgement?: boolean;
-      extendedSleeveNotes?: boolean;
       releaseYearMentions?: string;
       recapLimit?: number;
       recapMinutes?: number;
@@ -1332,7 +1329,7 @@ export async function update(patch) {
     }>(
       'djBehaviour', patch.djBehaviour,
     );
-    for (const key of ['showWelcome', 'sameHostAcknowledgement', 'extendedSleeveNotes'] as const) {
+    for (const key of ['showWelcome', 'sameHostAcknowledgement'] as const) {
       if (behaviour[key] !== undefined) next.djBehaviour[key] = behaviour[key];
     }
     if (behaviour.releaseYearMentions !== undefined) {

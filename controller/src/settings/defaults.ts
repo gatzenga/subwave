@@ -233,7 +233,6 @@ export const DEFAULTS = {
   djBehaviour: {
     showWelcome: false,
     sameHostAcknowledgement: false,
-    extendedSleeveNotes: false,
     releaseYearMentions: 'regular',
     // Compact anti-repeat material carried into every DJ script prompt. These
     // are deliberately ordinary live settings rather than boot environment:
