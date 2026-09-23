@@ -32,7 +32,7 @@ docker image prune -f
 docker run --rm --entrypoint liquidsoap subwave:latest --check /etc/liquidsoap/radio.liq
 curl -sI https://subwave.vkugler.ch/hls/live.m3u8 | head -1
 curl -sI https://subwave.vkugler.ch/stream.mp3 | head -1
-docker logs sub-wave --tail 50
+docker logs subwave --tail 50
 ```
 
 ## Rollback
