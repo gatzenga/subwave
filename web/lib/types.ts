@@ -174,7 +174,7 @@ export interface StationState {
   locale?: StationLocale;
   /** Operator player defaults. `skin` indexes components/skins;
    *  `tuneInOverlay` gates the tap-to-tune gate (default on). */
-  ui?: { boothBuddy?: boolean; skin?: string; tuneInOverlay?: boolean };
+  ui?: { skin?: string; tuneInOverlay?: boolean };
   /** Private-station flags (#478) — booleans only, never credentials.
    *  `privatePlayer` swaps the player pages for a "private station" screen;
    *  `listenerAuth` means the mounts demand the shared listener password

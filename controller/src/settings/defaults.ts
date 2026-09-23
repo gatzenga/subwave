@@ -176,11 +176,11 @@ export const DEFAULTS = {
   moods: MOOD_DEFAULTS,
   moodSchedule: PERIOD_MOOD_DEFAULTS,
   // Presentational player toggles, read via GET /state and applied live.
-  // `boothBuddy` gates the DJ-line mascot. `skin` is a slug only — the web app
+  // `skin` is a slug only — the web app
   // owns the registry and falls back on an unknown id, so nothing validates it
   // here. `tuneInOverlay` gates the full-bleed tune-in gate; off drops the
   // takeover and listeners start via the skin's own play button.
-  ui: { boothBuddy: false, skin: 'classic', tuneInOverlay: true },
+  ui: { skin: 'classic', tuneInOverlay: true },
   // Two independent locks over ONE shared password (#478). `privatePlayer` gates
   // the public web pages — UI-level, applies live. `listenerAuth` puts Icecast
   // listener auth on every mount via URL auth calling back into

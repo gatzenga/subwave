@@ -17,12 +17,9 @@ import {
   Users,
   Headphones,
   Plug,
-  MessageCircle,
   Palette,
   LogOut,
-  ChevronDown,
   ChevronRight,
-  MoreHorizontal,
   Clock,
   CalendarDays,
   Volume2,
@@ -77,13 +74,6 @@ import {
   BreadcrumbSeparator,
 } from '../ui/breadcrumb';
 import { Separator } from '../ui/separator';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
 import { DiscMark } from '../../lib/discMark';
 import { animate as motionAnimate } from 'motion/react';
 
@@ -174,10 +164,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/debug', id: 'debug', label: 'Debug', icon: Terminal },
     ],
   },
-];
-
-const FOOTER_LINKS: { href: string; label: string; icon: NavIcon; pill: string }[] = [
-  { href: 'https://discord.gg/vjVbVKnMBa', label: 'Discord', icon: MessageCircle, pill: '↗' },
 ];
 
 // Playlists, DJ Doc and Stations aren't sidebar items, so they're resolved
@@ -395,46 +381,10 @@ function AdminSidebar({
             when the rail is collapsed to icons. */}
         <SidebarMenu className="gap-1.5">
           <SidebarMenuItem>
-            {/* Non-modal: a modal Radix menu locks body scroll, and the lock's
-                15px scrollbar compensation pulls the sticky top bar off the
-                right edge. */}
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton title="More">
-                  <MoreHorizontal
-                    className="shrink-0 opacity-80"
-                    strokeWidth={2}
-                    aria-hidden="true"
-                  />
-                  <span className="flex-1 truncate">More</span>
-                  <ChevronDown className="ml-auto opacity-60" strokeWidth={2} aria-hidden="true" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" align="end" className="min-w-[11rem]">
-                <DropdownMenuGroup>
-                  {FOOTER_LINKS.map(link => {
-                    const Icon = link.icon;
-                    return (
-                      <DropdownMenuItem asChild key={link.href}>
-                        <Link
-                          href={link.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={closeOnMobileNav}
-                        >
-                          <Icon aria-hidden="true" />
-                          {link.label}
-                        </Link>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                  <DropdownMenuItem onClick={() => setConfirmingSignOut(true)}>
-                    <LogOut aria-hidden="true" />
-                    Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <SidebarMenuButton title="Sign out" onClick={() => setConfirmingSignOut(true)}>
+              <LogOut className="shrink-0 opacity-80" strokeWidth={2} aria-hidden="true" />
+              <span className="flex-1 truncate">Sign out</span>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
 

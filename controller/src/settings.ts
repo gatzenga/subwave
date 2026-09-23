@@ -631,10 +631,6 @@ export async function load() {
     moods: normalizeMoods(stored.moods),
     moodSchedule: normalizeMoodMap(stored.moodSchedule, MOOD_PERIODS, PERIOD_MOOD_DEFAULTS),
     ui: {
-      boothBuddy:
-        typeof stored.ui?.boothBuddy === 'boolean'
-          ? stored.ui.boothBuddy
-          : DEFAULTS.ui.boothBuddy,
       skin:
         typeof stored.ui?.skin === 'string' && stored.ui.skin.trim()
           ? stored.ui.skin.trim()
@@ -911,10 +907,10 @@ export async function load() {
     audio: {
       embeddings: typeof stored.audio?.embeddings === 'boolean' ? stored.audio.embeddings : DEFAULTS.audio.embeddings,
       vocalActivity: typeof stored.audio?.vocalActivity === 'boolean' ? stored.audio.vocalActivity : DEFAULTS.audio.vocalActivity,
-      analyzeQuietOnly:
-        typeof stored.audio?.analyzeQuietOnly === 'boolean'
-          ? stored.audio.analyzeQuietOnly
-          : DEFAULTS.audio.analyzeQuietOnly,
+      // No switch any more: analysis runs whether or not anyone is listening,
+      // so a stored true from before is not obeyed. ANALYZE_QUIET_ONLY=1 in the
+      // environment still turns it on.
+      analyzeQuietOnly: false,
       analyzeQuietMinutes: Number.isFinite(stored.audio?.analyzeQuietMinutes)
         ? Math.max(1, Math.min(120, Math.floor(stored.audio.analyzeQuietMinutes)))
         : DEFAULTS.audio.analyzeQuietMinutes,
@@ -1784,7 +1780,7 @@ export async function update(patch) {
     // unknowns, so an invalid value is DROPPED rather than erroring the whole
     // patch. The schema returns undefined for that case, which this skips.
     const ui = parseSettingsPatchKey<Record<string, unknown>>('ui', patch.ui);
-    for (const k of ['boothBuddy', 'skin', 'tuneInOverlay'] as const) {
+    for (const k of ['skin', 'tuneInOverlay'] as const) {
       if (ui[k] !== undefined) (next.ui as Record<string, unknown>)[k] = ui[k];
     }
   }

@@ -629,28 +629,6 @@ export function ThemeSection({ data, busy, saveSettings, adminFetch }: ThemeSect
         </div>
       </Card>
 
-      <Card title="Booth Buddy" sub="the DJ-line mascot on the player">
-        <div className="field">
-          <Label>Show the Booth Sprite</Label>
-          <div className="flex items-center gap-2">
-            <Seg
-              options={[
-                { id: 'on', label: 'On' },
-                { id: 'off', label: 'Off' },
-              ]}
-              value={data?.values?.ui?.boothBuddy === true ? 'on' : 'off'}
-              onChange={id => { if (!busy) saveSettings({ ui: { boothBuddy: id === 'on' } }); }}
-            />
-          </div>
-          <div className="field-hint">
-            A small animated mascot that leads the DJ line on the listener player,
-            reacting to what the DJ is doing (on-air, picking, or idle), and tap it
-            for a reaction. When off, the line falls back to the classic ♪/◇ marker.
-            Applies live, no restart.
-          </div>
-        </div>
-      </Card>
-
       <ThemeEditorModal
         open={editorOpen}
         onOpenChange={setEditorOpen}

@@ -451,7 +451,6 @@ router.get('/state', (req, res) => {
     theme: { active: activeThemeId },
     // Ride along like the theme so the player flips them on the next poll.
     ui: {
-      boothBuddy: s?.ui?.boothBuddy ?? false,
       skin: s?.ui?.skin || 'classic',
       tuneInOverlay: s?.ui?.tuneInOverlay ?? true,
     },

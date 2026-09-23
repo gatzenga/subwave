@@ -170,7 +170,6 @@ export default function ClassicSkin({ portalNode }: SkinProps) {
         llmTokens={llmTokens}
         feed={boothFeed}
         djLineOn={tickerOn}
-        boothBuddyOn={state.ui?.boothBuddy === true}
         offline={offline}
         upNext={upNext}
         onOpenBooth={openBooth}

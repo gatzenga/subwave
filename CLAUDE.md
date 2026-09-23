@@ -274,6 +274,10 @@ Do not reintroduce these, and do not assume their code still exists:
 - **Admin controls for** the TTS fallback voice, the Public API switch and
   listener-country geography (their settings keep their stored values), and
   every "Read this in the manual" link — there is no manual route
+- **Booth Buddy** (the player mascot and `ui.boothBuddy`), the library's
+  **Quiet times** switch (`load()` forces `audio.analyzeQuietOnly` false;
+  `ANALYZE_QUIET_ONLY=1` still turns it on) and the **Scene vocabulary**
+  editor, and the sidebar's Discord link and "More" menu
 - **Every transition of our own** — the crossfade setting, the DJ transition
   effects (sweep/washout/blend/dissolve/chop/loop), pair-aware drain, stem
   blends and the stem cache, the loudness card and the dead-air-trim setting.

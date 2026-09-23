@@ -7,7 +7,6 @@ import { useAdminAuth } from '../../lib/adminAuth';
 import { notify, errorMessage } from '../../lib/notify';
 import { Card, Btn, Pill } from './ui';
 import { ErrorState } from '@/components/ui/error-state';
-import BoothBuddy, { type BuddyMood } from '../BoothBuddy';
 import { ChevronDownIcon } from 'lucide-react';
 import { Task, TaskContent, TaskItem, TaskTrigger } from '../ai-elements/task';
 import { Shimmer } from '../ai-elements/shimmer';
@@ -38,12 +37,6 @@ const FIX_ENDPOINTS: Record<DoctorFixId, string> = {
   'generate-jingles': '/onboarding/generate-jingles',
   'tag-library': '/tag-library',
   'subsonic-reset': '/debug/subsonic/reset',
-};
-
-const MOOD_BY_OVERALL: Record<NonNullable<DoctorReview['overall']>, BuddyMood> = {
-  healthy: 'content',
-  attention: 'curious',
-  critical: 'spooked',
 };
 
 // Deliberately the upstream project repo, not a per-station setting: bug
@@ -281,14 +274,12 @@ export default function DoctorPanel() {
     window.open(full, '_blank', 'noopener,noreferrer');
   };
 
-  const buddyMood: BuddyMood = review?.available && review.overall ? MOOD_BY_OVERALL[review.overall] : 'content';
 
   return (
     <div className="mx-auto max-w-[1100px] px-0 py-8 sm:px-7">
       {ready && !hydrating && !report && (
         <Card title="DJ Doc" sub="booth's open">
           <div className="flex items-start gap-4">
-            <BoothBuddy mood="curious" size={52} />
             <div className="min-w-0 flex-1">
               <p className="text-[15px] leading-[1.65]">
                 Yo — DJ Doc here, resident engineer for this station. I sit in the booth and listen to
@@ -393,7 +384,6 @@ export default function DoctorPanel() {
         <div role="status" aria-live="polite">
           <Card className="is-spotlight mt-6" title="DJ Doc says" sub="running the levels…">
             <div className="flex items-start gap-4">
-              <BoothBuddy mood="onair" size={40} />
               <div className="min-w-0 flex-1">
                 <p className="text-[15px] leading-[1.65] font-bold">DJ Doc is listening…</p>
                 <p className="mt-1 text-[13px] leading-[1.55] text-muted">
@@ -433,7 +423,6 @@ export default function DoctorPanel() {
         >
           {review.available ? (
             <div className="flex items-start gap-4">
-              <BoothBuddy mood={buddyMood} size={40} />
               <div className="min-w-0 flex-1">
                 {/* The LLM may hand back markdown — render it, don't print it. */}
                 {review.summary && (

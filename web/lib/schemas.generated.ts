@@ -2528,7 +2528,6 @@ export const handoverPatchSchema = settingsBlockOf({
 });
 
 export const uiPatchSchema = settingsBlockOf({
-  boothBuddy: settingsBoolLike(),
   tuneInOverlay: settingsBoolLike(),
   // Silently DROPPED when it doesn't match, never refused — and note there is
   // no `?? ''`, so String(null) is 'null' and String(7) is '7', both of which

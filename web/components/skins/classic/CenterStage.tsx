@@ -78,9 +78,6 @@ export interface CenterStageProps {
   llmTokens: number | null;
   feed: SessionTurn[];
   djLineOn: boolean;
-  /** Station-wide toggle for the Booth Sprite mascot; the DJ line falls back to
-   *  the classic ♪/◇ marker when off. */
-  boothBuddyOn: boolean;
   /** Stream confirmed offline (see PlayerApp) — the stage shows an explicit
    *  off-air state instead of a stale "Now playing". */
   offline: boolean;
@@ -90,7 +87,7 @@ export interface CenterStageProps {
   onOpenTimeline: () => void;
 }
 
-export default memo(function CenterStage({ nowPlaying, trackStartedAt, llmTokens, feed, djLineOn, boothBuddyOn, offline, upNext, onOpenBooth, onOpenTimeline }: CenterStageProps) {
+export default memo(function CenterStage({ nowPlaying, trackStartedAt, llmTokens, feed, djLineOn, offline, upNext, onOpenBooth, onOpenTimeline }: CenterStageProps) {
   const client = useStationClient();
   // The 1s elapsed tick lives here, in the component that displays it, so it
   // only re-renders this subtree — not the whole player (see useElapsed).
@@ -304,7 +301,7 @@ export default memo(function CenterStage({ nowPlaying, trackStartedAt, llmTokens
       </div>
 
       {live && (
-        <DjThinkingLine feed={feed} enabled={djLineOn} currentTrackId={subsonicId} buddyOn={boothBuddyOn} onOpenBooth={onOpenBooth} />
+        <DjThinkingLine feed={feed} enabled={djLineOn} currentTrackId={subsonicId} onOpenBooth={onOpenBooth} />
       )}
 
       {/* Needs a known duration to time the window. */}

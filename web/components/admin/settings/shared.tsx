@@ -442,7 +442,7 @@ export interface SettingsData {
     };
     sfx?: { enabled?: boolean };
     beds?: { enabled?: boolean; requestIntros?: boolean; thresholdSec?: number; crossSec?: number; tailSec?: number };
-    ui?: { boothBuddy?: boolean; skin?: string; tuneInOverlay?: boolean };
+    ui?: { skin?: string; tuneInOverlay?: boolean };
     privacy?: {
       privatePlayer?: boolean;
       listenerAuth?: boolean;

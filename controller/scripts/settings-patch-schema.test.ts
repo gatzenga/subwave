@@ -400,7 +400,7 @@ test('ui.skin is DROPPED when invalid, and stringifies non-strings', () => {
 
 test('the never-throwing blocks still never throw', () => {
   // ui has no refusal path at all today.
-  assert.equal(uiPatchSchema.safeParse({ boothBuddy: 'x', tuneInOverlay: 0 }).success, true);
+  assert.equal(uiPatchSchema.safeParse({ tuneInOverlay: 0 }).success, true);
 });
 
 test('djHouseRules caps at 2000 and coerces', () => {
@@ -901,14 +901,14 @@ test('update() round-trips the second slice, coercions and restarts intact', asy
     station: '   ',
     locale: ' en-US ',
     likes: { maxTracks: 0.6 },
-    ui: { skin: 'Classic', boothBuddy: 1 },
+    ui: { skin: 'Classic', tuneInOverlay: 0 },
   });
   assert.equal(a.saved.ducking.voice, 0.25);
   assert.equal(a.saved.station, 'SUB/WAVE'); // emptied -> product default
   assert.equal(a.saved.locale, 'en-US');
   assert.equal(a.saved.likes.maxTracks, 1);
   assert.equal(a.saved.ui.skin, 'classic');
-  assert.equal(a.saved.ui.boothBuddy, true);
+  assert.equal(a.saved.ui.tuneInOverlay, false);
   assert.equal(a.requiresRestart, true); // ducking changed
 
   // An invalid skin is dropped, and the save still succeeds.
