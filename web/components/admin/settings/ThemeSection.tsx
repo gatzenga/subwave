@@ -511,12 +511,6 @@ export function ThemeSection({ data, busy, saveSettings, adminFetch }: ThemeSect
       <Card title="Player skin" sub="the face every listener sees">
         <div className="grid gap-3">
           <SkinGallery activeSkinId={activeSkinId} busy={busy} onChoose={chooseSkin} />
-          <div className="field-hint">
-            Each skin is a different full-screen layout built on the same live
-            data. This sets the station default; a listener can still pick a
-            different skin for their own browser from the player’s palette menu.
-            Applies live on the next poll, no restart.
-          </div>
         </div>
       </Card>
 

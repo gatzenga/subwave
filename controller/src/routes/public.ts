@@ -13,6 +13,7 @@ import { getFullContext, geocodePlace } from '../context.js';
 import { queue } from '../broadcast/queue.js';
 import * as session from '../broadcast/session.js';
 import { getStreamStatus } from '../broadcast/listeners.js';
+import { hlsStatus } from '../broadcast/hls-listeners.js';
 import { isIdle } from '../broadcast/stream-idle.js';
 import { currentStarve } from '../broadcast/music-starve.js';
 import { getSetupStatusSync } from '../setup/firstRun.js';
@@ -254,6 +255,9 @@ router.get('/now-playing', async (req, res) => {
       listeners: stream.listeners,
       streamOnline: stream.online,
       streamBitrate: stream.bitrate,
+      // The HLS transport's own lamp for the dash: on, writing segments, and
+      // its share of the audience.
+      hls: await hlsStatus(stationSettings.stream),
       // Mirrored by /listen.pls + /listen.m3u, additive to streamOnline/Bitrate.
       // mount/format are the always-served MP3 floor; the *Enabled flags let
       // clients discover the optional mounts.

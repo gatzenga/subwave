@@ -45,7 +45,6 @@ import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 import { RefreshCw, X } from 'lucide-react';
 import StationHeader, { type HealthMetrics } from './StationHeader';
 import { cn } from '../../lib/cn';
-import { TakeoverCard } from './dash/TakeoverCard';
 import QueueHeldBadge from './dash/QueueHeldBadge';
 import { BoothTurnText, SegmentButton, SortableTh, ToggleRow, classTone } from './dash/bits';
 import type {
@@ -337,9 +336,10 @@ export default function DashPanel() {
     // Redline at the DJ-agent deadline so the gauge tracks the model in use.
     // Null until /stats loads.
     latencyDeadlineMs: stats?.llm?.agentTimeoutMs ?? null,
-    ttsFallbackPct: stats?.tts?.count ? Math.round((stats.tts.fallbackRate ?? 0) * 1000) / 10 : null,
     online: status?.streamOnline ?? null,
     bitrateKbps: status?.streamBitrate ?? null,
+    hlsLive: status?.hls ? status.hls.enabled !== false && status.hls.live === true : null,
+    hlsListeners: status?.hls?.listeners ?? null,
   };
 
   const djName =
@@ -630,8 +630,6 @@ export default function DashPanel() {
               })}
             </div>
           </Card>
-
-          <TakeoverCard tz={tz} locale={locale} />
 
           <Card title="Broadcast">
             <div className="grid gap-2.5">

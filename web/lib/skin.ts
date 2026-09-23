@@ -14,10 +14,7 @@ export const DEFAULT_SKIN_ID = 'classic';
 
 /** Retired ids resolve to their successor so a saved setting survives an
  *  upgrade. */
-export const LEGACY_SKIN_ALIASES: Record<string, string> = {
-  terminal: 'tty',
-  spool: 'unit',
-};
+export const LEGACY_SKIN_ALIASES: Record<string, string> = {};
 
 export function canonicalSkinId(id: string | null | undefined): string | null {
   if (!id) return null;

@@ -23,7 +23,7 @@ import * as subsonicLog from '../music/subsonic-log.js';
 import { getFullContext } from '../context.js';
 import * as settings from '../settings.js';
 import { queue } from '../broadcast/queue.js';
-import { hlsListenerCount, hlsPlaylistAgeSec } from '../broadcast/hls-listeners.js';
+import { hlsStatus } from '../broadcast/hls-listeners.js';
 import * as session from '../broadcast/session.js';
 import { budgetStatus } from '../broadcast/dj-budget.js';
 import { voiceStatus } from '../broadcast/voice-policy.js';
@@ -174,17 +174,17 @@ async function buildDebugSnapshot(req: express.Request): Promise<any> {
     // HLS has no Icecast source to read, so both halves come from elsewhere:
     // liveness from the playlists on disk (hlsPlaylistAgeSec), listeners from
     // the edge's playlist access log. A null count is "not counted", never 0.
-    const hlsEnabled = st.hlsEnabled !== false;
+    const hls = await hlsStatus(st);
+    const hlsEnabled = hls.enabled;
     const segmentDuration = Number(st.hlsSegmentDuration) || 4;
     const segments = Number(st.hlsSegments) || 5;
-    const playlistAgeSec = await hlsPlaylistAgeSec();
     const hlsMount = {
       path: '/hls/live.m3u8',
       codec: 'HLS',
       configured: hlsEnabled,
-      live: playlistAgeSec !== null && playlistAgeSec <= segmentDuration * 3,
+      live: hls.live,
       bitrate: null,
-      listeners: hlsListenerCount(),
+      listeners: hls.listeners,
       // Not measured off a source like the Icecast rows are — the ladder is
       // fixed in radio.liq, so it is stated as a note rather than faked into
       // the bitrate/samplerate fields.
@@ -201,7 +201,7 @@ async function buildDebugSnapshot(req: express.Request): Promise<any> {
       listeners: hlsMount.listeners,
       segmentDuration,
       segments,
-      playlistAgeSec,
+      playlistAgeSec: hls.ageSec,
       playlist: hlsMount.url,
     };
 

@@ -420,6 +420,27 @@ export async function hlsPlaylistAgeSec(nowMs = Date.now()): Promise<number | nu
   return Math.max(0, Math.round((nowMs - newest) / 1000));
 }
 
+// The HLS mount's state for an operator surface: switched on, writing segments
+// (a variant playlist rewritten within three segments), and the counted
+// audience. One definition, read by /debug and the dash. A null count is "not
+// counted", never 0.
+export async function hlsStatus(stream: { hlsEnabled?: unknown; hlsSegmentDuration?: unknown } | null | undefined): Promise<{
+  enabled: boolean;
+  live: boolean;
+  listeners: number | null;
+  ageSec: number | null;
+}> {
+  const enabled = stream?.hlsEnabled !== false;
+  const segmentDuration = Number(stream?.hlsSegmentDuration) || 4;
+  const ageSec = await hlsPlaylistAgeSec();
+  return {
+    enabled,
+    live: ageSec !== null && ageSec <= segmentDuration * 3,
+    listeners: hlsListenerCount(),
+    ageSec,
+  };
+}
+
 // Throws when the directory cannot be read, so the caller can fall through to
 // the other one; a directory with no variant playlists yet returns 0.
 async function newestVariantMtimeMs(dir: string): Promise<number> {

@@ -60,6 +60,8 @@ export interface DashStatus {
   listeners?: ListenerCount | number | null;
   streamOnline?: boolean;
   streamBitrate?: number | null;
+  /** The HLS transport: switched on, writing segments, counted listeners. */
+  hls?: { enabled?: boolean; live?: boolean; listeners?: number | null } | null;
   activeShow?: ActiveShow | null;
   queue?: QueueState;
   sessionMessages?: SessionTurn[];

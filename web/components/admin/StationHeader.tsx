@@ -1,7 +1,8 @@
 'use client';
 
 // The on-air + health card at the top of /admin/dash: a now-playing title row
-// over a status strip of four instruments. All colour comes from theme tokens.
+// over a status strip of four instruments (listeners, DJ latency, and a lamp
+// each for HLS and the Icecast stream). All colour comes from theme tokens.
 // The meters animate via a single critically-damped (zeta~1) rAF loop that
 // writes straight to the DOM. Structure + state styling live in globals.css
 // under `.admin-root .hs-*`. Collapses under prefers-reduced-motion.
@@ -19,18 +20,18 @@ export interface HealthMetrics {
   /** The live DJ-agent deadline in ms, and the redline anchor. Null until
    *  /stats loads, in which case the gauge uses its default scale. */
   latencyDeadlineMs: number | null;
-  /** TTS fallback rate as a percentage, or null when unknown */
-  ttsFallbackPct: number | null;
   /** broadcast online? null before the first poll resolves */
   online: boolean | null;
   /** stream bitrate (kbps), or null when offline / unknown */
   bitrateKbps: number | null;
+  /** HLS writing segments? null before the first poll resolves */
+  hlsLive: boolean | null;
+  /** listeners counted on HLS, or null when not counted */
+  hlsListeners: number | null;
 }
 
 const SCALE = {
   listenersMax: 50,
-  ttsMidPct: 12, // fallback above this = caution (muted)
-  ttsBadPct: 25, // fallback above this = redline
 } as const;
 
 // The redline anchors to the live DJ-agent deadline, so a redlined needle means
@@ -180,9 +181,6 @@ export default function StationHeader({
   const latencyV = useRef<HTMLSpanElement>(null);
   const latencyRead = useRef<HTMLDivElement>(null);
   const zone = useRef<HTMLDivElement>(null);
-  const ttsV = useRef<HTMLSpanElement>(null);
-  const ttsRead = useRef<HTMLDivElement>(null);
-  const fill = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -195,7 +193,6 @@ export default function StationHeader({
     // Needles power up from zero on load.
     const sListeners: Spring = { x: 0, v: 0 };
     const sLatency: Spring = { x: 0, v: 0 };
-    const sTts: Spring = { x: 0, v: 0 };
     const sPeak: Spring = { x: 0, v: 0 };
 
     let raf = 0;
@@ -225,16 +222,6 @@ export default function StationHeader({
                 ? 'rising'
                 : 'nominal';
       }
-
-      const ttsPct = sTts.x;
-      if (fill.current) {
-        fill.current.className =
-          ttsPct >= SCALE.ttsBadPct ? 'hs-fill bad' : ttsPct >= SCALE.ttsMidPct ? 'hs-fill mid' : 'hs-fill';
-        fill.current.style.width = clamp(ttsPct, 0, 100) + '%';
-      }
-      if (ttsV.current)
-        ttsV.current.textContent = t.ttsFallbackPct == null ? '—' : ttsPct.toFixed(ttsPct < 10 ? 1 : 0);
-      ttsRead.current?.classList.toggle('warn', t.ttsFallbackPct != null && ttsPct >= SCALE.ttsBadPct);
     };
 
     const loop = (now: number) => {
@@ -242,16 +229,13 @@ export default function StationHeader({
       last = now;
       const t = targets.current;
       const lat = t.latencyMs ?? 0;
-      const tts = t.ttsFallbackPct ?? 0;
       if (reduceMotion) {
         sListeners.x = t.listeners;
         sLatency.x = lat;
-        sTts.x = tts;
         sPeak.x = t.listenersPeak;
       } else {
         springStep(sListeners, t.listeners, dt, 7);
         springStep(sLatency, lat, dt, 6);
-        springStep(sTts, tts, dt, 7);
         springStep(sPeak, t.listenersPeak, dt, 9);
       }
       render();
@@ -335,29 +319,32 @@ export default function StationHeader({
           </div>
         </div>
 
-        <div className="hs-cell !min-w-0 !border-t !border-l-0 !border-t-separator-strong sm:!min-w-[140px] sm:!border-t-0 sm:!border-l">
+        <div className="hs-cell hs-lamp !min-w-0 !border-t !border-l-0 !border-t-separator-strong sm:!min-w-[140px] sm:!border-t-0 sm:!border-l">
           <div className="hs-head">
             <div className="hs-lbl">
-              <span className="idx">03</span>TTS&nbsp;Fallback
+              <span className="idx">03</span>HLS
             </div>
-            <div className="hs-sub hidden sm:block">lower&nbsp;=&nbsp;better</div>
+            <div className="hs-sub hidden sm:block">adaptive</div>
           </div>
-          <div className="hs-barwrap">
-            <div className="hs-track">
-              <div className="hs-fill" ref={fill} />
-              <div className="hs-mark" />
+          <div className="hs-lampbody">
+            <div className={metrics.hlsLive ? 'hs-bulb hs-on' : 'hs-bulb'}>
+              <span className="hs-ring" />
+              <span className="hs-core" />
             </div>
-            <div className="hs-scale">
-              <span>0%</span>
-              <span>50%</span>
-              <span>100%</span>
+            <div className="hs-lampmeta">
+              <div className={metrics.hlsLive ? 'hs-state' : 'hs-state hs-off'}>
+                {metrics.hlsLive ? 'Live' : metrics.hlsLive === false ? 'Off' : '…'}
+              </div>
+              <div className="hs-rate">
+                <b>320–128</b> kbps
+              </div>
             </div>
           </div>
-          <div className="hs-read flex-wrap sm:flex-nowrap" ref={ttsRead}>
-            <span className="hs-v" ref={ttsV}>
-              0
-            </span>
-            <span className="hs-u">%&nbsp;fallback</span>
+          <div className="hs-lampctx">
+            <div className="hs-ctxrow">
+              <span className="hs-ctxk">listeners</span>
+              <span className="hs-ctxv">{metrics.hlsListeners ?? '—'}</span>
+            </div>
           </div>
         </div>
 

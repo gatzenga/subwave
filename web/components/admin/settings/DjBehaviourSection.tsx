@@ -22,10 +22,6 @@ import {
 export function DjBehaviourSection({ form, setForm, busy, saveSettings, fieldErrors }: SectionProps) {
   const talkPlacementAria = fieldAria('dj-talk-placement', undefined, { hasDescription: true });
   const linkStyleAria = fieldAria('dj-link-release-year', undefined, { hasDescription: true });
-  const pauseTalkAria = settingsFieldAria(
-    'pause-talk-min-seconds',
-    fieldErrors.pauseTalkMinSeconds,
-  );
   const recapLimitAria = settingsFieldAria(
     'dj-recap-limit',
     fieldErrors['djBehaviour.recapLimit'],
@@ -41,7 +37,6 @@ export function DjBehaviourSection({ form, setForm, busy, saveSettings, fieldErr
   const save = async () => {
     await saveSettings({
       djTalkOnlyBetweenTracks: form.djTalkOnlyBetweenTracks,
-      pauseTalkMinSeconds: Number(form.pauseTalkMinSeconds),
       djBehaviour: {
         ...form.djBehaviour,
         recapLimit: Number(form.djBehaviour.recapLimit),
@@ -88,31 +83,6 @@ export function DjBehaviourSection({ form, setForm, busy, saveSettings, fieldErr
               </>
             )}
           </p>
-        </div>
-      </Card>
-
-      <Card title="Pause-and-talk" sub={`${form.pauseTalkMinSeconds}s minimum`}>
-        <div className="field" data-invalid={pauseTalkAria.invalid || undefined}>
-          <Label {...pauseTalkAria.labelProps}>Minimum segment length</Label>
-          <Input
-            {...pauseTalkAria.controlProps}
-            type="number"
-            min="5"
-            max="90"
-            step="1"
-            value={form.pauseTalkMinSeconds}
-            onChange={e => setForm(f => ({ ...f, pauseTalkMinSeconds: e.target.value }))}
-          />
-          <p className="mt-2 text-[13px] leading-[1.55] text-muted">
-            On shows with Pause-and-talk enabled, eligible skill segments at least
-            this long pause the music and speak in the clear. Shorter segments keep
-            the usual ducked delivery.
-          </p>
-          <SettingsFieldError
-            path="pauseTalkMinSeconds"
-            errors={fieldErrors}
-            {...pauseTalkAria.errorProps}
-          />
         </div>
       </Card>
 
@@ -187,41 +157,6 @@ export function DjBehaviourSection({ form, setForm, busy, saveSettings, fieldErr
         </p>
       </Card>
 
-      <Card title="Show changes" sub={form.djBehaviour.showWelcome ? 'welcome at the hour' : 'quiet'}>
-        <div className="field">
-          <Label>Welcome the new show</Label>
-          <Seg
-            value={form.djBehaviour.showWelcome ? 'on' : 'off'}
-            options={[
-              { id: 'off', label: 'Off', title: 'Keep the normal hourly time check' },
-              { id: 'on', label: 'On', title: 'Extend the first hourly check with a welcome to the new show' },
-            ]}
-            onChange={v => setForm(f => ({ ...f, djBehaviour: { ...f.djBehaviour, showWelcome: v === 'on' } }))}
-          />
-          <p className="mt-2 text-[13px] leading-[1.55] text-muted">
-            At a scheduled show change, the incoming DJ’s first hourly time check adds a
-            short natural welcome to the new show. It does not replace a presenter handoff,
-            and ordinary hourly checks stay unchanged.
-          </p>
-        </div>
-        <div className="field mt-5">
-          <Label>Acknowledge a same-host change</Label>
-          <Seg
-            value={form.djBehaviour.sameHostAcknowledgement ? 'on' : 'off'}
-            options={[
-              { id: 'off', label: 'Off', title: 'Keep adjacent shows by the same DJ quiet' },
-              { id: 'on', label: 'On', title: 'Let the DJ briefly acknowledge moving into their next show' },
-            ]}
-            onChange={v => setForm(f => ({ ...f, djBehaviour: { ...f.djBehaviour, sameHostAcknowledgement: v === 'on' } }))}
-          />
-          <p className="mt-2 text-[13px] leading-[1.55] text-muted">
-            When the same DJ hosts two adjacent scheduled shows, add one brief spoken
-            acknowledgement of the new show. Different-DJ handoffs keep their normal
-            sign-off and greeting.
-          </p>
-        </div>
-      </Card>
-
       <Card title="Link style" sub={form.djBehaviour.releaseYearMentions + ' release-year mentions'}>
         <div className="field">
           <Label {...linkStyleAria.labelledByProps}>Release-year mentions</Label>
@@ -251,7 +186,7 @@ export function DjBehaviourSection({ form, setForm, busy, saveSettings, fieldErr
         onSave={save}
         saveLabel="Save DJ behaviour"
         errors={fieldErrors}
-        ownedKeys={['djTalkOnlyBetweenTracks', 'pauseTalkMinSeconds', 'djBehaviour']}
+        ownedKeys={['djTalkOnlyBetweenTracks', 'djBehaviour']}
       />
     </>
   );

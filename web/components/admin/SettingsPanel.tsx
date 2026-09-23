@@ -1029,25 +1029,7 @@ export default function SettingsPanel() {
               ]}
             />
 
-            <Card title="Broadcast" sub={data?.streamOnAir === false ? 'currently off air' : 'currently on air'}>
-              <div className="grid gap-2">
-                {data?.streamOnAir === false ? (
-                  <Btn sm tone="accent" onClick={startStream} disabled={busy || !data}>
-                    Start stream
-                  </Btn>
-                ) : (
-                  <Btn sm tone="danger" onClick={() => setConfirmStop(true)} disabled={busy || !data || data?.streamOnAir == null}>
-                    Stop stream
-                  </Btn>
-                )}
-                <div className="field-hint">
-                  Takes the station off air by disconnecting the Icecast mount. A mixer restart brings it back on air.
-                </div>
-              </div>
-            </Card>
-
-
-            <Advanced note="track length, duck depth, show boundaries and the extra stream mounts">
+            <Advanced note="track length, duck depth and the extra stream mounts">
             {form && (
               <Card title="Track length" sub="the window a track has to fall in to get picked">
                 <div className="field">
@@ -1169,50 +1151,6 @@ export default function SettingsPanel() {
                       the heavy duck — 0.30 is about −10 dB. Saving flags a pending restart.
                     </div>
                   </div>
-                </div>
-              </Card>
-            )}
-
-            {form && (
-              <Card title="Show boundaries" sub="stop a long track spilling into the next show">
-                <div className="field">
-                  <Label>Fade out at a show change</Label>
-                  <div className="flex items-center gap-2">
-                    <Seg
-                      options={[
-                        { id: 'on', label: 'On' },
-                        { id: 'off', label: 'Off' },
-                      ]}
-                      value={form.fadeAtShowEnd ? 'on' : 'off'}
-                      onChange={id => setForm(f => (f ? { ...f, fadeAtShowEnd: id === 'on' } : f))}
-                    />
-                  </div>
-                  <SettingsFieldError path="fadeAtShowEnd" errors={fieldErrors} />
-                  <div className="field-hint">
-                    On a schedule built from long records — ambient, classical, prog — the last
-                    track of a show can still be playing well into the next one, so the incoming
-                    host talks over the outgoing show&rsquo;s music. With this on, a track that
-                    would run past the boundary is faded out there instead. A short overrun is
-                    left alone, a track is never cut down to a stub, and a track you queue
-                    yourself from the studio always plays in full. Each show can override this. Applies on the next pick; no
-                    restart needed.
-                  </div>
-                  {(() => {
-                    // The minimum play time plus overrun tolerance prevents boundary
-                    // cuts at this cap. Shows can override the station cap.
-                    const floor = data?.values?.boundaryFadeMinTrackSeconds ?? 150;
-                    const cap = Number(form.maxTrackSeconds);
-                    if (!form.fadeAtShowEnd || !Number.isFinite(cap) || cap <= 0 || cap > floor) return null;
-                    return (
-                      <div className="field-hint italic">
-                        With <b>Maximum track length</b> at {cap}s, boundary fading cannot apply
-                        to tracks using this cap: it requires more than {floor}s of playable
-                        music. The cap limits track length, but a track starting near the end
-                        of a show can still run into the next one. Shows that override this
-                        cap may still use boundary fading.
-                      </div>
-                    );
-                  })()}
                 </div>
               </Card>
             )}
@@ -1421,6 +1359,23 @@ export default function SettingsPanel() {
 
             </Advanced>
 
+            <Card title="Broadcast" sub={data?.streamOnAir === false ? 'currently off air' : 'currently on air'}>
+              <div className="grid gap-2">
+                {data?.streamOnAir === false ? (
+                  <Btn sm tone="accent" onClick={startStream} disabled={busy || !data}>
+                    Start stream
+                  </Btn>
+                ) : (
+                  <Btn sm tone="danger" onClick={() => setConfirmStop(true)} disabled={busy || !data || data?.streamOnAir == null}>
+                    Stop stream
+                  </Btn>
+                )}
+                <div className="field-hint">
+                  Takes the station off air by disconnecting the Icecast mount. A mixer restart brings it back on air.
+                </div>
+              </div>
+            </Card>
+
             <Card title="Mixer" sub="apply pending Liquidsoap-level settings">
               <div className="grid gap-2">
                 <Btn sm tone="danger" onClick={() => setConfirmRestart(true)} disabled={busy || !data}>
@@ -1438,12 +1393,12 @@ export default function SettingsPanel() {
             </Card>
 
             <SaveBar
-              note="Duck depth, the encoder settings and the listener buffer only reach the stream after a mixer restart. The track-length window and show boundaries apply live."
+              note="Duck depth, the encoder settings and the listener buffer only reach the stream after a mixer restart. The track-length window applies live."
               busy={busy}
               onSave={saveDanger}
               saveLabel="Save danger zone"
               errors={fieldErrors}
-              ownedKeys={['ducking', 'maxTrackSeconds', 'picker.minTrackLengthSeconds', 'fadeAtShowEnd', 'stream']}
+              ownedKeys={['ducking', 'maxTrackSeconds', 'picker.minTrackLengthSeconds', 'stream']}
             />
           </>
         )}

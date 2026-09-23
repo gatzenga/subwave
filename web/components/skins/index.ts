@@ -19,36 +19,12 @@ export const SKINS: SkinManifest[] = [
     load: () => import('./classic/ClassicSkin'),
   },
   {
-    id: 'unit',
-    name: 'Unit SW-9',
-    description:
-      'A tabletop receiver — milled aluminium, weighted knobs, one glowing dot-matrix window.',
-    skinApiVersion: SKIN_API_VERSION,
-    load: () => import('./unit/UnitSkin'),
-  },
-  {
     id: 'drift',
     name: 'Drift',
     description:
       'Ninety percent weather, ten percent type — the cover art becomes the room.',
     skinApiVersion: SKIN_API_VERSION,
     load: () => import('./drift/DriftSkin'),
-  },
-  {
-    id: 'subamp',
-    name: 'Subamp',
-    description:
-      "A compact modular player — deck, booth and log stacked like it's 1998.",
-    skinApiVersion: SKIN_API_VERSION,
-    load: () => import('./subamp/SubampSkin'),
-  },
-  {
-    id: 'tty',
-    name: 'TTY',
-    description:
-      'The station as a live process — panes and a status line, everything tails.',
-    skinApiVersion: SKIN_API_VERSION,
-    load: () => import('./tty/TtySkin'),
   },
   {
     id: 'platter',

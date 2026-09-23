@@ -68,7 +68,7 @@ export const SECTIONS = [
   {
     id: 'behaviour', group: 'the dj', label: 'DJ behaviour',
     hint: 'talk placement · prompt memory', icon: MessageCircle,
-    formKeys: ['djTalkOnlyBetweenTracks', 'pauseTalkMinSeconds', 'djBehaviour'],
+    formKeys: ['djTalkOnlyBetweenTracks', 'djBehaviour'],
   },
   {
     id: 'llm', group: 'the dj', label: 'LLM provider',
@@ -228,7 +228,6 @@ export const SETTINGS_INDEX: readonly IndexEntry[] = [
   { label: 'Recent lines', section: 'behaviour', card: 'Prompt memory', keywords: 'recap repeat anti-repeat context history limit' },
   { label: 'Lookback window', section: 'behaviour', card: 'Prompt memory', keywords: 'minutes recap repeat anti-repeat context history' },
   { label: 'Characters per line', section: 'behaviour', card: 'Prompt memory', keywords: 'chars length recap tokens context' },
-  { label: 'Show changes', section: 'behaviour', card: 'Show changes', keywords: 'handoff presenter same host acknowledgement shift transition programme' },
   { label: 'Link style', section: 'behaviour', card: 'Link style', keywords: 'release year regular occasional rare metadata sleeve notes' },
 
   // ── library tagger ─────────────────────────────────────────────────────────
