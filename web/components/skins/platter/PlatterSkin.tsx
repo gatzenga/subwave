@@ -30,7 +30,7 @@ import {
   trackMeta,
   turnClock,
 } from '../shared';
-import { useSkinMotion, useTrackLike, useVolumeNudge } from '../sharedHooks';
+import { useSkinMotion, useVolumeNudge } from '../sharedHooks';
 import type { SkinProps } from '../types';
 
 /* Shares the tonearm's easing curve (Platter.module.css) so the deck reads as
@@ -189,7 +189,6 @@ export default function PlatterSkin(_props: SkinProps) {
   const labelSwap = spins ? LABEL_SETTLE : LABEL_CUT;
 
   const adjustVolume = useVolumeNudge();
-  const like = useTrackLike();
 
   const faderRef = useRef<HTMLDivElement | null>(null);
   const setVolFromPointer = useCallback(
@@ -275,23 +274,6 @@ export default function PlatterSkin(_props: SkinProps) {
               >
                 {muted ? 'MUTED' : 'MUTE'}
               </button>
-              {like.available && (
-                <button
-                  type="button"
-                  onClick={() => void like.like()}
-                  disabled={like.pending || like.liked}
-                  aria-pressed={like.liked}
-                  aria-label={like.liked ? 'Liked' : 'Like this track'}
-                  className={cn(
-                    'v3-focus flex size-14 flex-col items-center justify-center rounded-full border border-ink font-mono text-[9px] font-bold tracking-[0.1em]',
-                    like.liked ? 'bg-[var(--accent)] text-bg' : 'cursor-pointer bg-bg hover:bg-[var(--field)]',
-                    like.pending && 'opacity-60',
-                  )}
-                >
-                  <span className="text-[16px] leading-none">{like.liked ? '♥' : '♡'}</span>
-                  {like.count > 0 && <span className="tabular-nums">{like.count}</span>}
-                </button>
-              )}
             </div>
 
             <div className="flex flex-col items-center gap-2 lg:absolute lg:right-6 lg:bottom-6">

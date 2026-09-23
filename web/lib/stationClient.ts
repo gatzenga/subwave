@@ -42,26 +42,6 @@ export interface BeaconPayload {
   utmSource?: string;
 }
 
-/** Error statuses (403 disabled, 409 stale/no track, 429 throttled) still
- *  carry a JSON body with `error`. */
-export interface LikeResult {
-  ok?: boolean;
-  songId?: string | null;
-  liked?: boolean;
-  alreadyLiked?: boolean;
-  count?: number;
-  error?: string;
-}
-
-/** Liked-state for the current airing, per listener via a server-side dedup
- *  key — no account needed. */
-export interface LikeStatus {
-  enabled: boolean;
-  songId?: string | null;
-  liked?: boolean;
-  count?: number;
-}
-
 export interface StationClient {
   origin: StationOrigin;
   /** Prefix a controller-relative path with the station's API base.
@@ -75,11 +55,6 @@ export interface StationClient {
   health(init?: { signal?: AbortSignal }): Promise<Response>;
   schedule(): Promise<SchedulePayload>;
   themes(): Promise<ThemesPayload>;
-  /** `songId` is what the client believes is on air; the controller rejects a
-   *  stale tap. null on network error. */
-  likeCurrent(songId: string): Promise<LikeResult | null>;
-  /** null on network error. */
-  likeStatus(): Promise<LikeStatus | null>;
   /** Best-effort: never throws, never blocks. */
   beacon(payload: BeaconPayload): void;
 }
@@ -104,27 +79,6 @@ export function createStationClient(origin: StationOrigin): StationClient {
       const r = await fetch(`${api}/themes`);
       if (!r.ok) throw new Error(`themes fetch ${r.status}`);
       return json<ThemesPayload>(r);
-    },
-    likeCurrent: async songId => {
-      try {
-        const r = await fetch(`${api}/like`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ songId }),
-        });
-        // Error statuses carry a JSON body too. Surface it, don't throw.
-        return await json<LikeResult>(r);
-      } catch {
-        return null;
-      }
-    },
-    likeStatus: async () => {
-      try {
-        const r = await fetch(`${api}/like`);
-        return await json<LikeStatus>(r);
-      } catch {
-        return null;
-      }
     },
     beacon: payload => {
       fetch(`${api}/beacon`, {

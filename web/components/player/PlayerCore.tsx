@@ -23,7 +23,7 @@ import { useStationFeed, type StationFeed } from '@/hooks/useStationFeed';
 import { usePlayer, type PlayerStatus } from '@/hooks/usePlayer';
 import { useSignal, type Signal } from '@/hooks/useSignal';
 import { useMediaSession } from '@/hooks/useMediaSession';
-import { useStationClient, type LikeResult, type LikeStatus } from '@/lib/stationClient';
+import { useStationClient } from '@/lib/stationClient';
 
 export interface PlayerAudio {
   audioRef: RefObject<HTMLAudioElement | null>;
@@ -47,11 +47,6 @@ export interface PlayerActions {
   stop: () => void;
   toggleMute: () => void;
   setVolume: Dispatch<SetStateAction<number>>;
-  /** Like the currently playing track (#991). null on network error; error
-   *  statuses come back as a LikeResult with `error`. */
-  likeCurrent: (songId: string) => Promise<LikeResult | null>;
-  /** Liked-state + count for the current airing. null on network error. */
-  likeStatus: () => Promise<LikeStatus | null>;
 }
 
 const FeedContext = createContext<StationFeed | null>(null);
@@ -114,10 +109,8 @@ export function PlayerCoreProvider({ children }: { children: ReactNode }) {
       stop: () => stopRef.current(),
       toggleMute: () => muteRef.current(),
       setVolume,
-      likeCurrent: songId => client.likeCurrent(songId),
-      likeStatus: () => client.likeStatus(),
     }),
-    [setVolume, client],
+    [setVolume],
   );
 
   // Persona avatar for the OS lock screen while the DJ is talking. Prefer the
