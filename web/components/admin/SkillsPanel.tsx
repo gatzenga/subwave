@@ -11,7 +11,7 @@ import { useAdminAuth } from '../../lib/adminAuth';
 import { adminJson, adminResponse, useAdminMutation } from '../../lib/admin-query';
 import { useRosterView } from '../../lib/adminView';
 import { RefreshCw, Plus, Users, Upload, Search, X } from 'lucide-react';
-import { Card, Btn, Pill, Eyebrow, MetaChip, Toggle } from './ui';
+import { Card, Btn, Pill, MetaChip, Toggle } from './ui';
 import RosterViewToggle from './RosterViewToggle';
 import { V3Alert } from '../ui/alert';
 import { SkeletonRows } from '@/components/ui/skeleton';
@@ -335,35 +335,7 @@ export default function SkillsPanel() {
     <div className="grid gap-4">
       <section className="card">
         <div className="border-b border-ink p-4">
-          <Eyebrow className="text-vermilion">skills</Eyebrow>
-          <div className="mt-1.5 text-[22px] font-extrabold tracking-[-0.02em]">
-            What the DJ does between tracks.
-          </div>
-          <div className="mt-1 text-[11px] leading-[1.6] text-muted">
-            Each skill is an autonomous segment. It fires only when it&apos;s enabled here
-            <strong> and</strong> assigned to the persona on air. Assign DJs from a skill&apos;s
-            Edit sheet, or per-persona on the Personas page. &quot;Run now&quot; is an operator
-            override and ignores both.
-          </div>
-          <div className="mt-1 text-[11px] leading-[1.6] text-muted">
-            Hit <strong>Edit</strong> on any skill to open its segment sheet: change the brief,
-            cooldown, or which real-world context (time, weather) it may mention, plus the feed
-            URL for News. Edits save to <code>state/skills/&lt;kind&gt;/SKILL.md</code>.
-          </div>
-          <div className="mt-1 text-[11px] leading-[1.6] text-muted">
-            Add your own with <strong>New skill</strong> and it writes
-            <code> state/skills/&lt;name&gt;/SKILL.md</code> for you. (You can also drop a folder there
-            by hand, with an optional <code>tool.mjs</code> data tool, then hit <strong>Rescan</strong>.)
-            Custom skills arrive <strong>disabled</strong>, so review them before enabling.
-          </div>
-          <a
-            href="/manual/skills"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-block text-[11px] font-bold text-vermilion underline decoration-[1.5px] underline-offset-2"
-          >
-            Read this in the manual ↗
-          </a>
+          <div className="text-[22px] font-extrabold tracking-[-0.02em]">Skills</div>
         </div>
         {/* Full-width row of its own on phones: an `ml-auto` cluster pushed
             COMMUNITY / NEW SKILL off the right edge at 390px. */}
